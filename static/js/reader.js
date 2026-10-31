@@ -1,0 +1,499 @@
+document.addEventListener('DOMContentLoaded', () => {
+  // Elements
+  const progressBar = document.getElementById('reader-progress-bar');
+  const settingsToggle = document.getElementById('toggle-settings-btn');
+  const settingsDrawer = document.getElementById('settings-drawer');
+  const readerContainer = document.getElementById('reader-container');
+  const fontSelect = document.getElementById('font-family-select');
+  const fontSizeDisplay = document.getElementById('font-size-val');
+  const btnFontDec = document.getElementById('btn-font-dec');
+  const btnFontInc = document.getElementById('btn-font-inc');
+  const themePills = document.querySelectorAll('.theme-pill');
+  const chapterSelect = document.getElementById('chapter-select-dropdown');
+  const prevBtn = document.getElementById('prev-chapter-btn');
+  const nextBtn = document.getElementById('next-chapter-btn');
+
+  // Load preferences from localStorage
+  const savedTheme = localStorage.getItem('novel_reader_theme') || 'black';
+  const savedFont = localStorage.getItem('novel_reader_font') || "'Nunito Sans', sans-serif";
+  const savedFontSize = parseInt(localStorage.getItem('novel_reader_font_size') || '19', 10);
+
+  // Apply preferences
+  applyTheme(savedTheme);
+  applyFont(savedFont);
+  applyFontSize(savedFontSize);
+
+  // Settings Drawer Toggle
+  if (settingsToggle && settingsDrawer) {
+    settingsToggle.addEventListener('click', () => {
+      settingsDrawer.classList.toggle('open');
+    });
+  }
+
+  // Theme Switching
+  themePills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      const theme = pill.getAttribute('data-theme');
+      applyTheme(theme);
+      localStorage.setItem('novel_reader_theme', theme);
+    });
+  });
+
+  function applyTheme(theme) {
+    document.body.setAttribute('data-reader-theme', theme);
+    themePills.forEach(p => {
+      if (p.getAttribute('data-theme') === theme) {
+        p.classList.add('active');
+      } else {
+        p.classList.remove('active');
+      }
+    });
+  }
+
+  // Font Switching
+  if (fontSelect) {
+    fontSelect.value = savedFont;
+    fontSelect.addEventListener('change', (e) => {
+      applyFont(e.target.value);
+      localStorage.setItem('novel_reader_font', e.target.value);
+    });
+  }
+
+  function applyFont(font) {
+    if (readerContainer) {
+      readerContainer.style.fontFamily = font;
+    }
+    if (fontSelect) {
+      fontSelect.value = font;
+    }
+  }
+
+  // Font Size Adjuster
+  let currentFontSize = savedFontSize;
+  if (btnFontDec) {
+    btnFontDec.addEventListener('click', () => {
+      if (currentFontSize > 14) {
+        currentFontSize -= 1;
+        applyFontSize(currentFontSize);
+        localStorage.setItem('novel_reader_font_size', currentFontSize);
+      }
+    });
+  }
+
+  if (btnFontInc) {
+    btnFontInc.addEventListener('click', () => {
+      if (currentFontSize < 34) {
+        currentFontSize += 1;
+        applyFontSize(currentFontSize);
+        localStorage.setItem('novel_reader_font_size', currentFontSize);
+      }
+    });
+  }
+
+  function applyFontSize(size) {
+    currentFontSize = size;
+    if (readerContainer) {
+      readerContainer.style.fontSize = `${size}px`;
+    }
+    if (fontSizeDisplay) {
+      fontSizeDisplay.textContent = `${size}px`;
+    }
+  }
+
+  // Chapter Dropdown Jump
+  if (chapterSelect) {
+    chapterSelect.addEventListener('change', (e) => {
+      window.location.href = e.target.value;
+    });
+  }
+
+  // Reading Progress Calculation on Scroll
+  const novelSlug = document.body.getAttribute('data-novel-slug');
+  const currentChapterNum = parseInt(document.body.getAttribute('data-chapter-num') || '1', 10);
+  const nextChapterUrl = document.body.getAttribute('data-next-url');
+  const storageKey = `progress_${novelSlug}_ch${currentChapterNum}`;
+
+  let syncTimeout = null;
+
+  function updateProgress() {
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+    let progress = 0;
+    if (scrollHeight > 0) {
+      progress = Math.min(100, Math.max(0, (scrollTop / scrollHeight) * 100));
+    }
+
+    if (progressBar) {
+      progressBar.style.width = `${progress}%`;
+    }
+
+    localStorage.setItem(storageKey, scrollTop);
+
+    clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => {
+      if (novelSlug) {
+        fetch('/api/progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slug: novelSlug,
+            chapter_number: currentChapterNum,
+            percent: Math.round(progress * 10) / 10
+          })
+        }).catch(() => {});
+      }
+    }, 1000);
+  }
+
+  window.addEventListener('scroll', updateProgress, { passive: true });
+
+  // Restore Scroll Position on load
+  const savedScroll = localStorage.getItem(storageKey);
+  if (savedScroll && parseInt(savedScroll, 10) > 100) {
+    setTimeout(() => {
+      window.scrollTo({
+        top: parseInt(savedScroll, 10),
+        behavior: 'smooth'
+      });
+    }, 150);
+  }
+
+  // Keyboard Shortcuts for Reader Navigation
+  document.addEventListener('keydown', (e) => {
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+      return;
+    }
+
+    if (e.key === 'ArrowLeft' && prevBtn && !prevBtn.disabled) {
+      prevBtn.click();
+    } else if (e.key === 'ArrowRight' && nextBtn && !nextBtn.disabled) {
+      nextBtn.click();
+    } else if (e.key.toLowerCase() === 't') {
+      if (settingsToggle) settingsToggle.click();
+    } else if (e.key.toLowerCase() === 'a') {
+      // 'A' toggles Audio
+      if (listenToggleBtn) listenToggleBtn.click();
+    } else if (e.code === 'Space' && audioState.isOpen) {
+      // Space bar toggles Play/Pause in Audio Player
+      e.preventDefault();
+      toggleAudioPlay();
+    } else if (e.key.toLowerCase() === 'j' && audioState.isOpen) {
+      // 'J' = prev paragraph
+      playPrevParagraph();
+    } else if (e.key.toLowerCase() === 'k' && audioState.isOpen) {
+      // 'K' = next paragraph
+      playNextParagraph();
+    }
+  });
+
+  // =========================================================================
+  // NOVEL PHOENIX AUDIO TEXT-TO-SPEECH (TTS) ENGINE
+  // =========================================================================
+
+  const synth = window.speechSynthesis;
+  const isSpeechSupported = 'speechSynthesis' in window;
+
+  const listenToggleBtn = document.getElementById('listen-toggle-btn');
+  const playerBar = document.getElementById('listen-player-bar');
+  const audioBtnPlay = document.getElementById('audio-btn-play');
+  const audioBtnPrev = document.getElementById('audio-btn-prev');
+  const audioBtnNext = document.getElementById('audio-btn-next');
+  const audioBtnClose = document.getElementById('audio-btn-close');
+  const audioSpeedSelect = document.getElementById('audio-speed-select');
+  const audioVoiceSelect = document.getElementById('audio-voice-select');
+  const audioAutoNextCheck = document.getElementById('audio-auto-next');
+  const audioParaStatus = document.getElementById('audio-para-status');
+  const audioProgressFill = document.getElementById('audio-progress-fill');
+
+  const paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p'));
+
+  const audioState = {
+    isOpen: false,
+    isPlaying: false,
+    isPaused: false,
+    currentIndex: 0,
+    voices: [],
+    selectedVoice: null,
+    rate: 1.0,
+    wakeLock: null
+  };
+
+  // Populate System Speech Voices
+  function loadVoices() {
+    if (!isSpeechSupported) return;
+    const allVoices = synth.getVoices();
+    if (!allVoices || allVoices.length === 0) return;
+
+    audioState.voices = allVoices;
+    if (audioVoiceSelect) {
+      audioVoiceSelect.innerHTML = '';
+      
+      // Prioritize English voices or system default
+      allVoices.forEach((voice, i) => {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `${voice.name} (${voice.lang})`;
+        if (voice.default || voice.name.toLowerCase().includes('natural') || voice.lang.startsWith('en')) {
+          if (!audioState.selectedVoice) {
+            audioState.selectedVoice = voice;
+            option.selected = true;
+          }
+        }
+        audioVoiceSelect.appendChild(option);
+      });
+    }
+  }
+
+  if (isSpeechSupported) {
+    loadVoices();
+    if (synth.onvoiceschanged !== undefined) {
+      synth.onvoiceschanged = loadVoices;
+    }
+  }
+
+  // Voice selector change
+  if (audioVoiceSelect) {
+    audioVoiceSelect.addEventListener('change', (e) => {
+      const idx = parseInt(e.target.value, 10);
+      if (audioState.voices[idx]) {
+        audioState.selectedVoice = audioState.voices[idx];
+        if (audioState.isPlaying) {
+          speakParagraph(audioState.currentIndex);
+        }
+      }
+    });
+  }
+
+  // Speed selector change
+  if (audioSpeedSelect) {
+    audioSpeedSelect.addEventListener('change', (e) => {
+      audioState.rate = parseFloat(e.target.value);
+      if (audioState.isPlaying) {
+        speakParagraph(audioState.currentIndex);
+      }
+    });
+  }
+
+  // Find the paragraph currently in view on screen (to resume exactly from user's reading position)
+  function getParagraphCurrentlyInView() {
+    const viewportMiddle = window.innerHeight / 2;
+    for (let i = 0; i < paragraphNodes.length; i++) {
+      const rect = paragraphNodes[i].getBoundingClientRect();
+      if (rect.top <= viewportMiddle && rect.bottom >= viewportMiddle) {
+        return i;
+      }
+      if (rect.top >= 0 && rect.top <= window.innerHeight) {
+        return i;
+      }
+    }
+    return 0;
+  }
+
+  // Open Audio Player & start reading
+  function openAudioPlayer(startIndex = null) {
+    if (!isSpeechSupported) {
+      alert("Text-to-speech is not supported on this browser.");
+      return;
+    }
+
+    if (startIndex === null) {
+      startIndex = getParagraphCurrentlyInView();
+    }
+
+    audioState.isOpen = true;
+    if (playerBar) playerBar.classList.add('active');
+    if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+
+    requestWakeLock();
+    speakParagraph(startIndex);
+  }
+
+  // Close Audio Player
+  function closeAudioPlayer() {
+    stopSpeech();
+    audioState.isOpen = false;
+    audioState.isPlaying = false;
+    audioState.isPaused = false;
+    clearParagraphHighlight();
+
+    if (playerBar) playerBar.classList.remove('active');
+    if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
+    if (audioBtnPlay) audioBtnPlay.textContent = '▶';
+
+    releaseWakeLock();
+    localStorage.removeItem('novel_auto_play_tts');
+  }
+
+  function clearParagraphHighlight() {
+    paragraphNodes.forEach(p => p.classList.remove('listen-active-paragraph'));
+  }
+
+  function stopSpeech() {
+    if (isSpeechSupported) {
+      synth.cancel();
+    }
+  }
+
+  // Speak a specific paragraph by index
+  function speakParagraph(index) {
+    if (!paragraphNodes || paragraphNodes.length === 0) return;
+
+    // Check if reached end of chapter
+    if (index >= paragraphNodes.length) {
+      clearParagraphHighlight();
+      audioState.isPlaying = false;
+      if (audioBtnPlay) audioBtnPlay.textContent = '▶';
+      if (audioParaStatus) audioParaStatus.textContent = 'Chapter Finished 🎉';
+
+      // Auto advance to next chapter if enabled
+      if (audioAutoNextCheck && audioAutoNextCheck.checked && nextChapterUrl) {
+        localStorage.setItem('novel_auto_play_tts', 'true');
+        if (audioParaStatus) audioParaStatus.textContent = 'Next Chapter starting in 1.5s...';
+        setTimeout(() => {
+          window.location.href = nextChapterUrl;
+        }, 1500);
+      }
+      return;
+    }
+
+    if (index < 0) index = 0;
+
+    audioState.currentIndex = index;
+    const targetNode = paragraphNodes[index];
+    const textToSpeak = targetNode.textContent.trim();
+
+    // If paragraph is completely empty, jump to next
+    if (!textToSpeak) {
+      speakParagraph(index + 1);
+      return;
+    }
+
+    // Cancel any previous utterance
+    stopSpeech();
+
+    // Update UI highlights & auto-scroll
+    clearParagraphHighlight();
+    targetNode.classList.add('listen-active-paragraph');
+    targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Update player status & progress bar
+    if (audioParaStatus) {
+      audioParaStatus.textContent = `Paragraph ${index + 1} of ${paragraphNodes.length}`;
+    }
+    if (audioProgressFill) {
+      const pct = ((index + 1) / paragraphNodes.length) * 100;
+      audioProgressFill.style.width = `${pct}%`;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    if (audioState.selectedVoice) {
+      utterance.voice = audioState.selectedVoice;
+    }
+    utterance.rate = audioState.rate || 1.0;
+
+    utterance.onstart = () => {
+      audioState.isPlaying = true;
+      audioState.isPaused = false;
+      if (audioBtnPlay) audioBtnPlay.textContent = '⏸';
+      if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+    };
+
+    utterance.onend = () => {
+      // Automatically advance to the next paragraph
+      if (audioState.isPlaying && !audioState.isPaused) {
+        speakParagraph(index + 1);
+      }
+    };
+
+    utterance.onerror = (e) => {
+      console.warn("SpeechSynthesis error:", e);
+      if (audioState.isPlaying && !audioState.isPaused) {
+        speakParagraph(index + 1);
+      }
+    };
+
+    synth.speak(utterance);
+  }
+
+  // Toggle Play / Pause
+  function toggleAudioPlay() {
+    if (!audioState.isOpen) {
+      openAudioPlayer();
+      return;
+    }
+
+    if (audioState.isPlaying && !audioState.isPaused) {
+      synth.pause();
+      audioState.isPaused = true;
+      if (audioBtnPlay) audioBtnPlay.textContent = '▶';
+      if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
+      if (audioParaStatus) audioParaStatus.textContent = `Paused at Para ${audioState.currentIndex + 1}`;
+    } else if (audioState.isPaused) {
+      synth.resume();
+      audioState.isPaused = false;
+      if (audioBtnPlay) audioBtnPlay.textContent = '⏸';
+      if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+      if (audioParaStatus) audioParaStatus.textContent = `Playing Para ${audioState.currentIndex + 1} of ${paragraphNodes.length}`;
+    } else {
+      speakParagraph(audioState.currentIndex);
+    }
+  }
+
+  function playPrevParagraph() {
+    if (audioState.currentIndex > 0) {
+      speakParagraph(audioState.currentIndex - 1);
+    }
+  }
+
+  function playNextParagraph() {
+    if (audioState.currentIndex < paragraphNodes.length - 1) {
+      speakParagraph(audioState.currentIndex + 1);
+    }
+  }
+
+  // WakeLock: prevents sleep when listening on headphones
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        audioState.wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } catch (e) {}
+  }
+
+  function releaseWakeLock() {
+    if (audioState.wakeLock) {
+      audioState.wakeLock.release().catch(() => {});
+      audioState.wakeLock = null;
+    }
+  }
+
+  // Click any paragraph to start reading audio immediately from there!
+  paragraphNodes.forEach((node, idx) => {
+    node.addEventListener('click', () => {
+      openAudioPlayer(idx);
+    });
+  });
+
+  // Audio Control Button Listeners
+  if (listenToggleBtn) {
+    listenToggleBtn.addEventListener('click', () => {
+      if (audioState.isOpen && audioState.isPlaying) {
+        toggleAudioPlay();
+      } else {
+        openAudioPlayer();
+      }
+    });
+  }
+
+  if (audioBtnPlay) audioBtnPlay.addEventListener('click', toggleAudioPlay);
+  if (audioBtnPrev) audioBtnPrev.addEventListener('click', playPrevParagraph);
+  if (audioBtnNext) audioBtnNext.addEventListener('click', playNextParagraph);
+  if (audioBtnClose) audioBtnClose.addEventListener('click', closeAudioPlayer);
+
+  // Check if we navigated from previous chapter with auto-play active
+  if (localStorage.getItem('novel_auto_play_tts') === 'true') {
+    setTimeout(() => {
+      openAudioPlayer(0);
+    }, 400);
+  }
+});

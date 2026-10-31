@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Novel Phoenix Reader{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body data-reader-theme="black" {% block body_attrs %}{% endblock %}>
+
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="/" class="brand">
+        <span class="brand-icon">🔥</span>
+        <span>Novel<span class="highlight">Phoenix</span></span>
+      </a>
+      <div class="nav-links">
+        <a href="/" class="nav-link">Library</a>
+        <button class="btn-upload open-upload-btn">
+          <span>+</span> Upload Novel PDF
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Upload Modal -->
+  <div class="modal-overlay" id="upload-modal">
+    <div class="modal-box">
+      <button class="modal-close" id="close-upload-modal">&times;</button>
+      <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem;">Upload Novel PDF</h2>
+      <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1rem;">
+        Drop any light novel or web novel PDF. We'll automatically detect chapters, clean paragraph wrapping, and format it into the reader!
+      </p>
+
+      <form id="upload-form">
+        <div class="dropzone" id="pdf-dropzone">
+          <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">📄</div>
+          <div style="font-weight: 600; font-size: 0.95rem;">Click or drag & drop novel PDF here</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">Supports standard PDF book files</div>
+          <input type="file" id="pdf-file-input" name="file" accept=".pdf" style="display: none;" required>
+        </div>
+
+        <div id="file-selected-name" style="display: none; font-size: 0.85rem; color: var(--accent-color); margin-bottom: 1rem; font-weight: 600;"></div>
+
+        <div class="form-group">
+          <label class="form-label" for="novel-title-input">Novel Title (optional, auto-detected)</label>
+          <input type="text" id="novel-title-input" name="title" class="form-input" placeholder="e.g. Shadow Slave, Solo Leveling">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Author (optional)</label>
+          <input type="text" name="author" class="form-input" placeholder="e.g. Guiltythree, Chugong">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Synopsis (optional)</label>
+          <textarea name="synopsis" class="form-input" rows="2" placeholder="Brief novel description..."></textarea>
+        </div>
+
+        <div id="upload-status-area" style="display: none; margin: 1rem 0; padding: 0.8rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9rem; text-align: center;">
+          <span id="upload-status-text">Processing PDF...</span>
+        </div>
+
+        <button type="submit" class="btn-primary" id="btn-submit-upload" style="width: 100%; justify-content: center; margin-top: 0.5rem;">
+          Convert & Add to Library
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/js/upload.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.pdf
+data/library.db
+scratch/
+test_*.py

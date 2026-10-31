@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ novel.title }} — Novel Phoenix{% endblock %}
+
+{% block content %}
+<div class="novel-detail-header">
+  <div>
+    {% if novel.cover_image %}
+    <img src="{{ novel.cover_image }}" alt="{{ novel.title }}" class="detail-cover-img">
+    {% else %}
+    <div class="detail-cover-img" style="display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1f1f2e, #13131c); color: var(--accent-color); font-size: 3rem; font-weight: 800;">
+      {{ novel.title[:1] }}
+    </div>
+    {% endif %}
+  </div>
+
+  <div style="display: flex; flex-direction: column;">
+    <h1 class="detail-title">{{ novel.title }}</h1>
+    <div class="detail-author">Author: {{ novel.author }}</div>
+    <div class="detail-stats">
+      <span>📖 <strong>{{ novel.total_chapters }}</strong> Chapters</span>
+      <span>⏱️ Last Read: <strong>Chapter {{ novel.last_read_chapter }}</strong></span>
+    </div>
+
+    <div class="detail-actions">
+      <a href="/novel/{{ novel.slug }}/chapter/{{ novel.last_read_chapter }}" class="btn-primary">
+        {% if novel.last_read_chapter > 1 %}
+        ▶ Continue Chapter {{ novel.last_read_chapter }}
+        {% else %}
+        ▶ Start Reading Chapter 1
+        {% endif %}
+      </a>
+      <button class="btn-danger" onclick="deleteNovel('{{ novel.slug }}')">
+        🗑️ Delete
+      </button>
+    </div>
+
+    <div class="detail-synopsis">
+      <strong style="color: var(--text-primary); display: block; margin-bottom: 0.4rem;">Synopsis</strong>
+      {{ novel.synopsis }}
+    </div>
+  </div>
+</div>
+
+<div class="chapter-list-wrap">
+  <div class="section-title" style="margin-bottom: 0.5rem;">
+    <span>Chapters List</span>
+    <span class="badge-count">{{ novel.chapters|length }} total</span>
+  </div>
+
+  <div class="chapter-grid">
+    {% for ch in novel.chapters %}
+    <a href="/novel/{{ novel.slug }}/chapter/{{ ch.chapter_number }}" class="chapter-item">
+      <span class="chapter-item-title">{{ ch.title }}</span>
+      <span class="chapter-item-meta">{{ ch.word_count }} words</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function deleteNovel(slug) {
+  if (confirm("Are you sure you want to delete this novel from your library?")) {
+    const res = await fetch(`/api/novel/${slug}`, { method: 'DELETE' });
+    if (res.ok) {
+      window.location.href = '/';
+    } else {
+      alert("Failed to delete novel.");
+    }
+  }
+}
+</script>
+{% endblock %}
