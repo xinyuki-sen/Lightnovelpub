@@ -15,9 +15,16 @@ app = FastAPI(title="Novel Phoenix Custom Reader")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
-COVERS_DIR = os.path.join(STATIC_DIR, "covers")
 
-os.makedirs(COVERS_DIR, exist_ok=True)
+if os.environ.get("VERCEL"):
+    COVERS_DIR = "/tmp/covers"
+else:
+    COVERS_DIR = os.path.join(STATIC_DIR, "covers")
+
+try:
+    os.makedirs(COVERS_DIR, exist_ok=True)
+except Exception:
+    pass
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)

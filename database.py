@@ -4,7 +4,19 @@ import os
 import re
 from typing import List, Dict, Optional, Tuple
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data", "library.db")
+if os.environ.get("VERCEL"):
+    DB_DIR = "/tmp/data"
+    os.makedirs(DB_DIR, exist_ok=True)
+    DB_PATH = os.path.join(DB_DIR, "library.db")
+    seed_db = os.path.join(os.path.dirname(__file__), "data", "library.db")
+    if os.path.exists(seed_db) and not os.path.exists(DB_PATH):
+        import shutil
+        try:
+            shutil.copyfile(seed_db, DB_PATH)
+        except Exception as e:
+            print("Failed to copy seed database:", e)
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), "data", "library.db")
 
 def get_connection():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
