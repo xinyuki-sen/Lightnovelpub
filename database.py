@@ -9,6 +9,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "data", "library.db")
 def get_connection():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA foreign_keys = ON;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -156,6 +157,10 @@ def update_reading_progress(slug: str, chapter_number: int, percent: float):
 def delete_novel(slug: str):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM novels WHERE slug = ?", (slug,))
+    cursor.execute("SELECT id FROM novels WHERE slug = ?", (slug,))
+    row = cursor.fetchone()
+    if row:
+        cursor.execute("DELETE FROM chapters WHERE novel_id = ?", (row["id"],))
+        cursor.execute("DELETE FROM novels WHERE id = ?", (row["id"],))
     conn.commit()
     conn.close()

@@ -3,83 +3,126 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ chapter.title }} — {{ novel.title }} — Novel Phoenix</title>
+  <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}">
 
-  <!-- Reading Progress Line at very top of screen -->
+  <!-- Real-time Reading Progress Bar at the absolute top -->
   <div class="reader-progress-bar" id="reader-progress-bar"></div>
 
-  <!-- Sticky Reader Top Bar -->
-  <nav class="reader-topbar">
-    <div class="reader-titles">
-      <a href="/novel/{{ novel.slug }}" class="reader-book-title" title="Return to novel overview">
-        ← {{ novel.title }}
+  <!-- Sleek Sticky Reader Topbar -->
+  <header class="reader-topbar">
+    <div class="reader-titles-column">
+      <a href="/novel/{{ novel.slug }}" class="reader-book-link" title="Return to Table of Contents">
+        <span>←</span> {{ novel.title }}
       </a>
-      <div class="reader-chapter-title">{{ chapter.title }}</div>
+      <div class="reader-chapter-title-text">{{ chapter.title }}</div>
     </div>
 
-    <div class="reader-controls">
-      <!-- Novel Phoenix Listen Voice / Audio Button -->
-      <button class="control-btn btn-listen-voice" id="listen-toggle-btn" title="Text-to-Speech: Put on headphones and listen from current position!">
-        🎧 Audio
+    <div class="reader-toolbar-actions">
+      <!-- High-End Audio Text-to-Speech Button -->
+      <button class="reader-tool-btn btn-audio-listen" id="listen-toggle-btn" title="Headphones Mode: Listen to chapter audio from current reading position!">
+        <span>🎧</span> Audio Mode
       </button>
 
-      <button class="control-btn" id="toggle-settings-btn" title="Reading Settings (Theme, Font, Size)">
-        ⚙️ Settings
+      <button class="reader-tool-btn" id="toggle-settings-btn" title="Optimize Reading Experience (Theme, Font, Size, Width, Spacing)">
+        <span>⚙️</span> Optimize
       </button>
-      
-      <a href="/" class="control-btn" title="Back to Library">
-        📚 Library
+
+      <button class="reader-tool-btn" id="toggle-fullscreen-btn" title="Toggle Fullscreen Reading (F)">
+        <span id="fullscreen-icon">⛶</span>
+      </button>
+
+      <a href="/" class="reader-tool-btn" title="Back to Library">
+        <span>📚</span> Library
       </a>
     </div>
-  </nav>
+  </header>
 
-  <!-- Interactive Reader Settings Drawer -->
+  <!-- Reader Customizer Drawer -->
   <div class="settings-drawer" id="settings-drawer">
-    <div class="setting-group">
+    <!-- Themes -->
+    <div class="setting-ctrl-item">
       <span>Theme:</span>
-      <div class="theme-pill theme-black active" data-theme="black" title="Dark Black"></div>
-      <div class="theme-pill theme-midnight" data-theme="midnight" title="Midnight Blue"></div>
-      <div class="theme-pill theme-sepia" data-theme="sepia" title="Parchment Sepia"></div>
-      <div class="theme-pill theme-light" data-theme="light" title="Day Light"></div>
+      <div class="theme-pill-dot dot-black active" data-theme="black" title="Pitch Black (OLED)"></div>
+      <div class="theme-pill-dot dot-midnight" data-theme="midnight" title="Deep Midnight"></div>
+      <div class="theme-pill-dot dot-forest" data-theme="forest" title="Forest Night"></div>
+      <div class="theme-pill-dot dot-sepia" data-theme="sepia" title="Parchment Sepia"></div>
+      <div class="theme-pill-dot dot-light" data-theme="light" title="Day Light"></div>
     </div>
 
-    <div class="setting-group">
+    <!-- Font Family -->
+    <div class="setting-ctrl-item">
       <span>Font:</span>
-      <select id="font-family-select" class="form-input" style="padding: 0.35rem 0.6rem; font-size: 0.85rem;">
-        <option value="'Nunito Sans', sans-serif">Nunito Sans (Default)</option>
-        <option value="'Merriweather', serif">Merriweather (Book Serif)</option>
+      <select id="font-family-select" class="listen-select-box" style="padding: 0.35rem 0.65rem;">
+        <option value="'Nunito Sans', sans-serif">Nunito Sans (Modern Clean)</option>
+        <option value="'Merriweather', serif">Merriweather (Classic Book Serif)</option>
+        <option value="'Lora', serif">Lora (Elegant Editorial)</option>
         <option value="'Roboto', sans-serif">Roboto</option>
-        <option value="'Open Sans', sans-serif">Open Sans</option>
         <option value="'Montserrat', sans-serif">Montserrat</option>
+        <option value="'Open Sans', sans-serif">Open Sans</option>
       </select>
     </div>
 
-    <div class="setting-group">
-      <span>Size:</span>
-      <button class="control-btn" id="btn-font-dec" style="padding: 0.3rem 0.6rem;">A -</button>
-      <span id="font-size-val" style="font-weight: 700; width: 38px; text-align: center;">19px</span>
-      <button class="control-btn" id="btn-font-inc" style="padding: 0.3rem 0.6rem;">A +</button>
+    <!-- Font Size -->
+    <div class="setting-ctrl-item">
+      <span>Font Size:</span>
+      <button class="reader-tool-btn" id="btn-font-dec" style="padding: 0.3rem 0.65rem;">A -</button>
+      <span id="font-size-val" style="font-weight: 800; min-width: 40px; text-align: center; color: var(--accent-light);">19px</span>
+      <button class="reader-tool-btn" id="btn-font-inc" style="padding: 0.3rem 0.65rem;">A +</button>
     </div>
 
-    <div class="setting-group" style="font-size: 0.78rem; color: var(--text-muted);">
-      💡 Tip: Click any paragraph to start audio reading from there!
+    <!-- Reading Width -->
+    <div class="setting-ctrl-item">
+      <span>Width:</span>
+      <select id="reading-width-select" class="listen-select-box" style="padding: 0.35rem 0.65rem;">
+        <option value="760px">Compact (760px)</option>
+        <option value="860px" selected>Comfort (860px)</option>
+        <option value="1020px">Wide (1020px)</option>
+        <option value="1200px">Max (1200px)</option>
+      </select>
+    </div>
+
+    <!-- Line Spacing -->
+    <div class="setting-ctrl-item">
+      <span>Line Spacing:</span>
+      <select id="line-height-select" class="listen-select-box" style="padding: 0.35rem 0.65rem;">
+        <option value="1.6">Compact (1.6)</option>
+        <option value="1.85" selected>Standard (1.85)</option>
+        <option value="2.15">Relaxed (2.15)</option>
+      </select>
+    </div>
+
+    <!-- Paragraph Gap -->
+    <div class="setting-ctrl-item">
+      <span>Gap:</span>
+      <select id="para-gap-select" class="listen-select-box" style="padding: 0.35rem 0.65rem;">
+        <option value="1rem">Tight</option>
+        <option value="1.6rem" selected>Normal</option>
+        <option value="2.2rem">Spacious</option>
+      </select>
+    </div>
+
+    <!-- Reset Defaults -->
+    <div class="setting-ctrl-item">
+      <button class="reader-tool-btn" id="btn-reset-settings" style="padding: 0.35rem 0.8rem; font-size: 0.82rem;" title="Reset typography & theme to defaults">
+        ↺ Reset
+      </button>
     </div>
   </div>
 
-  <!-- Top Navigation Bar -->
-  <div class="chapter-nav-bar">
+  <!-- Top Chapter Navigation Bar -->
+  <div class="chapter-nav-row">
     {% if prev_chapter %}
-    <a href="/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}" class="nav-ch-btn" id="prev-chapter-btn">
+    <a href="/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}" class="nav-arrow-btn" id="prev-chapter-btn">
       ← Prev
     </a>
     {% else %}
-    <button class="nav-ch-btn" disabled>← Prev</button>
+    <button class="nav-arrow-btn" disabled>← Prev</button>
     {% endif %}
 
-    <select class="chapter-select" id="chapter-select-dropdown">
+    <select class="chapter-dropdown-select" id="chapter-select-dropdown">
       {% for ch in all_chapters %}
       <option value="/novel/{{ novel.slug }}/chapter/{{ ch.chapter_number }}" {% if ch.chapter_number == chapter.chapter_number %}selected{% endif %}>
         {{ ch.title }}
@@ -88,56 +131,57 @@
     </select>
 
     {% if next_chapter %}
-    <a href="/novel/{{ novel.slug }}/chapter/{{ next_chapter }}" class="nav-ch-btn" id="next-chapter-btn">
+    <a href="/novel/{{ novel.slug }}/chapter/{{ next_chapter }}" class="nav-arrow-btn" id="next-chapter-btn">
       Next →
     </a>
     {% else %}
-    <button class="nav-ch-btn" disabled>Next →</button>
+    <button class="nav-arrow-btn" disabled>Next →</button>
     {% endif %}
   </div>
 
-  <!-- Reading Canvas: Clean Paragraphs -->
-  <article class="reader-container" id="reader-container">
-    <div style="text-align: center; margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color);">
-      <h1 style="font-size: 1.85rem; font-weight: 800; margin-bottom: 0.4rem;">{{ chapter.title }}</h1>
-      <span style="font-size: 0.85rem; color: var(--text-muted);">{{ chapter.word_count }} words</span>
+  <!-- Main Reading Canvas: Clean Paragraphs -->
+  <article class="reader-article-canvas" id="reader-container">
+    <div class="chapter-headline-block">
+      <h1 class="chapter-headline-title">{{ chapter.title }}</h1>
+      <span class="chapter-headline-words">{{ chapter.word_count }} Words &bull; Estimated read: {{ (chapter.word_count / 220)|round|int + 1 }} mins</span>
     </div>
 
     <div id="chapter-content">
       {% for para in chapter.paragraphs %}
-      <p data-para-index="{{ loop.index0 }}" title="Click to start audio reading from this paragraph">{{ para }}</p>
+      <p data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para }}</p>
       {% endfor %}
     </div>
   </article>
 
   <!-- Bottom Navigation Bar -->
-  <div class="chapter-nav-bar" style="margin-bottom: 5rem;">
+  <div class="chapter-nav-row" style="margin-bottom: 6rem;">
     {% if prev_chapter %}
-    <a href="/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}" class="nav-ch-btn">
-      ← Prev Chapter
+    <a href="/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}" class="nav-arrow-btn">
+      ← Previous Chapter
     </a>
     {% else %}
-    <button class="nav-ch-btn" disabled>← Prev</button>
+    <button class="nav-arrow-btn" disabled>← Previous Chapter</button>
     {% endif %}
 
-    <a href="/novel/{{ novel.slug }}" class="nav-ch-btn">
+    <a href="/novel/{{ novel.slug }}" class="nav-arrow-btn">
       Table of Contents
     </a>
 
     {% if next_chapter %}
-    <a href="/novel/{{ novel.slug }}/chapter/{{ next_chapter }}" class="nav-ch-btn">
+    <a href="/novel/{{ novel.slug }}/chapter/{{ next_chapter }}" class="nav-arrow-btn">
       Next Chapter →
     </a>
     {% else %}
-    <button class="nav-ch-btn" disabled>Next Chapter →</button>
+    <button class="nav-arrow-btn" disabled>Next Chapter →</button>
     {% endif %}
   </div>
 
-  <!-- Floating Audio Player Bar (Novel Phoenix Style) -->
+  <!-- Docked Floating Audio Player Widget (Novel Phoenix Luxury Design) -->
   <div class="listen-player-bar" id="listen-player-bar">
     <div class="listen-player__progress">
       <div class="listen-player__progress-fill" id="audio-progress-fill"></div>
     </div>
+    
     <div class="listen-player__inner">
       <div class="listen-player__info">
         {% if novel.cover_image %}
@@ -150,34 +194,34 @@
       </div>
 
       <div class="listen-player__controls">
-        <button class="listen-btn" id="audio-btn-prev" title="Previous Paragraph (or press J)">⏮</button>
-        <button class="listen-btn listen-btn-play" id="audio-btn-play" title="Play / Pause (or press Space)">▶</button>
-        <button class="listen-btn" id="audio-btn-next" title="Next Paragraph (or press K)">⏭</button>
+        <button class="listen-round-btn" id="audio-btn-prev" title="Rewind Paragraph (J)">⏮</button>
+        <button class="listen-round-btn listen-btn-play-hero" id="audio-btn-play" title="Play / Pause (Space)">▶</button>
+        <button class="listen-round-btn" id="audio-btn-next" title="Forward Paragraph (K)">⏭</button>
       </div>
 
       <div class="listen-player__settings">
         <!-- Speed -->
-        <select class="listen-select" id="audio-speed-select" title="Speaking Speed">
-          <option value="0.75">Speed: 0.75x</option>
-          <option value="1.0" selected>Speed: 1.0x (Normal)</option>
-          <option value="1.25">Speed: 1.25x</option>
-          <option value="1.5">Speed: 1.5x</option>
-          <option value="1.75">Speed: 1.75x</option>
-          <option value="2.0">Speed: 2.0x</option>
+        <select class="listen-select-box" id="audio-speed-select" title="Speaking Rate">
+          <option value="0.75">0.75x</option>
+          <option value="1.0" selected>1.0x Speed</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="1.75">1.75x</option>
+          <option value="2.0">2.0x</option>
         </select>
 
         <!-- Voice Selector -->
-        <select class="listen-select" id="audio-voice-select" title="Voice Selection" style="max-width: 190px;">
+        <select class="listen-select-box" id="audio-voice-select" title="Natural Voice Selection" style="max-width: 170px;">
           <option value="">Default Voice</option>
         </select>
 
         <!-- Auto next chapter -->
-        <label class="listen-toggle-label" title="Automatically advance to the next chapter when this one finishes">
+        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
           <input type="checkbox" id="audio-auto-next" checked>
-          <span>Auto-Next</span>
+          <span>Auto-Next 🔁</span>
         </label>
 
-        <button class="listen-close-btn" id="audio-btn-close" title="Close Audio Player">&times;</button>
+        <button class="listen-close-cross" id="audio-btn-close" title="Close Audio Player">&times;</button>
       </div>
     </div>
   </div>

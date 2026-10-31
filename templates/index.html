@@ -1,34 +1,61 @@
 {% extends "base.html" %}
 
-{% block title %}My Novel Library — Novel Phoenix{% endblock %}
+{% block title %}My Novel Library — LightnovelPub{% endblock %}
 
 {% block content %}
-<div class="section-title">
-  <div>
-    <span>My Library</span>
-    <span class="badge-count">{{ novels|length }} Novels</span>
+<!-- Cinematic Library Hero Header -->
+<div class="library-hero">
+  <div class="hero-text">
+    <h1>Welcome back, Reader</h1>
+    <p>Read, listen, and manage your personal light novel collection converted directly from your PDFs.</p>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-stat-box">
+      <div class="hero-stat-num">{{ novels|length }}</div>
+      <div class="hero-stat-label">Novels in Library</div>
+    </div>
+    {% set total_chs = namespace(count=0) %}
+    {% for n in novels %}
+      {% set total_chs.count = total_chs.count + n.total_chapters %}
+    {% endfor %}
+    <div class="hero-stat-box">
+      <div class="hero-stat-num">{{ total_chs.count }}</div>
+      <div class="hero-stat-label">Total Chapters</div>
+    </div>
+  </div>
+</div>
+
+<div class="section-header-row">
+  <div class="section-title-wrap">
+    <h2>Continue Reading</h2>
+    <span class="badge-pill">{{ novels|length }} Available</span>
   </div>
 </div>
 
 {% if novels %}
 <div class="novel-grid">
   {% for novel in novels %}
-  <a href="/novel/{{ novel.slug }}" class="novel-card">
+  <a href="/novel/{{ novel.slug }}" class="novel-card" data-novel-title="{{ novel.title }}">
     <div class="novel-cover-wrap">
       {% if novel.cover_image %}
-      <img src="{{ novel.cover_image }}" alt="{{ novel.title }}" class="novel-cover-img">
+      <img src="{{ novel.cover_image }}" alt="{{ novel.title }}" class="novel-cover-img" loading="lazy">
       {% else %}
-      <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1f1f2e, #13131c); color: var(--accent-color); font-size: 2.2rem; font-weight: 800;">
-        {{ novel.title[:1] }}
+      <div class="novel-cover-placeholder">
+        <div class="book-icon">📖</div>
+        <div class="short-title">{{ novel.title }}</div>
       </div>
       {% endif %}
-      <span class="novel-card-badge">{{ novel.total_chapters }} Chs</span>
+      <span class="novel-card-badge">{{ novel.total_chapters }} Chapters</span>
     </div>
     <div class="novel-info-body">
       <h3 class="novel-title" title="{{ novel.title }}">{{ novel.title }}</h3>
       <div class="novel-author">{{ novel.author }}</div>
+      
       <div class="novel-progress-bar-wrap">
-        <span>Chapter {{ novel.last_read_chapter }}</span>
+        <div class="progress-header">
+          <span>Chapter {{ novel.last_read_chapter }}</span>
+          <span>{{ ((novel.last_read_chapter / novel.total_chapters) * 100)|round|int if novel.total_chapters > 0 else 0 }}%</span>
+        </div>
         <div class="progress-track">
           <div class="progress-fill" style="width: {{ (novel.last_read_chapter / novel.total_chapters * 100) if novel.total_chapters > 0 else 0 }}%;"></div>
         </div>
@@ -40,11 +67,11 @@
 {% else %}
 <div class="empty-library">
   <div class="empty-icon">📚</div>
-  <h3 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem;">Your library is empty</h3>
-  <p style="color: var(--text-secondary); max-width: 440px; margin: 0 auto 1.5rem auto;">
-    Upload your favorite novel PDF to convert it into the Novel Phoenix reading experience.
+  <h3>Your library is empty</h3>
+  <p>
+    Upload your favorite novel PDF to convert it into segmented chapters with high-end typography and audio mode.
   </p>
-  <button class="btn-primary open-upload-btn" style="margin: 0 auto;">
+  <button class="btn-read-primary open-upload-btn" style="margin: 0 auto;">
     <span>+</span> Upload Your First PDF Novel
   </button>
 </div>

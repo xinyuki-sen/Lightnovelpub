@@ -1,5 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // Elements
+  // =========================================================================
+  // 1. DOM ELEMENTS & PREFERENCES INITIALIZATION
+  // =========================================================================
   const progressBar = document.getElementById('reader-progress-bar');
   const settingsToggle = document.getElementById('toggle-settings-btn');
   const settingsDrawer = document.getElementById('settings-drawer');
@@ -8,7 +10,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const fontSizeDisplay = document.getElementById('font-size-val');
   const btnFontDec = document.getElementById('btn-font-dec');
   const btnFontInc = document.getElementById('btn-font-inc');
-  const themePills = document.querySelectorAll('.theme-pill');
+  const themePills = document.querySelectorAll('.theme-pill-dot');
+  const widthSelect = document.getElementById('reading-width-select');
+  const lineHeightSelect = document.getElementById('line-height-select');
+  const paraGapSelect = document.getElementById('para-gap-select');
+  const resetSettingsBtn = document.getElementById('btn-reset-settings');
+  const fullscreenBtn = document.getElementById('toggle-fullscreen-btn');
+  const fullscreenIcon = document.getElementById('fullscreen-icon');
   const chapterSelect = document.getElementById('chapter-select-dropdown');
   const prevBtn = document.getElementById('prev-chapter-btn');
   const nextBtn = document.getElementById('next-chapter-btn');
@@ -17,11 +25,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedTheme = localStorage.getItem('novel_reader_theme') || 'black';
   const savedFont = localStorage.getItem('novel_reader_font') || "'Nunito Sans', sans-serif";
   const savedFontSize = parseInt(localStorage.getItem('novel_reader_font_size') || '19', 10);
+  const savedWidth = localStorage.getItem('novel_reader_width') || '860px';
+  const savedLineHeight = localStorage.getItem('novel_reader_line_height') || '1.85';
+  const savedParaGap = localStorage.getItem('novel_reader_para_gap') || '1.6rem';
 
-  // Apply preferences
+  // Apply saved preferences immediately
   applyTheme(savedTheme);
   applyFont(savedFont);
   applyFontSize(savedFontSize);
+  applyWidth(savedWidth);
+  applyLineHeight(savedLineHeight);
+  applyParaGap(savedParaGap);
 
   // Settings Drawer Toggle
   if (settingsToggle && settingsDrawer) {
@@ -29,6 +43,10 @@ document.addEventListener('DOMContentLoaded', () => {
       settingsDrawer.classList.toggle('open');
     });
   }
+
+  // =========================================================================
+  // 2. OPTIMIZATION & CUSTOMIZATION CONTROLS
+  // =========================================================================
 
   // Theme Switching
   themePills.forEach(pill => {
@@ -100,6 +118,106 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Reading Width Adjuster
+  if (widthSelect) {
+    widthSelect.value = savedWidth;
+    widthSelect.addEventListener('change', (e) => {
+      applyWidth(e.target.value);
+      localStorage.setItem('novel_reader_width', e.target.value);
+    });
+  }
+
+  function applyWidth(width) {
+    document.documentElement.style.setProperty('--reader-max-width', width);
+    if (readerContainer) {
+      readerContainer.style.maxWidth = width;
+    }
+    const navRows = document.querySelectorAll('.chapter-nav-row');
+    navRows.forEach(row => row.style.maxWidth = width);
+    if (widthSelect) {
+      widthSelect.value = width;
+    }
+  }
+
+  // Line Height Adjuster
+  if (lineHeightSelect) {
+    lineHeightSelect.value = savedLineHeight;
+    lineHeightSelect.addEventListener('change', (e) => {
+      applyLineHeight(e.target.value);
+      localStorage.setItem('novel_reader_line_height', e.target.value);
+    });
+  }
+
+  function applyLineHeight(val) {
+    document.documentElement.style.setProperty('--reader-line-height', val);
+    if (readerContainer) {
+      readerContainer.style.lineHeight = val;
+    }
+    if (lineHeightSelect) {
+      lineHeightSelect.value = val;
+    }
+  }
+
+  // Paragraph Gap Adjuster
+  if (paraGapSelect) {
+    paraGapSelect.value = savedParaGap;
+    paraGapSelect.addEventListener('change', (e) => {
+      applyParaGap(e.target.value);
+      localStorage.setItem('novel_reader_para_gap', e.target.value);
+    });
+  }
+
+  function applyParaGap(val) {
+    document.documentElement.style.setProperty('--reader-para-spacing', val);
+    const paragraphs = document.querySelectorAll('#chapter-content p');
+    paragraphs.forEach(p => p.style.marginBottom = val);
+    if (paraGapSelect) {
+      paraGapSelect.value = val;
+    }
+  }
+
+  // Fullscreen Mode Toggle
+  if (fullscreenBtn) {
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+  }
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+      if (fullscreenIcon) fullscreenIcon.textContent = '✕';
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+      if (fullscreenIcon) fullscreenIcon.textContent = '⛶';
+    }
+  }
+
+  document.addEventListener('fullscreenchange', () => {
+    if (fullscreenIcon) {
+      fullscreenIcon.textContent = document.fullscreenElement ? '✕' : '⛶';
+    }
+  });
+
+  // Reset Preferences to Defaults
+  if (resetSettingsBtn) {
+    resetSettingsBtn.addEventListener('click', () => {
+      applyTheme('black');
+      applyFont("'Nunito Sans', sans-serif");
+      applyFontSize(19);
+      applyWidth('860px');
+      applyLineHeight('1.85');
+      applyParaGap('1.6rem');
+
+      localStorage.removeItem('novel_reader_theme');
+      localStorage.removeItem('novel_reader_font');
+      localStorage.removeItem('novel_reader_font_size');
+      localStorage.removeItem('novel_reader_width');
+      localStorage.removeItem('novel_reader_line_height');
+      localStorage.removeItem('novel_reader_para_gap');
+    });
+  }
+
   // Chapter Dropdown Jump
   if (chapterSelect) {
     chapterSelect.addEventListener('change', (e) => {
@@ -158,40 +276,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 150);
   }
 
-  // Keyboard Shortcuts for Reader Navigation
-  document.addEventListener('keydown', (e) => {
-    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-      return;
-    }
-
-    if (e.key === 'ArrowLeft' && prevBtn && !prevBtn.disabled) {
-      prevBtn.click();
-    } else if (e.key === 'ArrowRight' && nextBtn && !nextBtn.disabled) {
-      nextBtn.click();
-    } else if (e.key.toLowerCase() === 't') {
-      if (settingsToggle) settingsToggle.click();
-    } else if (e.key.toLowerCase() === 'a') {
-      // 'A' toggles Audio
-      if (listenToggleBtn) listenToggleBtn.click();
-    } else if (e.code === 'Space' && audioState.isOpen) {
-      // Space bar toggles Play/Pause in Audio Player
-      e.preventDefault();
-      toggleAudioPlay();
-    } else if (e.key.toLowerCase() === 'j' && audioState.isOpen) {
-      // 'J' = prev paragraph
-      playPrevParagraph();
-    } else if (e.key.toLowerCase() === 'k' && audioState.isOpen) {
-      // 'K' = next paragraph
-      playNextParagraph();
-    }
-  });
-
   // =========================================================================
-  // NOVEL PHOENIX AUDIO TEXT-TO-SPEECH (TTS) ENGINE
+  // 3. NOVEL PHOENIX AUDIO TEXT-TO-SPEECH (TTS) ENGINE
   // =========================================================================
 
   const synth = window.speechSynthesis;
-  const isSpeechSupported = 'speechSynthesis' in window;
+  const isSpeechSupported = ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
 
   const listenToggleBtn = document.getElementById('listen-toggle-btn');
   const playerBar = document.getElementById('listen-player-bar');
@@ -207,6 +297,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p'));
 
+  // Saved audio settings
+  const savedRate = parseFloat(localStorage.getItem('novel_reader_audio_rate') || '1.0');
+  const savedVoiceURI = localStorage.getItem('novel_reader_voice_uri') || '';
+
   const audioState = {
     isOpen: false,
     isPlaying: false,
@@ -214,9 +308,14 @@ document.addEventListener('DOMContentLoaded', () => {
     currentIndex: 0,
     voices: [],
     selectedVoice: null,
-    rate: 1.0,
-    wakeLock: null
+    rate: savedRate,
+    wakeLock: null,
+    keepAliveTimer: null
   };
+
+  if (audioSpeedSelect) {
+    audioSpeedSelect.value = String(savedRate);
+  }
 
   // Populate System Speech Voices
   function loadVoices() {
@@ -225,22 +324,42 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!allVoices || allVoices.length === 0) return;
 
     audioState.voices = allVoices;
+
     if (audioVoiceSelect) {
       audioVoiceSelect.innerHTML = '';
-      
-      // Prioritize English voices or system default
-      allVoices.forEach((voice, i) => {
+
+      // Sort voices: English/Natural first, then others alphabetically
+      const sortedVoices = [...allVoices].sort((a, b) => {
+        const aEn = a.lang.toLowerCase().startsWith('en');
+        const bEn = b.lang.toLowerCase().startsWith('en');
+        if (aEn && !bEn) return -1;
+        if (!aEn && bEn) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      let chosenVoice = null;
+
+      sortedVoices.forEach((voice) => {
         const option = document.createElement('option');
-        option.value = i;
+        option.value = voice.voiceURI;
         option.textContent = `${voice.name} (${voice.lang})`;
-        if (voice.default || voice.name.toLowerCase().includes('natural') || voice.lang.startsWith('en')) {
-          if (!audioState.selectedVoice) {
-            audioState.selectedVoice = voice;
-            option.selected = true;
-          }
+
+        if (savedVoiceURI && voice.voiceURI === savedVoiceURI) {
+          chosenVoice = voice;
+          option.selected = true;
+        } else if (!chosenVoice && (voice.default || voice.name.toLowerCase().includes('natural') || voice.lang.startsWith('en-US'))) {
+          chosenVoice = voice;
+          option.selected = true;
         }
+
         audioVoiceSelect.appendChild(option);
       });
+
+      if (!chosenVoice && sortedVoices.length > 0) {
+        chosenVoice = sortedVoices[0];
+      }
+
+      audioState.selectedVoice = chosenVoice;
     }
   }
 
@@ -254,10 +373,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Voice selector change
   if (audioVoiceSelect) {
     audioVoiceSelect.addEventListener('change', (e) => {
-      const idx = parseInt(e.target.value, 10);
-      if (audioState.voices[idx]) {
-        audioState.selectedVoice = audioState.voices[idx];
-        if (audioState.isPlaying) {
+      const uri = e.target.value;
+      const matched = audioState.voices.find(v => v.voiceURI === uri);
+      if (matched) {
+        audioState.selectedVoice = matched;
+        localStorage.setItem('novel_reader_voice_uri', uri);
+        if (audioState.isPlaying && !audioState.isPaused) {
           speakParagraph(audioState.currentIndex);
         }
       }
@@ -268,7 +389,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (audioSpeedSelect) {
     audioSpeedSelect.addEventListener('change', (e) => {
       audioState.rate = parseFloat(e.target.value);
-      if (audioState.isPlaying) {
+      localStorage.setItem('novel_reader_audio_rate', String(audioState.rate));
+      if (audioState.isPlaying && !audioState.isPaused) {
         speakParagraph(audioState.currentIndex);
       }
     });
@@ -276,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Find the paragraph currently in view on screen (to resume exactly from user's reading position)
   function getParagraphCurrentlyInView() {
-    const viewportMiddle = window.innerHeight / 2;
+    const viewportMiddle = window.innerHeight * 0.4;
     for (let i = 0; i < paragraphNodes.length; i++) {
       const rect = paragraphNodes[i].getBoundingClientRect();
       if (rect.top <= viewportMiddle && rect.bottom >= viewportMiddle) {
@@ -305,6 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
 
     requestWakeLock();
+    startKeepAlive();
     speakParagraph(startIndex);
   }
 
@@ -315,6 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
     audioState.isPlaying = false;
     audioState.isPaused = false;
     clearParagraphHighlight();
+    stopKeepAlive();
 
     if (playerBar) playerBar.classList.remove('active');
     if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
@@ -331,6 +455,27 @@ document.addEventListener('DOMContentLoaded', () => {
   function stopSpeech() {
     if (isSpeechSupported) {
       synth.cancel();
+      if (synth.paused) {
+        synth.resume();
+      }
+    }
+  }
+
+  // Chrome 15s pause bug workaround
+  function startKeepAlive() {
+    stopKeepAlive();
+    audioState.keepAliveTimer = setInterval(() => {
+      if (isSpeechSupported && synth.speaking && !synth.paused) {
+        synth.pause();
+        synth.resume();
+      }
+    }, 9000);
+  }
+
+  function stopKeepAlive() {
+    if (audioState.keepAliveTimer) {
+      clearInterval(audioState.keepAliveTimer);
+      audioState.keepAliveTimer = null;
     }
   }
 
@@ -342,7 +487,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (index >= paragraphNodes.length) {
       clearParagraphHighlight();
       audioState.isPlaying = false;
+      audioState.isPaused = false;
       if (audioBtnPlay) audioBtnPlay.textContent = '▶';
+      if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
       if (audioParaStatus) audioParaStatus.textContent = 'Chapter Finished 🎉';
 
       // Auto advance to next chapter if enabled
@@ -360,7 +507,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     audioState.currentIndex = index;
     const targetNode = paragraphNodes[index];
-    const textToSpeak = targetNode.textContent.trim();
+    const textToSpeak = (targetNode.textContent || '').trim();
 
     // If paragraph is completely empty, jump to next
     if (!textToSpeak) {
@@ -368,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Cancel any previous utterance
+    // Cancel any ongoing speech & resume queue
     stopSpeech();
 
     // Update UI highlights & auto-scroll
@@ -385,34 +532,46 @@ document.addEventListener('DOMContentLoaded', () => {
       audioProgressFill.style.width = `${pct}%`;
     }
 
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    if (audioState.selectedVoice) {
-      utterance.voice = audioState.selectedVoice;
-    }
-    utterance.rate = audioState.rate || 1.0;
-
-    utterance.onstart = () => {
-      audioState.isPlaying = true;
-      audioState.isPaused = false;
-      if (audioBtnPlay) audioBtnPlay.textContent = '⏸';
-      if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
-    };
-
-    utterance.onend = () => {
-      // Automatically advance to the next paragraph
-      if (audioState.isPlaying && !audioState.isPaused) {
-        speakParagraph(index + 1);
+    // Small delay to ensure synth.cancel() took full effect
+    setTimeout(() => {
+      // Ensure voices are loaded
+      if (!audioState.selectedVoice && audioState.voices.length > 0) {
+        audioState.selectedVoice = audioState.voices[0];
       }
-    };
 
-    utterance.onerror = (e) => {
-      console.warn("SpeechSynthesis error:", e);
-      if (audioState.isPlaying && !audioState.isPaused) {
-        speakParagraph(index + 1);
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      window.__activeNovelUtterance = utterance; // Prevent Chrome garbage collection bug
+
+      if (audioState.selectedVoice) {
+        utterance.voice = audioState.selectedVoice;
       }
-    };
+      utterance.rate = audioState.rate || 1.0;
 
-    synth.speak(utterance);
+      utterance.onstart = () => {
+        audioState.isPlaying = true;
+        audioState.isPaused = false;
+        if (audioBtnPlay) audioBtnPlay.textContent = '⏸';
+        if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+      };
+
+      utterance.onend = () => {
+        if (audioState.isPlaying && !audioState.isPaused) {
+          speakParagraph(index + 1);
+        }
+      };
+
+      utterance.onerror = (e) => {
+        console.warn("SpeechSynthesis error:", e);
+        if (audioState.isPlaying && !audioState.isPaused) {
+          // If error is not a manual cancel, gracefully advance
+          if (e.error !== 'interrupted' && e.error !== 'canceled') {
+            setTimeout(() => speakParagraph(index + 1), 100);
+          }
+        }
+      };
+
+      synth.speak(utterance);
+    }, 35);
   }
 
   // Toggle Play / Pause
@@ -451,7 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // WakeLock: prevents sleep when listening on headphones
+  // WakeLock: prevents screen sleep when listening on headphones
   async function requestWakeLock() {
     try {
       if ('wakeLock' in navigator) {
@@ -477,7 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Audio Control Button Listeners
   if (listenToggleBtn) {
     listenToggleBtn.addEventListener('click', () => {
-      if (audioState.isOpen && audioState.isPlaying) {
+      if (audioState.isOpen) {
         toggleAudioPlay();
       } else {
         openAudioPlayer();
@@ -490,10 +649,42 @@ document.addEventListener('DOMContentLoaded', () => {
   if (audioBtnNext) audioBtnNext.addEventListener('click', playNextParagraph);
   if (audioBtnClose) audioBtnClose.addEventListener('click', closeAudioPlayer);
 
+  // Keyboard Shortcuts for Reader & Audio Navigation
+  document.addEventListener('keydown', (e) => {
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+      return;
+    }
+
+    if (e.key === 'ArrowLeft' && prevBtn && !prevBtn.disabled) {
+      prevBtn.click();
+    } else if (e.key === 'ArrowRight' && nextBtn && !nextBtn.disabled) {
+      nextBtn.click();
+    } else if (e.key.toLowerCase() === 't' || e.key.toLowerCase() === 'o') {
+      // 'T' or 'O' toggles Optimize/Customize drawer
+      if (settingsToggle) settingsToggle.click();
+    } else if (e.key.toLowerCase() === 'f') {
+      // 'F' toggles Fullscreen
+      toggleFullscreen();
+    } else if (e.key.toLowerCase() === 'a') {
+      // 'A' toggles Audio
+      if (listenToggleBtn) listenToggleBtn.click();
+    } else if (e.code === 'Space' && audioState.isOpen) {
+      // Space bar toggles Play/Pause in Audio Player
+      e.preventDefault();
+      toggleAudioPlay();
+    } else if (e.key.toLowerCase() === 'j' && audioState.isOpen) {
+      // 'J' = prev paragraph
+      playPrevParagraph();
+    } else if (e.key.toLowerCase() === 'k' && audioState.isOpen) {
+      // 'K' = next paragraph
+      playNextParagraph();
+    }
+  });
+
   // Check if we navigated from previous chapter with auto-play active
   if (localStorage.getItem('novel_auto_play_tts') === 'true') {
     setTimeout(() => {
       openAudioPlayer(0);
-    }, 400);
+    }, 450);
   }
 });
