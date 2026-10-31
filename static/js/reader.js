@@ -277,29 +277,55 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // =========================================================================
-  // 3. NOVEL PHOENIX AUDIO TEXT-TO-SPEECH (TTS) ENGINE
+  // 3. NOVEL PHOENIX EXACT AUDIO PLAYER (MATCHING USER SCREENSHOTS)
   // =========================================================================
 
   const synth = window.speechSynthesis;
   const isSpeechSupported = ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
 
+  // Topbar Button
   const listenToggleBtn = document.getElementById('listen-toggle-btn');
-  const playerBar = document.getElementById('listen-player-bar');
-  const audioBtnPlay = document.getElementById('audio-btn-play');
-  const audioBtnPrev = document.getElementById('audio-btn-prev');
-  const audioBtnNext = document.getElementById('audio-btn-next');
-  const audioBtnClose = document.getElementById('audio-btn-close');
-  const audioSpeedSelect = document.getElementById('audio-speed-select');
-  const audioVoiceSelect = document.getElementById('audio-voice-select');
-  const audioAutoNextCheck = document.getElementById('audio-auto-next');
-  const audioParaStatus = document.getElementById('audio-para-status');
-  const audioProgressFill = document.getElementById('audio-progress-fill');
+
+  // Novel Phoenix Floating Audio Widget Elements
+  const npWidget = document.getElementById('np-audio-widget');
+  const npBtnClose = document.getElementById('np-audio-close');
+  const npSpeedMinus = document.getElementById('np-speed-minus');
+  const npSpeedPlus = document.getElementById('np-speed-plus');
+  const npSpeedStepperLabel = document.getElementById('np-speed-stepper-label');
+
+  // Settings Panel Elements
+  const npSettingsToggle = document.getElementById('np-btn-settings-toggle');
+  const npSettingsPanel = document.getElementById('np-audio-settings-panel');
+  const npSettingsIcon = document.getElementById('np-settings-toggle-icon');
+  const npLanguageSelect = document.getElementById('np-language-select');
+  const npVoiceSelect = document.getElementById('np-voice-select');
+  const npSpeedSlider = document.getElementById('np-speed-slider');
+  const npSpeedValLabel = document.getElementById('np-speed-val-label');
+  const npPitchSlider = document.getElementById('np-pitch-slider');
+  const npPitchValLabel = document.getElementById('np-pitch-val-label');
+  const npTabWord = document.getElementById('np-tab-highlight-word');
+  const npTabSentence = document.getElementById('np-tab-highlight-sentence');
+  const npToggleAutoNext = document.getElementById('np-toggle-autonext');
+  const npToggleAutoScroll = document.getElementById('np-toggle-autoscroll');
+
+  // Controls Row Elements
+  const npBtnRestart = document.getElementById('np-btn-restart');
+  const npBtnPrev = document.getElementById('np-btn-prev');
+  const npBtnRewind10 = document.getElementById('np-btn-rewind-10');
+  const npBtnPlayPause = document.getElementById('np-btn-play-pause');
+  const npPlayIcon = document.getElementById('np-play-icon');
+  const npBtnForward10 = document.getElementById('np-btn-forward-10');
+  const npBtnNext = document.getElementById('np-btn-next');
 
   const paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p'));
 
-  // Saved audio settings
+  // Saved audio states
   const savedRate = parseFloat(localStorage.getItem('novel_reader_audio_rate') || '1.0');
+  const savedPitch = parseFloat(localStorage.getItem('novel_reader_audio_pitch') || '1.0');
   const savedVoiceURI = localStorage.getItem('novel_reader_voice_uri') || '';
+  const savedHighlightMode = localStorage.getItem('novel_reader_highlight_mode') || 'word'; // 'word' or 'sentence'
+  const savedAutoNext = localStorage.getItem('novel_reader_autonext') !== 'false';
+  const savedAutoScroll = localStorage.getItem('novel_reader_autoscroll') !== 'false';
 
   const audioState = {
     isOpen: false,
@@ -308,16 +334,47 @@ document.addEventListener('DOMContentLoaded', () => {
     currentIndex: 0,
     voices: [],
     selectedVoice: null,
+    selectedLang: 'all',
     rate: savedRate,
+    pitch: savedPitch,
+    highlightMode: savedHighlightMode,
+    autoNext: savedAutoNext,
+    autoScroll: savedAutoScroll,
     wakeLock: null,
-    keepAliveTimer: null
+    keepAliveTimer: null,
+    currentRawText: '',
+    originalParaHTML: ''
   };
 
-  if (audioSpeedSelect) {
-    audioSpeedSelect.value = String(savedRate);
+  // Sync initial UI values
+  updateSpeedDisplays(audioState.rate);
+  if (npPitchSlider) npPitchSlider.value = String(audioState.pitch);
+  if (npPitchValLabel) npPitchValLabel.textContent = String(audioState.pitch);
+  if (npToggleAutoNext) npToggleAutoNext.checked = audioState.autoNext;
+  if (npToggleAutoScroll) npToggleAutoScroll.checked = audioState.autoScroll;
+  setHighlightTab(audioState.highlightMode);
+
+  function updateSpeedDisplays(rate) {
+    const rounded = Math.round(rate * 100) / 100;
+    const label = `${rounded}x`;
+    if (npSpeedStepperLabel) npSpeedStepperLabel.textContent = label;
+    if (npSpeedSlider) npSpeedSlider.value = String(rounded);
+    if (npSpeedValLabel) npSpeedValLabel.textContent = `${label.toUpperCase()}`;
   }
 
-  // Populate System Speech Voices
+  function setHighlightTab(mode) {
+    audioState.highlightMode = mode;
+    localStorage.setItem('novel_reader_highlight_mode', mode);
+    if (mode === 'word') {
+      npTabWord?.classList.add('active');
+      npTabSentence?.classList.remove('active');
+    } else {
+      npTabSentence?.classList.add('active');
+      npTabWord?.classList.remove('active');
+    }
+  }
+
+  // Populate Voices & Languages
   function loadVoices() {
     if (!isSpeechSupported) return;
     const allVoices = synth.getVoices();
@@ -325,42 +382,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
     audioState.voices = allVoices;
 
-    if (audioVoiceSelect) {
-      audioVoiceSelect.innerHTML = '';
-
-      // Sort voices: English/Natural first, then others alphabetically
-      const sortedVoices = [...allVoices].sort((a, b) => {
-        const aEn = a.lang.toLowerCase().startsWith('en');
-        const bEn = b.lang.toLowerCase().startsWith('en');
-        if (aEn && !bEn) return -1;
-        if (!aEn && bEn) return 1;
-        return a.name.localeCompare(b.name);
+    // Populate Languages Dropdown
+    if (npLanguageSelect) {
+      const langs = new Set();
+      allVoices.forEach(v => {
+        if (v.lang) langs.add(v.lang);
       });
 
-      let chosenVoice = null;
+      const currentLangVal = npLanguageSelect.value || 'all';
+      npLanguageSelect.innerHTML = '<option value="all">All Languages</option>';
 
-      sortedVoices.forEach((voice) => {
-        const option = document.createElement('option');
-        option.value = voice.voiceURI;
-        option.textContent = `${voice.name} (${voice.lang})`;
-
-        if (savedVoiceURI && voice.voiceURI === savedVoiceURI) {
-          chosenVoice = voice;
-          option.selected = true;
-        } else if (!chosenVoice && (voice.default || voice.name.toLowerCase().includes('natural') || voice.lang.startsWith('en-US'))) {
-          chosenVoice = voice;
-          option.selected = true;
+      Array.from(langs).sort().forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = l;
+        opt.textContent = l;
+        if (l.toLowerCase().startsWith('en-us') || l.toLowerCase().startsWith('en-gb')) {
+          opt.textContent = `${l} (Recommended)`;
         }
-
-        audioVoiceSelect.appendChild(option);
+        npLanguageSelect.appendChild(opt);
       });
 
-      if (!chosenVoice && sortedVoices.length > 0) {
-        chosenVoice = sortedVoices[0];
+      npLanguageSelect.value = currentLangVal;
+    }
+
+    renderVoiceOptions();
+  }
+
+  function renderVoiceOptions() {
+    if (!npVoiceSelect || !audioState.voices) return;
+
+    const filtered = audioState.voices.filter(v => {
+      if (!audioState.selectedLang || audioState.selectedLang === 'all') return true;
+      return v.lang === audioState.selectedLang;
+    });
+
+    // Sort: Natural / Microsoft / Google English voices first
+    filtered.sort((a, b) => {
+      const aEn = a.lang.toLowerCase().startsWith('en');
+      const bEn = b.lang.toLowerCase().startsWith('en');
+      if (aEn && !bEn) return -1;
+      if (!aEn && bEn) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    npVoiceSelect.innerHTML = '';
+    let matched = null;
+
+    filtered.forEach(voice => {
+      const opt = document.createElement('option');
+      opt.value = voice.voiceURI;
+      opt.textContent = `${voice.name} (${voice.lang})`;
+
+      if (savedVoiceURI && voice.voiceURI === savedVoiceURI) {
+        matched = voice;
+        opt.selected = true;
+      } else if (!matched && (voice.default || voice.name.toLowerCase().includes('natural') || voice.lang.startsWith('en'))) {
+        matched = voice;
+        opt.selected = true;
       }
 
-      audioState.selectedVoice = chosenVoice;
+      npVoiceSelect.appendChild(opt);
+    });
+
+    if (!matched && filtered.length > 0) {
+      matched = filtered[0];
     }
+
+    audioState.selectedVoice = matched;
   }
 
   if (isSpeechSupported) {
@@ -370,13 +458,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Voice selector change
-  if (audioVoiceSelect) {
-    audioVoiceSelect.addEventListener('change', (e) => {
+  // Language change
+  if (npLanguageSelect) {
+    npLanguageSelect.addEventListener('change', (e) => {
+      audioState.selectedLang = e.target.value;
+      renderVoiceOptions();
+    });
+  }
+
+  // Voice change
+  if (npVoiceSelect) {
+    npVoiceSelect.addEventListener('change', (e) => {
       const uri = e.target.value;
-      const matched = audioState.voices.find(v => v.voiceURI === uri);
-      if (matched) {
-        audioState.selectedVoice = matched;
+      const v = audioState.voices.find(item => item.voiceURI === uri);
+      if (v) {
+        audioState.selectedVoice = v;
         localStorage.setItem('novel_reader_voice_uri', uri);
         if (audioState.isPlaying && !audioState.isPaused) {
           speakParagraph(audioState.currentIndex);
@@ -385,18 +481,84 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Speed selector change
-  if (audioSpeedSelect) {
-    audioSpeedSelect.addEventListener('change', (e) => {
-      audioState.rate = parseFloat(e.target.value);
-      localStorage.setItem('novel_reader_audio_rate', String(audioState.rate));
+  // Speed Stepper (- / +)
+  if (npSpeedMinus) {
+    npSpeedMinus.addEventListener('click', () => {
+      let r = Math.max(0.5, Math.round((audioState.rate - 0.25) * 100) / 100);
+      setAudioRate(r);
+    });
+  }
+
+  if (npSpeedPlus) {
+    npSpeedPlus.addEventListener('click', () => {
+      let r = Math.min(2.5, Math.round((audioState.rate + 0.25) * 100) / 100);
+      setAudioRate(r);
+    });
+  }
+
+  // Speed Slider
+  if (npSpeedSlider) {
+    npSpeedSlider.addEventListener('input', (e) => {
+      setAudioRate(parseFloat(e.target.value));
+    });
+  }
+
+  function setAudioRate(newRate) {
+    audioState.rate = newRate;
+    updateSpeedDisplays(newRate);
+    localStorage.setItem('novel_reader_audio_rate', String(newRate));
+    if (audioState.isPlaying && !audioState.isPaused) {
+      speakParagraph(audioState.currentIndex);
+    }
+  }
+
+  // Pitch Slider
+  if (npPitchSlider) {
+    npPitchSlider.addEventListener('input', (e) => {
+      const p = parseFloat(e.target.value);
+      audioState.pitch = p;
+      if (npPitchValLabel) npPitchValLabel.textContent = String(p);
+      localStorage.setItem('novel_reader_audio_pitch', String(p));
       if (audioState.isPlaying && !audioState.isPaused) {
         speakParagraph(audioState.currentIndex);
       }
     });
   }
 
-  // Find the paragraph currently in view on screen (to resume exactly from user's reading position)
+  // Highlight Tabs
+  if (npTabWord) {
+    npTabWord.addEventListener('click', () => setHighlightTab('word'));
+  }
+  if (npTabSentence) {
+    npTabSentence.addEventListener('click', () => setHighlightTab('sentence'));
+  }
+
+  // Switches
+  if (npToggleAutoNext) {
+    npToggleAutoNext.addEventListener('change', (e) => {
+      audioState.autoNext = e.target.checked;
+      localStorage.setItem('novel_reader_autonext', String(e.target.checked));
+    });
+  }
+
+  if (npToggleAutoScroll) {
+    npToggleAutoScroll.addEventListener('change', (e) => {
+      audioState.autoScroll = e.target.checked;
+      localStorage.setItem('novel_reader_autoscroll', String(e.target.checked));
+    });
+  }
+
+  // Settings Panel Expand/Collapse (Gear Button)
+  if (npSettingsToggle && npSettingsPanel) {
+    npSettingsToggle.addEventListener('click', () => {
+      const isOpen = npSettingsPanel.classList.toggle('open');
+      if (npSettingsIcon) {
+        npSettingsIcon.textContent = isOpen ? '⌄' : '⚙';
+      }
+    });
+  }
+
+  // Find paragraph currently in viewport
   function getParagraphCurrentlyInView() {
     const viewportMiddle = window.innerHeight * 0.4;
     for (let i = 0; i < paragraphNodes.length; i++) {
@@ -411,7 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return 0;
   }
 
-  // Open Audio Player & start reading
+  // Open Audio Player
   function openAudioPlayer(startIndex = null) {
     if (!isSpeechSupported) {
       alert("Text-to-speech is not supported on this browser.");
@@ -423,7 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     audioState.isOpen = true;
-    if (playerBar) playerBar.classList.add('active');
+    if (npWidget) npWidget.classList.add('active');
     if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
 
     requestWakeLock();
@@ -437,19 +599,27 @@ document.addEventListener('DOMContentLoaded', () => {
     audioState.isOpen = false;
     audioState.isPlaying = false;
     audioState.isPaused = false;
-    clearParagraphHighlight();
+    restoreParagraphDOM();
     stopKeepAlive();
 
-    if (playerBar) playerBar.classList.remove('active');
+    if (npWidget) npWidget.classList.remove('active');
     if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
-    if (audioBtnPlay) audioBtnPlay.textContent = '▶';
+    if (npPlayIcon) npPlayIcon.textContent = '▶';
 
     releaseWakeLock();
     localStorage.removeItem('novel_auto_play_tts');
   }
 
-  function clearParagraphHighlight() {
-    paragraphNodes.forEach(p => p.classList.remove('listen-active-paragraph'));
+  function restoreParagraphDOM() {
+    paragraphNodes.forEach(p => {
+      p.classList.remove('listen-active-paragraph');
+      // If we modified paragraph innerHTML for word highlights, restore clean text
+      const orig = p.getAttribute('data-raw-content');
+      if (orig !== null) {
+        p.textContent = orig;
+        p.removeAttribute('data-raw-content');
+      }
+    });
   }
 
   function stopSpeech() {
@@ -461,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Chrome 15s pause bug workaround
+  // Keep-alive timer for Chrome 15s pause bug
   function startKeepAlive() {
     stopKeepAlive();
     audioState.keepAliveTimer = setInterval(() => {
@@ -469,7 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
         synth.pause();
         synth.resume();
       }
-    }, 9000);
+    }, 8500);
   }
 
   function stopKeepAlive() {
@@ -479,26 +649,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Speak a specific paragraph by index
+  // Speak paragraph by index with real-time Word/Sentence highlighting
   function speakParagraph(index) {
     if (!paragraphNodes || paragraphNodes.length === 0) return;
 
-    // Check if reached end of chapter
+    // Check if reached chapter end
     if (index >= paragraphNodes.length) {
-      clearParagraphHighlight();
+      restoreParagraphDOM();
       audioState.isPlaying = false;
       audioState.isPaused = false;
-      if (audioBtnPlay) audioBtnPlay.textContent = '▶';
+      if (npPlayIcon) npPlayIcon.textContent = '▶';
       if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
-      if (audioParaStatus) audioParaStatus.textContent = 'Chapter Finished 🎉';
 
-      // Auto advance to next chapter if enabled
-      if (audioAutoNextCheck && audioAutoNextCheck.checked && nextChapterUrl) {
+      if (audioState.autoNext && nextChapterUrl) {
         localStorage.setItem('novel_auto_play_tts', 'true');
-        if (audioParaStatus) audioParaStatus.textContent = 'Next Chapter starting in 1.5s...';
         setTimeout(() => {
           window.location.href = nextChapterUrl;
-        }, 1500);
+        }, 1200);
       }
       return;
     }
@@ -507,50 +674,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
     audioState.currentIndex = index;
     const targetNode = paragraphNodes[index];
-    const textToSpeak = (targetNode.textContent || '').trim();
 
-    // If paragraph is completely empty, jump to next
+    // Ensure raw text cache
+    let textToSpeak = targetNode.getAttribute('data-raw-content');
+    if (textToSpeak === null) {
+      textToSpeak = targetNode.textContent.trim();
+      targetNode.setAttribute('data-raw-content', textToSpeak);
+    }
+
     if (!textToSpeak) {
       speakParagraph(index + 1);
       return;
     }
 
-    // Cancel any ongoing speech & resume queue
     stopSpeech();
+    restoreParagraphDOM();
 
-    // Update UI highlights & auto-scroll
-    clearParagraphHighlight();
+    // Sentence/Paragraph highlight
     targetNode.classList.add('listen-active-paragraph');
-    targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-    // Update player status & progress bar
-    if (audioParaStatus) {
-      audioParaStatus.textContent = `Paragraph ${index + 1} of ${paragraphNodes.length}`;
-    }
-    if (audioProgressFill) {
-      const pct = ((index + 1) / paragraphNodes.length) * 100;
-      audioProgressFill.style.width = `${pct}%`;
+    if (audioState.autoScroll) {
+      targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    // Small delay to ensure synth.cancel() took full effect
     setTimeout(() => {
-      // Ensure voices are loaded
       if (!audioState.selectedVoice && audioState.voices.length > 0) {
         audioState.selectedVoice = audioState.voices[0];
       }
 
       const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      window.__activeNovelUtterance = utterance; // Prevent Chrome garbage collection bug
+      window.__activeNovelUtterance = utterance; // Shield against Chrome GC
 
       if (audioState.selectedVoice) {
         utterance.voice = audioState.selectedVoice;
       }
       utterance.rate = audioState.rate || 1.0;
+      utterance.pitch = audioState.pitch || 1.0;
+
+      // Real-time boundary event for Word Highlighting (Matches Novel Phoenix Image 1)
+      utterance.onboundary = (e) => {
+        if (!audioState.isPlaying || audioState.isPaused) return;
+
+        if (audioState.highlightMode === 'word' && (e.name === 'word' || typeof e.charIndex === 'number')) {
+          const charIdx = e.charIndex;
+          const len = e.charLength || getWordLenAt(textToSpeak, charIdx);
+          if (len > 0) {
+            highlightWordInElement(targetNode, textToSpeak, charIdx, len);
+          }
+        }
+      };
 
       utterance.onstart = () => {
         audioState.isPlaying = true;
         audioState.isPaused = false;
-        if (audioBtnPlay) audioBtnPlay.textContent = '⏸';
+        if (npPlayIcon) npPlayIcon.textContent = '⏸';
         if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
       };
 
@@ -561,17 +737,41 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
       utterance.onerror = (e) => {
-        console.warn("SpeechSynthesis error:", e);
-        if (audioState.isPlaying && !audioState.isPaused) {
-          // If error is not a manual cancel, gracefully advance
-          if (e.error !== 'interrupted' && e.error !== 'canceled') {
-            setTimeout(() => speakParagraph(index + 1), 100);
-          }
+        if (e.error !== 'interrupted' && e.error !== 'canceled') {
+          setTimeout(() => speakParagraph(index + 1), 100);
         }
       };
 
       synth.speak(utterance);
     }, 35);
+  }
+
+  function getWordLenAt(str, idx) {
+    let end = idx;
+    while (end < str.length && !/\s|[.,!?;:"'()\[\]{}]/.test(str[end])) {
+      end++;
+    }
+    return Math.max(1, end - idx);
+  }
+
+  function highlightWordInElement(node, fullText, startIdx, length) {
+    const before = fullText.substring(0, startIdx);
+    const word = fullText.substring(startIdx, startIdx + length);
+    const after = fullText.substring(startIdx + length);
+
+    // Escape HTML
+    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    node.innerHTML = `${esc(before)}<mark class="np-spoken-word">${esc(word)}</mark>${esc(after)}`;
+
+    if (audioState.autoScroll) {
+      const mark = node.querySelector('.np-spoken-word');
+      if (mark) {
+        const rect = mark.getBoundingClientRect();
+        if (rect.top < 80 || rect.bottom > window.innerHeight - 150) {
+          mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }
   }
 
   // Toggle Play / Pause
@@ -584,15 +784,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (audioState.isPlaying && !audioState.isPaused) {
       synth.pause();
       audioState.isPaused = true;
-      if (audioBtnPlay) audioBtnPlay.textContent = '▶';
+      if (npPlayIcon) npPlayIcon.textContent = '▶';
       if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
-      if (audioParaStatus) audioParaStatus.textContent = `Paused at Para ${audioState.currentIndex + 1}`;
     } else if (audioState.isPaused) {
       synth.resume();
       audioState.isPaused = false;
-      if (audioBtnPlay) audioBtnPlay.textContent = '⏸';
+      if (npPlayIcon) npPlayIcon.textContent = '⏸';
       if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
-      if (audioParaStatus) audioParaStatus.textContent = `Playing Para ${audioState.currentIndex + 1} of ${paragraphNodes.length}`;
     } else {
       speakParagraph(audioState.currentIndex);
     }
@@ -610,7 +808,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // WakeLock: prevents screen sleep when listening on headphones
+  function restartChapter() {
+    speakParagraph(0);
+  }
+
+  // WakeLock: prevents sleep when listening
   async function requestWakeLock() {
     try {
       if ('wakeLock' in navigator) {
@@ -633,7 +835,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Audio Control Button Listeners
+  // Wire up audio controls
   if (listenToggleBtn) {
     listenToggleBtn.addEventListener('click', () => {
       if (audioState.isOpen) {
@@ -644,10 +846,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (audioBtnPlay) audioBtnPlay.addEventListener('click', toggleAudioPlay);
-  if (audioBtnPrev) audioBtnPrev.addEventListener('click', playPrevParagraph);
-  if (audioBtnNext) audioBtnNext.addEventListener('click', playNextParagraph);
-  if (audioBtnClose) audioBtnClose.addEventListener('click', closeAudioPlayer);
+  if (npBtnClose) npBtnClose.addEventListener('click', closeAudioPlayer);
+  if (npBtnPlayPause) npBtnPlayPause.addEventListener('click', toggleAudioPlay);
+  if (npBtnPrev) npBtnPrev.addEventListener('click', playPrevParagraph);
+  if (npBtnNext) npBtnNext.addEventListener('click', playNextParagraph);
+  if (npBtnRestart) npBtnRestart.addEventListener('click', restartChapter);
+
+  // Rewind & Forward 10s (moves backwards / forwards 1 paragraph)
+  if (npBtnRewind10) npBtnRewind10.addEventListener('click', playPrevParagraph);
+  if (npBtnForward10) npBtnForward10.addEventListener('click', playNextParagraph);
 
   // Keyboard Shortcuts for Reader & Audio Navigation
   document.addEventListener('keydown', (e) => {
@@ -660,23 +867,17 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (e.key === 'ArrowRight' && nextBtn && !nextBtn.disabled) {
       nextBtn.click();
     } else if (e.key.toLowerCase() === 't' || e.key.toLowerCase() === 'o') {
-      // 'T' or 'O' toggles Optimize/Customize drawer
       if (settingsToggle) settingsToggle.click();
     } else if (e.key.toLowerCase() === 'f') {
-      // 'F' toggles Fullscreen
       toggleFullscreen();
     } else if (e.key.toLowerCase() === 'a') {
-      // 'A' toggles Audio
       if (listenToggleBtn) listenToggleBtn.click();
     } else if (e.code === 'Space' && audioState.isOpen) {
-      // Space bar toggles Play/Pause in Audio Player
       e.preventDefault();
       toggleAudioPlay();
     } else if (e.key.toLowerCase() === 'j' && audioState.isOpen) {
-      // 'J' = prev paragraph
       playPrevParagraph();
     } else if (e.key.toLowerCase() === 'k' && audioState.isOpen) {
-      // 'K' = next paragraph
       playNextParagraph();
     }
   });
