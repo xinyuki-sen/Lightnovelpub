@@ -1,5 +1,16 @@
 document.addEventListener('DOMContentLoaded', () => {
   // =========================================================================
+  // 0. PWA SERVICE WORKER REGISTRATION (OFFLINE SUPPORT)
+  // =========================================================================
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then(reg => console.log('PWA ServiceWorker registered:', reg.scope))
+        .catch(err => console.log('ServiceWorker notice:', err));
+    });
+  }
+
+  // =========================================================================
   // 1. DOM ELEMENTS & PREFERENCES INITIALIZATION
   // =========================================================================
   const progressBar = document.getElementById('reader-progress-bar');
@@ -43,10 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
       settingsDrawer.classList.toggle('open');
     });
   }
-
-  // =========================================================================
-  // 2. OPTIMIZATION & CUSTOMIZATION CONTROLS
-  // =========================================================================
 
   // Theme Switching
   themePills.forEach(pill => {
@@ -277,7 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // =========================================================================
-  // 3. NOVEL PHOENIX EXACT AUDIO PLAYER (MATCHING USER SCREENSHOTS)
+  // 3. OFFLINE-FIRST, BULLETPROOF AUDIO TTS ENGINE
   // =========================================================================
 
   const synth = window.speechSynthesis;
@@ -323,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedRate = parseFloat(localStorage.getItem('novel_reader_audio_rate') || '1.0');
   const savedPitch = parseFloat(localStorage.getItem('novel_reader_audio_pitch') || '1.0');
   const savedVoiceURI = localStorage.getItem('novel_reader_voice_uri') || '';
-  const savedHighlightMode = localStorage.getItem('novel_reader_highlight_mode') || 'word'; // 'word' or 'sentence'
+  const savedHighlightMode = localStorage.getItem('novel_reader_highlight_mode') || 'word';
   const savedAutoNext = localStorage.getItem('novel_reader_autonext') !== 'false';
   const savedAutoScroll = localStorage.getItem('novel_reader_autoscroll') !== 'false';
 
@@ -332,6 +339,8 @@ document.addEventListener('DOMContentLoaded', () => {
     isPlaying: false,
     isPaused: false,
     currentIndex: 0,
+    currentSentenceIdx: 0,
+    sentences: [],
     voices: [],
     selectedVoice: null,
     selectedLang: 'all',
@@ -341,9 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
     autoNext: savedAutoNext,
     autoScroll: savedAutoScroll,
     wakeLock: null,
-    keepAliveTimer: null,
-    currentRawText: '',
-    originalParaHTML: ''
+    keepAliveTimer: null
   };
 
   // Sync initial UI values
@@ -374,11 +381,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Populate Voices & Languages
+  // Populate Voices prioritizing OFFLINE / LOCAL service voices
   function loadVoices() {
     if (!isSpeechSupported) return;
-    const allVoices = synth.getVoices();
-    if (!allVoices || allVoices.length === 0) return;
+    const allVoices = synth.getVoices() || [];
+    if (allVoices.length === 0) return;
 
     audioState.voices = allVoices;
 
@@ -396,8 +403,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const opt = document.createElement('option');
         opt.value = l;
         opt.textContent = l;
-        if (l.toLowerCase().startsWith('en-us') || l.toLowerCase().startsWith('en-gb')) {
-          opt.textContent = `${l} (Recommended)`;
+        if (l.toLowerCase().startsWith('en')) {
+          opt.textContent = `${l} (English)`;
         }
         npLanguageSelect.appendChild(opt);
       });
@@ -416,12 +423,21 @@ document.addEventListener('DOMContentLoaded', () => {
       return v.lang === audioState.selectedLang;
     });
 
-    // Sort: Natural / Microsoft / Google English voices first
+    // Offline-first sorting:
+    // 1. localService === true (offline built-in device voice)
+    // 2. English languages (en-US, en-GB)
+    // 3. Name
     filtered.sort((a, b) => {
+      // Prioritize local offline voices
+      if (a.localService && !b.localService) return -1;
+      if (!a.localService && b.localService) return 1;
+
+      // Prioritize English
       const aEn = a.lang.toLowerCase().startsWith('en');
       const bEn = b.lang.toLowerCase().startsWith('en');
       if (aEn && !bEn) return -1;
       if (!aEn && bEn) return 1;
+
       return a.name.localeCompare(b.name);
     });
 
@@ -431,12 +447,16 @@ document.addEventListener('DOMContentLoaded', () => {
     filtered.forEach(voice => {
       const opt = document.createElement('option');
       opt.value = voice.voiceURI;
-      opt.textContent = `${voice.name} (${voice.lang})`;
+      const offlineBadge = voice.localService ? '⚡ [Offline]' : '🌐';
+      opt.textContent = `${offlineBadge} ${voice.name} (${voice.lang})`;
 
       if (savedVoiceURI && voice.voiceURI === savedVoiceURI) {
         matched = voice;
         opt.selected = true;
-      } else if (!matched && (voice.default || voice.name.toLowerCase().includes('natural') || voice.lang.startsWith('en'))) {
+      } else if (!matched && voice.localService && voice.lang.toLowerCase().startsWith('en')) {
+        matched = voice;
+        opt.selected = true;
+      } else if (!matched && (voice.default || voice.lang.toLowerCase().startsWith('en'))) {
         matched = voice;
         opt.selected = true;
       }
@@ -573,7 +593,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return 0;
   }
 
-  // Open Audio Player
+  // Open Audio Player & start immediately
   function openAudioPlayer(startIndex = null) {
     if (!isSpeechSupported) {
       alert("Text-to-speech is not supported on this browser.");
@@ -613,12 +633,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function restoreParagraphDOM() {
     paragraphNodes.forEach(p => {
       p.classList.remove('listen-active-paragraph');
-      // If we modified paragraph innerHTML for word highlights, restore clean text
-      const orig = p.getAttribute('data-raw-content');
-      if (orig !== null) {
-        p.textContent = orig;
-        p.removeAttribute('data-raw-content');
-      }
+      // If words were tokenized with spans, remove word highlights
+      p.querySelectorAll('.np-word-token').forEach(span => {
+        span.classList.remove('np-spoken-word');
+      });
     });
   }
 
@@ -631,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Keep-alive timer for Chrome 15s pause bug
+  // Chrome 15s pause keep-alive
   function startKeepAlive() {
     stopKeepAlive();
     audioState.keepAliveTimer = setInterval(() => {
@@ -649,11 +667,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Speak paragraph by index with real-time Word/Sentence highlighting
+  // Non-destructive word tokenization on the active paragraph
+  function tokenizeParagraphWords(node) {
+    if (node.getAttribute('data-tokenized') === 'true') return;
+    const text = node.textContent;
+    // Split into words while keeping delimiters
+    const tokens = text.split(/(\s+)/);
+    const fragment = document.createDocumentFragment();
+
+    tokens.forEach((t) => {
+      if (/\S/.test(t)) {
+        const span = document.createElement('span');
+        span.className = 'np-word-token';
+        span.textContent = t;
+        fragment.appendChild(span);
+      } else {
+        fragment.appendChild(document.createTextNode(t));
+      }
+    });
+
+    node.innerHTML = '';
+    node.appendChild(fragment);
+    node.setAttribute('data-tokenized', 'true');
+  }
+
+  // Speak paragraph synchronously without breaking user gesture context
   function speakParagraph(index) {
     if (!paragraphNodes || paragraphNodes.length === 0) return;
 
-    // Check if reached chapter end
     if (index >= paragraphNodes.length) {
       restoreParagraphDOM();
       audioState.isPlaying = false;
@@ -665,7 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('novel_auto_play_tts', 'true');
         setTimeout(() => {
           window.location.href = nextChapterUrl;
-        }, 1200);
+        }, 1000);
       }
       return;
     }
@@ -674,104 +715,101 @@ document.addEventListener('DOMContentLoaded', () => {
 
     audioState.currentIndex = index;
     const targetNode = paragraphNodes[index];
-
-    // Ensure raw text cache
-    let textToSpeak = targetNode.getAttribute('data-raw-content');
-    if (textToSpeak === null) {
-      textToSpeak = targetNode.textContent.trim();
-      targetNode.setAttribute('data-raw-content', textToSpeak);
-    }
+    const textToSpeak = targetNode.textContent.trim();
 
     if (!textToSpeak) {
       speakParagraph(index + 1);
       return;
     }
 
+    // Cancel previous speech
     stopSpeech();
     restoreParagraphDOM();
 
-    // Sentence/Paragraph highlight
+    // Prepare non-destructive word spans
+    tokenizeParagraphWords(targetNode);
     targetNode.classList.add('listen-active-paragraph');
+
     if (audioState.autoScroll) {
       targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    setTimeout(() => {
-      if (!audioState.selectedVoice && audioState.voices.length > 0) {
-        audioState.selectedVoice = audioState.voices[0];
-      }
+    // Ensure voice selection (prefer offline/local)
+    if (!audioState.selectedVoice && audioState.voices.length > 0) {
+      audioState.selectedVoice = audioState.voices.find(v => v.localService && v.lang.startsWith('en')) || audioState.voices[0];
+    }
 
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      window.__activeNovelUtterance = utterance; // Shield against Chrome GC
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    window.__activeNovelUtterance = utterance; // Shield against Garbage Collection
 
-      if (audioState.selectedVoice) {
-        utterance.voice = audioState.selectedVoice;
-      }
-      utterance.rate = audioState.rate || 1.0;
-      utterance.pitch = audioState.pitch || 1.0;
+    if (audioState.selectedVoice) {
+      utterance.voice = audioState.selectedVoice;
+    }
+    utterance.rate = audioState.rate || 1.0;
+    utterance.pitch = audioState.pitch || 1.0;
 
-      // Real-time boundary event for Word Highlighting (Matches Novel Phoenix Image 1)
-      utterance.onboundary = (e) => {
-        if (!audioState.isPlaying || audioState.isPaused) return;
+    const wordSpans = targetNode.querySelectorAll('.np-word-token');
+    let lastWordIndex = -1;
 
-        if (audioState.highlightMode === 'word' && (e.name === 'word' || typeof e.charIndex === 'number')) {
-          const charIdx = e.charIndex;
-          const len = e.charLength || getWordLenAt(textToSpeak, charIdx);
-          if (len > 0) {
-            highlightWordInElement(targetNode, textToSpeak, charIdx, len);
+    // Word boundary event (smooth, non-destructive)
+    utterance.onboundary = (e) => {
+      if (!audioState.isPlaying || audioState.isPaused) return;
+
+      if (audioState.highlightMode === 'word' && wordSpans.length > 0) {
+        // Approximate matching by char index or sequential progression
+        let charIdx = e.charIndex || 0;
+        let cumulative = 0;
+        let matchedSpan = null;
+
+        for (let i = 0; i < wordSpans.length; i++) {
+          const span = wordSpans[i];
+          const spanLen = span.textContent.length;
+          if (cumulative <= charIdx && charIdx <= cumulative + spanLen + 2) {
+            matchedSpan = span;
+            lastWordIndex = i;
+            break;
+          }
+          cumulative += spanLen + 1;
+        }
+
+        if (matchedSpan) {
+          wordSpans.forEach(s => s.classList.remove('np-spoken-word'));
+          matchedSpan.classList.add('np-spoken-word');
+
+          if (audioState.autoScroll) {
+            const rect = matchedSpan.getBoundingClientRect();
+            if (rect.top < 80 || rect.bottom > window.innerHeight - 150) {
+              matchedSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }
         }
-      };
+      }
+    };
 
-      utterance.onstart = () => {
-        audioState.isPlaying = true;
-        audioState.isPaused = false;
-        if (npPlayIcon) npPlayIcon.textContent = '⏸';
-        if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
-      };
+    utterance.onstart = () => {
+      audioState.isPlaying = true;
+      audioState.isPaused = false;
+      if (npPlayIcon) npPlayIcon.textContent = '⏸';
+      if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+    };
 
-      utterance.onend = () => {
-        if (audioState.isPlaying && !audioState.isPaused) {
+    utterance.onend = () => {
+      if (audioState.isPlaying && !audioState.isPaused) {
+        speakParagraph(index + 1);
+      }
+    };
+
+    utterance.onerror = (e) => {
+      console.warn("SpeechSynthesis error:", e.error);
+      if (audioState.isPlaying && !audioState.isPaused) {
+        if (e.error !== 'interrupted' && e.error !== 'canceled') {
           speakParagraph(index + 1);
         }
-      };
-
-      utterance.onerror = (e) => {
-        if (e.error !== 'interrupted' && e.error !== 'canceled') {
-          setTimeout(() => speakParagraph(index + 1), 100);
-        }
-      };
-
-      synth.speak(utterance);
-    }, 35);
-  }
-
-  function getWordLenAt(str, idx) {
-    let end = idx;
-    while (end < str.length && !/\s|[.,!?;:"'()\[\]{}]/.test(str[end])) {
-      end++;
-    }
-    return Math.max(1, end - idx);
-  }
-
-  function highlightWordInElement(node, fullText, startIdx, length) {
-    const before = fullText.substring(0, startIdx);
-    const word = fullText.substring(startIdx, startIdx + length);
-    const after = fullText.substring(startIdx + length);
-
-    // Escape HTML
-    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    node.innerHTML = `${esc(before)}<mark class="np-spoken-word">${esc(word)}</mark>${esc(after)}`;
-
-    if (audioState.autoScroll) {
-      const mark = node.querySelector('.np-spoken-word');
-      if (mark) {
-        const rect = mark.getBoundingClientRect();
-        if (rect.top < 80 || rect.bottom > window.innerHeight - 150) {
-          mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
       }
-    }
+    };
+
+    // SYNCHRONOUS speech start to guarantee user activation token is valid
+    synth.speak(utterance);
   }
 
   // Toggle Play / Pause

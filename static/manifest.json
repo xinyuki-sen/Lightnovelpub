@@ -1,0 +1,21 @@
+{
+  "name": "LightnovelPub",
+  "short_name": "LightnovelPub",
+  "description": "Offline-First Luxury Light Novel Reader & Text-to-Speech Player",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "/static/img/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/static/img/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
