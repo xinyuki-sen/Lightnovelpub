@@ -743,6 +743,7 @@ function initReader() {
       if (v) {
         audioState.selectedVoice = v;
         localStorage.setItem('novel_reader_voice_uri', uri);
+        clearPrefetchedAudio();
         if (audioState.isPlaying && !audioState.isPaused) {
           speakParagraph(audioState.currentIndex, false);
         }
@@ -779,9 +780,7 @@ function initReader() {
     if (activeHtml5Audio) {
       activeHtml5Audio.playbackRate = newRate;
     }
-    if (audioState.isPlaying && !audioState.isPaused) {
-      speakParagraph(audioState.currentIndex, false);
-    }
+    clearPrefetchedAudio();
   }
 
   // Pitch Slider
@@ -791,9 +790,7 @@ function initReader() {
       audioState.pitch = p;
       if (npPitchValLabel) npPitchValLabel.textContent = String(p);
       localStorage.setItem('novel_reader_audio_pitch', String(p));
-      if (audioState.isPlaying && !audioState.isPaused) {
-        speakParagraph(audioState.currentIndex);
-      }
+      clearPrefetchedAudio();
     });
   }
 
@@ -1209,34 +1206,116 @@ function initReader() {
   }
 
   // Web Speech API fallback engine (Instant, 0MB overhead, device offline)
+  // =========================================================================
+  // DUAL-BUFFER GAPLESS AUDIO QUEUE & LOOKAHEAD PREFETCHER (ANDROID HARDENED)
+  // =========================================================================
+  const prefetchedAudioMap = new Map();
+  const prefetchInFlight = new Set();
+
+  function clearPrefetchedAudio() {
+    prefetchedAudioMap.clear();
+  }
+
+  async function prefetchParagraphAudio(idx) {
+    if (!paragraphNodes || idx < 0 || idx >= paragraphNodes.length) return null;
+    if (prefetchedAudioMap.has(idx)) return prefetchedAudioMap.get(idx);
+    if (prefetchInFlight.has(idx)) return null;
+
+    const currentVoice = audioState.selectedVoice || NEURAL_VOICES[0];
+    if (!currentVoice || !currentVoice.isNeural) return null;
+
+    // 1. Check Dexie cache first (0 network latency)
+    if (novelDb) {
+      try {
+        const cached = await novelDb.audioCache.get([novelSlug, currentChapterNum, idx]);
+        if (cached && cached.audioBlob) {
+          prefetchedAudioMap.set(idx, cached.audioBlob);
+          return cached.audioBlob;
+        }
+      } catch (e) {}
+    }
+
+    if (navigator.onLine === false) return null;
+
+    const targetNode = paragraphNodes[idx];
+    if (!targetNode) return null;
+    const textToPrefetch = targetNode.textContent.trim();
+    if (!textToPrefetch) return null;
+
+    prefetchInFlight.add(idx);
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: textToPrefetch,
+          voice: currentVoice.edgeVoice || 'en-US-ChristopherNeural',
+          rate: audioState.rate || 1.0,
+          pitch: audioState.pitch || 1.0
+        })
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        prefetchedAudioMap.set(idx, blob);
+
+        // Persist into Dexie for offline library reading
+        if (novelDb) {
+          novelDb.audioCache.put({
+            novelSlug: novelSlug,
+            chapterNumber: currentChapterNum,
+            paraIndex: idx,
+            audioBlob: blob,
+            created_at: Date.now()
+          }).catch(() => {});
+        }
+        return blob;
+      }
+    } catch (prefetchErr) {
+      // Non-blocking prefetch failure
+    } finally {
+      prefetchInFlight.delete(idx);
+    }
+    return null;
+  }
+
+  // Web Speech API fallback engine (Instant, 0MB overhead, device offline)
   function speakParagraphWebSpeech(index, textToSpeak, targetNode) {
     if (!isSpeechSupported) return;
 
-    if (!audioState.selectedVoice || audioState.selectedVoice.isNeural) {
-      if (audioState.voices.length > 0) {
-        audioState.selectedVoice = audioState.voices.find(v => v.localService && v.lang.startsWith('en')) || audioState.voices[0];
-      }
+    // CRITICAL: NEVER overwrite audioState.selectedVoice! Determine active voice dynamically:
+    let activeVoice = null;
+    const availableVoices = synth.getVoices() || [];
+
+    if (audioState.selectedVoice && !audioState.selectedVoice.isNeural) {
+      activeVoice = availableVoices.find(v => v.voiceURI === audioState.selectedVoice.voiceURI) || audioState.selectedVoice;
+    } else if (availableVoices.length > 0) {
+      activeVoice = availableVoices.find(v => v.localService && v.lang && v.lang.startsWith('en'))
+                 || availableVoices.find(v => v.lang && v.lang.startsWith('en'))
+                 || availableVoices[0];
     }
 
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     window.__activeNovelUtterance = utterance; // Shield against Garbage Collection
 
-    if (audioState.selectedVoice && !audioState.selectedVoice.isNeural) {
-      utterance.voice = audioState.selectedVoice;
-      utterance.lang = audioState.selectedVoice.lang || 'en-US';
+    if (activeVoice) {
+      utterance.voice = activeVoice;
+      utterance.lang = activeVoice.lang || 'en-US';
     } else {
       utterance.lang = 'en-US';
     }
-    utterance.rate = audioState.rate || 1.0;
-    utterance.pitch = audioState.pitch || 1.0;
+
+    // Safe clamped rate and pitch for Android Chrome
+    const safeRate = Math.min(2.0, Math.max(0.6, audioState.rate || 1.0));
+    const safePitch = Math.min(1.5, Math.max(0.6, audioState.pitch || 1.0));
+    utterance.rate = safeRate;
+    utterance.pitch = safePitch;
     utterance.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
 
     const wordSpans = targetNode.querySelectorAll('.np-word-token');
-    let hasReceivedBoundary = false;
 
     // Word boundary event (smooth, non-destructive)
     utterance.onboundary = (e) => {
-      hasReceivedBoundary = true;
       if (!audioState.isPlaying || audioState.isPaused) return;
 
       if (audioState.highlightMode === 'word' && wordSpans.length > 0) {
@@ -1283,7 +1362,6 @@ function initReader() {
     utterance.onstart = () => {
       audioState.isPlaying = true;
       audioState.isPaused = false;
-      startAudioPipeline();
       updatePlayStateUI(true);
       updateMediaSession();
     };
@@ -1291,7 +1369,10 @@ function initReader() {
     utterance.onend = () => {
       window.__activeNovelUtterance = null;
       if (audioState.isPlaying && !audioState.isPaused) {
-        speakParagraph(index + 1, true);
+        // 35ms safety delay on Android to avoid dropping IPC audio track
+        setTimeout(() => {
+          speakParagraph(index + 1, true);
+        }, 35);
       }
     };
 
@@ -1313,7 +1394,6 @@ function initReader() {
 
     synth.speak(utterance);
   }
-
 
   // Synchronize glowing amber word highlight and smooth autoscroll for HTML5 Audio
   function syncHtml5AudioHighlight(audio, targetNode) {
@@ -1345,7 +1425,7 @@ function initReader() {
     }
   }
 
-  // Unified multi-tier audio runner: Dexie Cached Audio -> Neural Edge-TTS -> Web Speech API
+  // Unified multi-tier audio runner: Lookahead Cache -> Neural Edge-TTS -> Web Speech API
   async function speakParagraph(index, isContinuous = false) {
     if (!paragraphNodes || paragraphNodes.length === 0) return;
 
@@ -1379,7 +1459,7 @@ function initReader() {
       return;
     }
 
-    // CRITICAL FIX: Stop previous speech BEFORE stamping the new audioPlaybackEpoch!
+    // Stop previous audio if not continuous
     if (!isContinuous) {
       stopSpeech();
     }
@@ -1402,19 +1482,23 @@ function initReader() {
 
     const currentVoice = audioState.selectedVoice || NEURAL_VOICES[0];
 
-    // TIER 1: Neural Edge-TTS with Dexie.js Audio Cache (Standard HTML5 Audio with Android lock-screen)
+    // TIER 1: Neural Edge-TTS with Gapless Pre-buffer (Standard HTML5 Audio with Android lock-screen)
     if (currentVoice && currentVoice.isNeural) {
-      let audioBlob = null;
-      if (novelDb) {
+      let audioBlob = prefetchedAudioMap.get(index) || null;
+
+      // 1. Check Dexie if not in memory map
+      if (!audioBlob && novelDb) {
         try {
           const cached = await novelDb.audioCache.get([novelSlug, currentChapterNum, index]);
           if (cached && cached.audioBlob) {
             audioBlob = cached.audioBlob;
+            prefetchedAudioMap.set(index, audioBlob);
           }
         } catch (e) {}
       }
 
-      if (!audioBlob && navigator.onLine) {
+      // 2. Fetch directly if not yet prefetched
+      if (!audioBlob && navigator.onLine !== false) {
         try {
           const res = await fetch('/api/tts', {
             method: 'POST',
@@ -1422,12 +1506,14 @@ function initReader() {
             body: JSON.stringify({
               text: textToSpeak,
               voice: currentVoice.edgeVoice || 'en-US-ChristopherNeural',
-              rate: audioState.rate || 1.0
+              rate: audioState.rate || 1.0,
+              pitch: audioState.pitch || 1.0
             })
           });
-          if (currentEpoch !== audioPlaybackEpoch) return; // Stale audio request canceled
+          if (currentEpoch !== audioPlaybackEpoch) return; // Stale request cancelled
           if (res.ok) {
             audioBlob = await res.blob();
+            prefetchedAudioMap.set(index, audioBlob);
             if (novelDb) {
               novelDb.audioCache.put({
                 novelSlug: novelSlug,
@@ -1439,9 +1525,10 @@ function initReader() {
             }
           }
         } catch (fetchErr) {
-          console.warn("Neural audio fetch note, falling back to Web Speech:", fetchErr);
+          console.warn("Neural audio fetch note:", fetchErr);
         }
       }
+
       if (currentEpoch !== audioPlaybackEpoch) return;
 
       if (audioBlob) {
@@ -1461,9 +1548,12 @@ function initReader() {
         activeHtml5Audio.onplay = () => {
           audioState.isPlaying = true;
           audioState.isPaused = false;
-          startAudioPipeline();
           updatePlayStateUI(true);
           updateMediaSession();
+
+          // CRITICAL: Immediately prefetch the next 2 paragraphs in background while current plays!
+          prefetchParagraphAudio(index + 1);
+          prefetchParagraphAudio(index + 2);
         };
 
         activeHtml5Audio.onended = () => {
@@ -1473,6 +1563,7 @@ function initReader() {
           }
           activeHtml5Audio = null;
           if (audioState.isPlaying && !audioState.isPaused) {
+            // Gapless instant transition to next paragraph!
             speakParagraph(index + 1, true);
           }
         };
@@ -1485,16 +1576,15 @@ function initReader() {
         try {
           await activeHtml5Audio.play();
           return;
-        } catch (e) {
-          // Playback error, fall through to Web Speech API
+        } catch (playErr) {
+          console.warn("HTML5 audio playback error, falling back:", playErr);
         }
       }
     }
 
-    // TIER 2: Native Web Speech API fallback
+    // TIER 2: Native Web Speech API fallback (never mutates audioState.selectedVoice)
     speakParagraphWebSpeech(index, textToSpeak, targetNode);
   }
-
   // Toggle Play / Pause
   function toggleAudioPlay() {
     if (!audioState.isOpen) {

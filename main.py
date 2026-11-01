@@ -203,6 +203,7 @@ class TTSRequest(BaseModel):
     text: str
     voice: str = "en-US-ChristopherNeural"
     rate: float = 1.0
+    pitch: Optional[float] = 1.0
 
 @app.post("/api/tts")
 async def generate_tts(req: TTSRequest):
@@ -216,9 +217,13 @@ async def generate_tts(req: TTSRequest):
     rate_percent = int((req.rate - 1.0) * 100)
     rate_str = f"{rate_percent:+d}%"
 
+    pitch_val = req.pitch if req.pitch is not None else 1.0
+    pitch_hz = int((pitch_val - 1.0) * 50)
+    pitch_str = f"{pitch_hz:+d}Hz"
+
     try:
         import edge_tts
-        comm = edge_tts.Communicate(text=text, voice=req.voice, rate=rate_str)
+        comm = edge_tts.Communicate(text=text, voice=req.voice, rate=rate_str, pitch=pitch_str)
         chunks = []
         async for chunk in comm.stream():
             if chunk["type"] == "audio":
