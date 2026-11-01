@@ -367,9 +367,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p'));
 
-  // Saved audio states
+  // Saved audio & display states
   const savedRate = parseFloat(localStorage.getItem('novel_reader_audio_rate') || '1.0');
   const savedPitch = parseFloat(localStorage.getItem('novel_reader_audio_pitch') || '1.0');
+  const savedVolume = parseFloat(localStorage.getItem('novel_reader_volume') || '1.0');
+  const savedBrightness = parseInt(localStorage.getItem('novel_reader_brightness') || '100', 10);
   const savedVoiceURI = localStorage.getItem('novel_reader_voice_uri') || '';
   const savedHighlightMode = localStorage.getItem('novel_reader_highlight_mode') || 'word';
   const savedAutoNext = localStorage.getItem('novel_reader_autonext') !== 'false';
@@ -441,6 +443,8 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedLang: 'all',
     rate: savedRate,
     pitch: savedPitch,
+    volume: savedVolume,
+    brightness: savedBrightness,
     highlightMode: savedHighlightMode,
     autoNext: savedAutoNext,
     autoScroll: savedAutoScroll,
@@ -679,14 +683,200 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Settings Panel Expand/Collapse (Gear Button)
+  // Settings Panel Expand/Collapse (Exact chevron matching user screenshot)
   if (npSettingsToggle && npSettingsPanel) {
     npSettingsToggle.addEventListener('click', () => {
       const isOpen = npSettingsPanel.classList.toggle('open');
       if (npSettingsIcon) {
-        npSettingsIcon.textContent = isOpen ? '⌄' : '⚙';
+        npSettingsIcon.textContent = isOpen ? '▼' : '▲';
       }
     });
+  }
+
+  // =========================================================================
+  // VOLUME & SCREEN BRIGHTNESS / INBUILT EXTENSION DOCK LOGIC
+  // =========================================================================
+
+  const npVolumeSlider = document.getElementById('np-volume-slider');
+  const npVolValLabel = document.getElementById('np-vol-val-label');
+  const dockVolSlider = document.getElementById('dock-vol-slider');
+  const dockVolPercent = document.getElementById('dock-vol-percent');
+  const dockVolIcon = document.getElementById('dock-vol-icon');
+
+  function setAudioVolume(vol) {
+    vol = Math.max(0, Math.min(1, vol));
+    audioState.volume = vol;
+    localStorage.setItem('novel_reader_volume', String(vol));
+    const percent = `${Math.round(vol * 100)}%`;
+    if (npVolValLabel) npVolValLabel.textContent = percent;
+    if (npVolumeSlider) npVolumeSlider.value = String(vol);
+    if (dockVolSlider) dockVolSlider.value = String(vol);
+    if (dockVolPercent) dockVolPercent.textContent = percent;
+
+    if (activeHtml5Audio) {
+      activeHtml5Audio.volume = vol;
+    }
+
+    if (vol === 0) {
+      if (dockVolIcon) dockVolIcon.textContent = '🔇';
+    } else if (vol < 0.5) {
+      if (dockVolIcon) dockVolIcon.textContent = '🔉';
+    } else {
+      if (dockVolIcon) dockVolIcon.textContent = '🔊';
+    }
+  }
+
+  if (npVolumeSlider) {
+    npVolumeSlider.value = String(savedVolume);
+    setAudioVolume(savedVolume);
+    npVolumeSlider.addEventListener('input', (e) => setAudioVolume(parseFloat(e.target.value)));
+  }
+  if (dockVolSlider) {
+    dockVolSlider.value = String(savedVolume);
+    dockVolSlider.addEventListener('input', (e) => setAudioVolume(parseFloat(e.target.value)));
+  }
+
+  // Screen Brightness Dimmer (30% to 100%)
+  const dockBrightnessSlider = document.getElementById('dock-brightness-slider');
+  const dockBrightnessVal = document.getElementById('dock-brightness-val');
+
+  function setScreenBrightness(brightness) {
+    brightness = Math.max(25, Math.min(100, brightness));
+    audioState.brightness = brightness;
+    localStorage.setItem('novel_reader_brightness', String(brightness));
+    if (dockBrightnessVal) dockBrightnessVal.textContent = `${brightness}%`;
+    if (dockBrightnessSlider) dockBrightnessSlider.value = String(brightness);
+
+    // 100% -> 0 dim; 25% -> 0.75 dim
+    const dim = ((100 - brightness) / 100) * 0.75;
+    document.documentElement.style.setProperty('--reader-dim', dim);
+  }
+
+  if (dockBrightnessSlider) {
+    dockBrightnessSlider.value = String(savedBrightness);
+    setScreenBrightness(savedBrightness);
+    dockBrightnessSlider.addEventListener('input', (e) => setScreenBrightness(parseInt(e.target.value, 10)));
+  } else {
+    setScreenBrightness(savedBrightness);
+  }
+
+  // Dock Popovers (Volume & Brightness)
+  const dockBtnVol = document.getElementById('dock-btn-vol');
+  const dockVolPopover = document.getElementById('dock-vol-popover');
+  const dockBtnBrightness = document.getElementById('dock-btn-brightness');
+  const dockBrightnessPopover = document.getElementById('dock-brightness-popover');
+
+  if (dockBtnVol && dockVolPopover) {
+    dockBtnVol.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dockBrightnessPopover?.classList.remove('open');
+      dockVolPopover.classList.toggle('open');
+    });
+  }
+
+  if (dockBtnBrightness && dockBrightnessPopover) {
+    dockBtnBrightness.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dockVolPopover?.classList.remove('open');
+      dockBrightnessPopover.classList.toggle('open');
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.dock-popover-wrapper')) {
+      dockVolPopover?.classList.remove('open');
+      dockBrightnessPopover?.classList.remove('open');
+    }
+  });
+
+  // Dock Font Stepper (A- / A+)
+  const dockFontDec = document.getElementById('dock-font-dec');
+  const dockFontInc = document.getElementById('dock-font-inc');
+  const dockFontVal = document.getElementById('dock-font-val');
+
+  function updateDockFontSize(size) {
+    if (dockFontVal) dockFontVal.textContent = `${size}px`;
+  }
+  updateDockFontSize(savedFontSize);
+
+  if (dockFontDec) {
+    dockFontDec.addEventListener('click', () => {
+      let cur = parseInt(localStorage.getItem('novel_reader_font_size') || '19', 10);
+      cur = Math.max(13, cur - 1);
+      applyFontSize(cur);
+      localStorage.setItem('novel_reader_font_size', String(cur));
+      updateDockFontSize(cur);
+    });
+  }
+
+  if (dockFontInc) {
+    dockFontInc.addEventListener('click', () => {
+      let cur = parseInt(localStorage.getItem('novel_reader_font_size') || '19', 10);
+      cur = Math.min(34, cur + 1);
+      applyFontSize(cur);
+      localStorage.setItem('novel_reader_font_size', String(cur));
+      updateDockFontSize(cur);
+    });
+  }
+
+  // Dock Theme Cycle
+  const dockBtnThemeCycle = document.getElementById('dock-btn-theme-cycle');
+  const themesList = ['black', 'midnight', 'forest', 'sepia', 'light'];
+  if (dockBtnThemeCycle) {
+    dockBtnThemeCycle.addEventListener('click', () => {
+      const curTheme = document.body.getAttribute('data-reader-theme') || 'black';
+      let nextIdx = (themesList.indexOf(curTheme) + 1) % themesList.length;
+      const nextTheme = themesList[nextIdx];
+      applyTheme(nextTheme);
+      localStorage.setItem('novel_reader_theme', nextTheme);
+    });
+  }
+
+  // Dock Audio Toggle
+  const dockBtnAudioToggle = document.getElementById('dock-btn-audio-toggle');
+  if (dockBtnAudioToggle) {
+    dockBtnAudioToggle.addEventListener('click', () => {
+      if (audioState.isOpen) {
+        toggleAudioPlay();
+      } else {
+        openAudioPlayer();
+      }
+    });
+  }
+
+  // Dock Open Typography Drawer
+  const dockBtnOpenTypography = document.getElementById('dock-btn-open-typography');
+  if (dockBtnOpenTypography && settingsDrawer) {
+    dockBtnOpenTypography.addEventListener('click', () => {
+      settingsDrawer.classList.toggle('open');
+    });
+  }
+
+  // Minimize / Restore Dock
+  const dockExtension = document.getElementById('reader-extension-dock');
+  const dockBtnMinimize = document.getElementById('dock-btn-minimize');
+  const dockReopenBtn = document.getElementById('dock-reopen-btn');
+
+  function setDockMinimized(isMin) {
+    if (isMin) {
+      dockExtension?.classList.add('minimized');
+      dockReopenBtn?.classList.add('visible');
+      localStorage.setItem('novel_dock_minimized', 'true');
+    } else {
+      dockExtension?.classList.remove('minimized');
+      dockReopenBtn?.classList.remove('visible');
+      localStorage.removeItem('novel_dock_minimized');
+    }
+  }
+
+  if (dockBtnMinimize) {
+    dockBtnMinimize.addEventListener('click', () => setDockMinimized(true));
+  }
+  if (dockReopenBtn) {
+    dockReopenBtn.addEventListener('click', () => setDockMinimized(false));
+  }
+  if (localStorage.getItem('novel_dock_minimized') === 'true') {
+    setDockMinimized(true);
   }
 
   // Find paragraph currently in viewport
@@ -725,6 +915,22 @@ document.addEventListener('DOMContentLoaded', () => {
     speakParagraph(startIndex, false);
   }
 
+  const dockAudioIcon = document.getElementById('dock-audio-icon');
+
+  function updatePlayStateUI(isPlaying) {
+    if (isPlaying) {
+      if (npPlayIcon) npPlayIcon.textContent = '⏸';
+      if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+      dockBtnAudioToggle?.classList.add('is-playing');
+      if (dockAudioIcon) dockAudioIcon.textContent = '⏸';
+    } else {
+      if (npPlayIcon) npPlayIcon.textContent = '▶';
+      if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
+      dockBtnAudioToggle?.classList.remove('is-playing');
+      if (dockAudioIcon) dockAudioIcon.textContent = '🎧';
+    }
+  }
+
   // Close Audio Player
   function closeAudioPlayer() {
     stopSpeech();
@@ -736,8 +942,7 @@ document.addEventListener('DOMContentLoaded', () => {
     stopKeepAlive();
 
     if (npWidget) npWidget.classList.remove('active');
-    if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
-    if (npPlayIcon) npPlayIcon.textContent = '▶';
+    updatePlayStateUI(false);
 
     releaseWakeLock();
     localStorage.removeItem('novel_auto_play_tts');
@@ -837,6 +1042,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     utterance.rate = audioState.rate || 1.0;
     utterance.pitch = audioState.pitch || 1.0;
+    utterance.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
 
     const wordSpans = targetNode.querySelectorAll('.np-word-token');
 
@@ -877,8 +1083,7 @@ document.addEventListener('DOMContentLoaded', () => {
       audioState.isPlaying = true;
       audioState.isPaused = false;
       startAudioPipeline();
-      if (npPlayIcon) npPlayIcon.textContent = '⏸';
-      if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+      updatePlayStateUI(true);
       updateMediaSession();
     };
 
@@ -917,8 +1122,7 @@ document.addEventListener('DOMContentLoaded', () => {
       audioState.isPlaying = false;
       audioState.isPaused = false;
       pauseAudioPipeline();
-      if (npPlayIcon) npPlayIcon.textContent = '▶';
-      if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
+      updatePlayStateUI(false);
       updateMediaSession();
 
       if (audioState.autoNext && nextChapterUrl) {
@@ -1004,13 +1208,13 @@ document.addEventListener('DOMContentLoaded', () => {
         activeAudioUrl = URL.createObjectURL(audioBlob);
         activeHtml5Audio = new Audio(activeAudioUrl);
         activeHtml5Audio.playbackRate = audioState.rate || 1.0;
+        activeHtml5Audio.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
 
         activeHtml5Audio.onplay = () => {
           audioState.isPlaying = true;
           audioState.isPaused = false;
           startAudioPipeline();
-          if (npPlayIcon) npPlayIcon.textContent = '⏸';
-          if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+          updatePlayStateUI(true);
           updateMediaSession();
         };
 
@@ -1059,8 +1263,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       pauseAudioPipeline();
       audioState.isPaused = true;
-      if (npPlayIcon) npPlayIcon.textContent = '▶';
-      if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
+      updatePlayStateUI(false);
       updateMediaSession();
     } else if (audioState.isPaused) {
       startAudioPipeline();
@@ -1072,8 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         speakParagraph(audioState.currentIndex, false);
       }
       audioState.isPaused = false;
-      if (npPlayIcon) npPlayIcon.textContent = '⏸';
-      if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+      updatePlayStateUI(true);
       updateMediaSession();
     } else {
       speakParagraph(audioState.currentIndex, false);

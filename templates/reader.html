@@ -208,8 +208,8 @@
       </div>
     </div>
 
-    <!-- Collapsible Settings Panel (Matches Image 2) -->
-    <div class="np-audio-settings-body" id="np-audio-settings-panel">
+    <!-- Collapsible Settings Panel (Matches User Screenshot: Expanded by default) -->
+    <div class="np-audio-settings-body open" id="np-audio-settings-panel">
       <!-- Row 1: Language & Voice -->
       <div class="np-settings-grid-2">
         <div class="np-setting-field">
@@ -231,8 +231,8 @@
         </div>
       </div>
 
-      <!-- Row 2: Sliders for Speed & Pitch -->
-      <div class="np-settings-grid-2" style="margin-top: 1.1rem;">
+      <!-- Row 2: Sliders for Speed, Pitch & Volume -->
+      <div class="np-settings-grid-3" style="margin-top: 1.1rem;">
         <div class="np-setting-field">
           <div class="np-slider-header">
             <label class="np-field-label">SPEED</label>
@@ -247,6 +247,14 @@
             <span class="np-slider-val" id="np-pitch-val-label">1</span>
           </div>
           <input type="range" id="np-pitch-slider" class="np-range-slider" min="0.5" max="1.5" step="0.05" value="1.0">
+        </div>
+
+        <div class="np-setting-field">
+          <div class="np-slider-header">
+            <label class="np-field-label">VOLUME</label>
+            <span class="np-slider-val" id="np-vol-val-label">100%</span>
+          </div>
+          <input type="range" id="np-volume-slider" class="np-range-slider" min="0" max="1" step="0.05" value="1.0">
         </div>
       </div>
 
@@ -301,12 +309,85 @@
       <!-- Next Paragraph -->
       <button type="button" class="np-circle-icon-btn" id="np-btn-next" title="Next Paragraph (K)">⏭</button>
       
-      <!-- Settings / Collapse Toggle Button -->
-      <button type="button" class="np-circle-icon-btn" id="np-btn-settings-toggle" title="Voice & Playback Settings">
-        <span id="np-settings-toggle-icon">⚙</span>
+      <!-- Settings / Collapse Toggle Button (Exact down chevron matching Novel Phoenix) -->
+      <button type="button" class="np-circle-icon-btn" id="np-btn-settings-toggle" title="Collapse / Expand Panel">
+        <span id="np-settings-toggle-icon">▼</span>
       </button>
     </div>
   </div>
+
+  <!-- Inbuilt Floating Reader Extension Dock / HUD (Premium Native Tool) -->
+  <aside class="reader-extension-dock" id="reader-extension-dock" aria-label="Quick Reader Dock">
+    <div class="dock-pill-main">
+      <!-- Quick Audio Play / Pause -->
+      <button type="button" class="dock-btn dock-btn-audio" id="dock-btn-audio-toggle" title="Toggle Audio Reader (A)">
+        <span class="dock-icon" id="dock-audio-icon">🎧</span>
+        <span class="dock-label">Listen</span>
+      </button>
+
+      <!-- Quick Volume Slider Popover -->
+      <div class="dock-popover-wrapper">
+        <button type="button" class="dock-btn" id="dock-btn-vol" title="Audio Volume">
+          <span class="dock-icon" id="dock-vol-icon">🔊</span>
+        </button>
+        <div class="dock-popover" id="dock-vol-popover">
+          <div class="dock-popover-header">
+            <span>Volume</span>
+            <span id="dock-vol-percent">100%</span>
+          </div>
+          <input type="range" id="dock-vol-slider" class="np-range-slider" min="0" max="1" step="0.05" value="1.0">
+        </div>
+      </div>
+
+      <!-- Quick Screen Brightness / Dimmer Popover -->
+      <div class="dock-popover-wrapper">
+        <button type="button" class="dock-btn" id="dock-btn-brightness" title="Screen Brightness / Night Dimmer">
+          <span class="dock-icon">☀️</span>
+        </button>
+        <div class="dock-popover" id="dock-brightness-popover">
+          <div class="dock-popover-header">
+            <span>Screen Brightness</span>
+            <span id="dock-brightness-val">100%</span>
+          </div>
+          <input type="range" id="dock-brightness-slider" class="np-range-slider" min="25" max="100" step="5" value="100">
+          <div class="dock-popover-footer">
+            <span>🌙 Night</span>
+            <span>☀️ Bright</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Font Size Stepper -->
+      <div class="dock-stepper-wrap" title="Text Size">
+        <button type="button" class="dock-step-btn" id="dock-font-dec" title="Decrease font size">A−</button>
+        <span class="dock-stepper-val" id="dock-font-val">19px</span>
+        <button type="button" class="dock-step-btn" id="dock-font-inc" title="Increase font size">A+</button>
+      </div>
+
+      <!-- Quick Theme Cycle -->
+      <button type="button" class="dock-btn" id="dock-btn-theme-cycle" title="Cycle Reading Themes (OLED Black, Midnight, Forest, Sepia, Light)">
+        <span class="dock-icon">🎨</span>
+      </button>
+
+      <!-- Open Full Typography Drawer -->
+      <button type="button" class="dock-btn" id="dock-btn-open-typography" title="Typography & Spacing Settings">
+        <span class="dock-icon">⚙️</span>
+      </button>
+
+      <!-- Minimize Dock -->
+      <button type="button" class="dock-btn dock-btn-collapse" id="dock-btn-minimize" title="Minimize Controls">
+        <span>✕</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Minimized Floating Trigger Button -->
+  <button type="button" class="dock-reopen-pill" id="dock-reopen-btn" title="Open Reading Controls Dock">
+    <span>⚡ Reader HUD</span>
+  </button>
+
+  <!-- Fullscreen Screen Brightness Dimmer Overlay -->
+  <div class="reader-brightness-overlay" id="reader-brightness-overlay"></div>
 
   <script src="/static/js/dexie.min.js"></script>
   <script src="/static/js/reader.js"></script>
