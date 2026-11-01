@@ -65,12 +65,12 @@ async def service_worker():
     )
 
 @app.get("/", response_class=HTMLResponse)
-async def library_home(request: Request):
-    novels = database.get_all_novels()
+async def library_home(request: Request, sort: Optional[str] = "recent"):
+    novels = database.get_all_novels(order_by=sort or "recent")
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"novels": novels}
+        context={"novels": novels, "current_sort": sort or "recent"}
     )
 
 @app.get("/novel/{slug}", response_class=HTMLResponse)
@@ -96,8 +96,15 @@ async def chapter_reader(request: Request, slug: str, chapter_number: int):
         full_novel = database.get_novel_by_slug(slug)
         all_chapters = full_novel.get("chapters", []) if full_novel else []
     
-    prev_chapter = chapter_number - 1 if chapter_number > 1 else None
-    next_chapter = chapter_number + 1 if chapter_number < novel.get("total_chapters", len(all_chapters)) else None
+    # Robust previous and next chapter resolution against non-contiguous numbering
+    ch_nums = [c["chapter_number"] for c in all_chapters] if all_chapters else []
+    if chapter_number in ch_nums:
+        idx = ch_nums.index(chapter_number)
+        prev_chapter = ch_nums[idx - 1] if idx > 0 else None
+        next_chapter = ch_nums[idx + 1] if idx < len(ch_nums) - 1 else None
+    else:
+        prev_chapter = chapter_number - 1 if chapter_number > 1 else None
+        next_chapter = chapter_number + 1 if chapter_number < novel.get("total_chapters", len(all_chapters)) else None
     
     return templates.TemplateResponse(
         request=request,

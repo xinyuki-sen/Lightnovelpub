@@ -25,6 +25,12 @@ def get_connection():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     conn.execute("PRAGMA foreign_keys = ON;")
+    try:
+        conn.execute("PRAGMA journal_mode = WAL;")
+        conn.execute("PRAGMA synchronous = NORMAL;")
+        conn.execute("PRAGMA cache_size = -32000;")
+    except Exception:
+        pass
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -68,6 +74,8 @@ def init_db():
                 UNIQUE (novel_id, chapter_number)
             );
             """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_novels_created ON novels(created_at DESC);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_novels_progress ON novels(last_read_chapter, last_read_percent);")
     finally:
         conn.close()
 
@@ -126,11 +134,23 @@ def save_novel(title: str, author: str, synopsis: str, cover_path: str, chapters
     finally:
         conn.close()
 
-def get_all_novels() -> List[Dict]:
+def get_all_novels(order_by: str = "recent") -> List[Dict]:
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM novels ORDER BY created_at DESC")
+        if order_by == "title":
+            cursor.execute("SELECT * FROM novels ORDER BY title COLLATE NOCASE ASC")
+        elif order_by == "chapters":
+            cursor.execute("SELECT * FROM novels ORDER BY total_chapters DESC, created_at DESC")
+        elif order_by == "progress":
+            cursor.execute("SELECT * FROM novels ORDER BY last_read_percent DESC, last_read_chapter DESC")
+        else:
+            # Default: Actively reading first, then newly added
+            cursor.execute("""
+                SELECT * FROM novels 
+                ORDER BY CASE WHEN last_read_chapter > 1 OR last_read_percent > 3.0 THEN 0 ELSE 1 END,
+                         created_at DESC
+            """)
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
     finally:

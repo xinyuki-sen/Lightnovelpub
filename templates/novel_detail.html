@@ -248,11 +248,32 @@ if (sortBtn && gridContainer) {
 
 async function deleteNovel(slug) {
   if (confirm("Are you sure you want to delete this novel from your library?")) {
-    const res = await fetch(`/api/novel/${slug}`, { method: 'DELETE' });
-    if (res.ok) {
-      window.location.href = '/';
-    } else {
-      alert("Failed to delete novel.");
+    try {
+      const res = await fetch(`/api/novel/${slug}`, { method: 'DELETE' });
+      if (res.ok) {
+        if (typeof Dexie !== 'undefined') {
+          const db = new Dexie('LightnovelpubDB');
+          db.version(1).stores({
+            chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
+            progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
+            audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
+          });
+          await db.chapters.where('novelSlug').equals(slug).delete().catch(() => {});
+          await db.progress.where('novelSlug').equals(slug).delete().catch(() => {});
+          await db.audioCache.where('novelSlug').equals(slug).delete().catch(() => {});
+        }
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && k.includes(slug)) {
+            localStorage.removeItem(k);
+          }
+        }
+        window.location.href = '/';
+      } else {
+        alert("Failed to delete novel.");
+      }
+    } catch (e) {
+      alert("Network error: " + e.message);
     }
   }
 }

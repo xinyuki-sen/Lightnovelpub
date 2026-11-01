@@ -109,17 +109,39 @@ document.addEventListener('DOMContentLoaded', async () => {
   </div>
 </div>
 
-<!-- Collection Controls & Filter Row -->
+<!-- Collection Controls, Integrated Search & Sorting Bar -->
 <div class="collection-controls-bar" id="novel-collection">
   <div class="collection-heading-wrap">
     <h2 class="collection-title">Library Collection</h2>
     <span class="badge-pill" id="visible-novel-count">{{ novels|length }} Available</span>
   </div>
 
-  <div class="collection-filter-pills" id="library-filter-pills">
-    <button type="button" class="filter-pill-btn active" data-filter="all">All ({{ novels|length }})</button>
-    <button type="button" class="filter-pill-btn" data-filter="reading">In Progress</button>
-    <button type="button" class="filter-pill-btn" data-filter="unread">Unread</button>
+  <!-- Integrated Real-time Search Input -->
+  <div class="collection-search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="collection-search-input" class="collection-search-input" placeholder="Search library (title, author)..." autocomplete="off">
+    <button type="button" id="clear-search-btn" class="clear-search-btn" title="Clear search query" style="display: none;">✕</button>
+  </div>
+
+  <div class="collection-actions-wrap">
+    <!-- Filter Pills (All, In Progress, Unread, Completed) -->
+    <div class="collection-filter-pills" id="library-filter-pills">
+      <button type="button" class="filter-pill-btn active" data-filter="all">All ({{ novels|length }})</button>
+      <button type="button" class="filter-pill-btn" data-filter="reading">In Progress</button>
+      <button type="button" class="filter-pill-btn" data-filter="unread">Unread</button>
+      <button type="button" class="filter-pill-btn" data-filter="completed">Completed</button>
+    </div>
+
+    <!-- Quick Sort Dropdown -->
+    <div class="collection-sort-wrap">
+      <span class="sort-icon">↕️</span>
+      <select id="library-sort-select" class="library-sort-select" title="Sort library collection">
+        <option value="recent">Recently Read</option>
+        <option value="title">Title (A → Z)</option>
+        <option value="progress">Highest Progress</option>
+        <option value="chapters">Most Chapters</option>
+      </select>
+    </div>
   </div>
 </div>
 
@@ -149,6 +171,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         {% if is_reading %}
         <span class="novel-status-chip">Reading Ch. {{ cur_ch }} ({{ cur_pct|round|int }}%)</span>
         {% endif %}
+        <button type="button" class="btn-card-quick-delete" title="Delete novel from library" onclick="deleteNovelFromLibrary(event, '{{ novel.slug }}', '{{ novel.title }}')">
+          🗑️
+        </button>
       </div>
 
       <!-- Quick Action Overlay Pill -->
@@ -174,6 +199,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   </a>
   {% endfor %}
 </div>
+
+<!-- Empty Search / Filter Feedback State -->
+<div class="novel-no-results-bento" id="novel-no-results" style="display: none;">
+  <div class="empty-icon-halo">🔍</div>
+  <h3>No Novels Found</h3>
+  <p id="no-results-message">No titles or authors match your current search and filters.</p>
+  <button type="button" class="btn-hero-ghost" id="btn-reset-library-filters" style="margin: 0 auto; display: inline-flex;">
+    Clear Filters & Search
+  </button>
+</div>
 {% else %}
 <div class="empty-library-bento">
   <div class="empty-icon-halo">📚</div>
@@ -188,15 +223,43 @@ document.addEventListener('DOMContentLoaded', async () => {
 {% endif %}
 
 <script>
-// Instant interactive filtering and search for library
+// Instant interactive filtering, dual-input search sync, sorting, and library management
 document.addEventListener('DOMContentLoaded', () => {
-  const searchInput = document.getElementById('library-search-input');
-  const cards = Array.from(document.querySelectorAll('.novel-card'));
+  const navSearch = document.getElementById('library-search-input');
+  const collectionSearch = document.getElementById('collection-search-input');
+  const clearBtn = document.getElementById('clear-search-btn');
+  const cardsContainer = document.getElementById('main-novel-grid');
+  let cards = Array.from(document.querySelectorAll('.novel-card'));
   const filterPills = Array.from(document.querySelectorAll('.filter-pill-btn'));
   const countBadge = document.getElementById('visible-novel-count');
+  const sortSelect = document.getElementById('library-sort-select');
+  const noResultsBlock = document.getElementById('novel-no-results');
+  const noResultsMsg = document.getElementById('no-results-message');
+  const resetBtn = document.getElementById('btn-reset-library-filters');
 
   let currentFilter = 'all';
   let searchQuery = '';
+
+  function syncSearch(query, origin) {
+    searchQuery = query.trim().toLowerCase();
+    if (origin !== 'nav' && navSearch) navSearch.value = query;
+    if (origin !== 'collection' && collectionSearch) collectionSearch.value = query;
+    if (clearBtn) clearBtn.style.display = searchQuery ? 'inline-flex' : 'none';
+    applyFilters();
+  }
+
+  if (navSearch) {
+    navSearch.addEventListener('input', (e) => syncSearch(e.target.value, 'nav'));
+  }
+  if (collectionSearch) {
+    collectionSearch.addEventListener('input', (e) => syncSearch(e.target.value, 'collection'));
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      syncSearch('', 'all');
+      collectionSearch?.focus();
+    });
+  }
 
   function applyFilters() {
     let visibleCount = 0;
@@ -204,11 +267,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const title = (card.getAttribute('data-novel-title') || '').toLowerCase();
       const author = (card.getAttribute('data-novel-author') || '').toLowerCase();
       const ch = parseInt(card.getAttribute('data-ch') || '1', 10);
+      const pct = parseFloat(card.getAttribute('data-percent') || '0');
 
       const matchesSearch = !searchQuery || title.includes(searchQuery) || author.includes(searchQuery);
       let matchesFilter = true;
-      if (currentFilter === 'reading') matchesFilter = ch > 1;
-      if (currentFilter === 'unread') matchesFilter = ch <= 1;
+      if (currentFilter === 'reading') matchesFilter = (pct > 0.0 || ch > 1) && pct < 100.0;
+      if (currentFilter === 'unread') matchesFilter = (pct === 0.0 && ch <= 1);
+      if (currentFilter === 'completed') matchesFilter = pct >= 100.0;
 
       if (matchesSearch && matchesFilter) {
         card.style.display = '';
@@ -221,13 +286,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (countBadge) {
       countBadge.textContent = `${visibleCount} Available`;
     }
-  }
 
-  if (searchInput) {
-    searchInput.addEventListener('input', (e) => {
-      searchQuery = e.target.value.trim().toLowerCase();
-      applyFilters();
-    });
+    if (noResultsBlock) {
+      if (visibleCount === 0 && cards.length > 0) {
+        noResultsBlock.style.display = 'block';
+        if (noResultsMsg) {
+          noResultsMsg.textContent = searchQuery ? `No titles or authors match "${searchQuery}".` : 'No novels match this filter category.';
+        }
+      } else {
+        noResultsBlock.style.display = 'none';
+      }
+    }
   }
 
   filterPills.forEach(pill => {
@@ -238,7 +307,102 @@ document.addEventListener('DOMContentLoaded', () => {
       applyFilters();
     });
   });
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      syncSearch('', 'all');
+      filterPills.forEach(p => p.classList.remove('active'));
+      filterPills[0]?.classList.add('active');
+      currentFilter = 'all';
+      applyFilters();
+    });
+  }
+
+  // Instant DOM sorting without page reload
+  if (sortSelect && cardsContainer) {
+    sortSelect.addEventListener('change', (e) => {
+      const sortBy = e.target.value;
+      cards = Array.from(document.querySelectorAll('.novel-card'));
+      cards.sort((a, b) => {
+        if (sortBy === 'title') {
+          const tA = (a.getAttribute('data-novel-title') || '').toLowerCase();
+          const tB = (b.getAttribute('data-novel-title') || '').toLowerCase();
+          return tA.localeCompare(tB);
+        } else if (sortBy === 'progress') {
+          const pA = parseFloat(a.getAttribute('data-percent') || '0');
+          const pB = parseFloat(b.getAttribute('data-percent') || '0');
+          return pB - pA;
+        } else if (sortBy === 'chapters') {
+          const cA = parseInt(a.getAttribute('data-total-chs') || '0', 10);
+          const cB = parseInt(b.getAttribute('data-total-chs') || '0', 10);
+          return cB - cA;
+        } else {
+          // 'recent': actively reading first, then original order
+          const rA = parseFloat(a.getAttribute('data-percent') || '0') > 0 ? 1 : 0;
+          const rB = parseFloat(b.getAttribute('data-percent') || '0') > 0 ? 1 : 0;
+          return rB - rA;
+        }
+      });
+      cards.forEach(c => cardsContainer.appendChild(c));
+    });
+  }
 });
+
+// Delete novel directly from Library Card with complete Dexie & LocalStorage purge
+async function deleteNovelFromLibrary(e, slug, title) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!confirm(`Are you sure you want to delete "${title}" from your library?`)) {
+    return;
+  }
+  try {
+    const res = await fetch(`/api/novel/${slug}`, { method: 'DELETE' });
+    if (res.ok) {
+      // Purge Dexie IndexedDB
+      if (typeof Dexie !== 'undefined') {
+        const db = new Dexie('LightnovelpubDB');
+        db.version(1).stores({
+          chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
+          progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
+          audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
+        });
+        await db.chapters.where('novelSlug').equals(slug).delete().catch(() => {});
+        await db.progress.where('novelSlug').equals(slug).delete().catch(() => {});
+        await db.audioCache.where('novelSlug').equals(slug).delete().catch(() => {});
+      }
+      // Purge localStorage keys
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.includes(slug)) {
+          localStorage.removeItem(k);
+        }
+      }
+      // Animate card removal
+      const card = document.querySelector(`.novel-card[data-novel-slug="${slug}"]`);
+      if (card) {
+        card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.9)';
+        setTimeout(() => {
+          card.remove();
+          // Update count badges
+          const remaining = document.querySelectorAll('.novel-card').length;
+          const countBadge = document.getElementById('visible-novel-count');
+          if (countBadge) countBadge.textContent = `${remaining} Available`;
+          const allPill = document.querySelector('.filter-pill-btn[data-filter="all"]');
+          if (allPill) allPill.textContent = `All (${remaining})`;
+          if (remaining === 0) {
+            window.location.reload();
+          }
+        }, 300);
+      }
+    } else {
+      alert("Failed to delete novel.");
+    }
+  } catch (err) {
+    alert("Network error: " + err.message);
+  }
+}
 </script>
 
 <!-- Dexie.js Client-Side Authoritative Hydration (Resilient Offline Progress) -->
