@@ -286,11 +286,10 @@ function initReader() {
   const novelSlug = document.body.getAttribute('data-novel-slug');
   const currentChapterNum = parseInt(document.body.getAttribute('data-chapter-num') || '1', 10);
   const nextChapterUrl = document.body.getAttribute('data-next-url');
-  const storageKey = progress__ch;
-  const paraStorageKey = progress_para__ch;
-  const pctStorageKey = progress_pct__ch;
-  const novelSummaryKey = 
-ovel_progress_;
+  const storageKey = `progress_${novelSlug}_ch${currentChapterNum}`;
+  const paraStorageKey = `progress_para_${novelSlug}_ch${currentChapterNum}`;
+  const pctStorageKey = `progress_pct_${novelSlug}_ch${currentChapterNum}`;
+  const novelSummaryKey = `novel_progress_${novelSlug}`;
 
   // Dexie IndexedDB Initialization (Tier 2 Offline Cache)
   let novelDb = null;
@@ -304,7 +303,7 @@ ovel_progress_;
       });
 
       // Automatically cache current chapter into IndexedDB for 100% offline access
-      const chapterHeadline = document.querySelector('.chapter-headline-title')?.textContent?.trim() || Chapter ;
+      const chapterHeadline = document.querySelector('.chapter-headline-title')?.textContent?.trim() || `Chapter ${currentChapterNum}`;
       const chapterContentHtml = document.getElementById('chapter-content')?.innerHTML || '';
       if (novelSlug && chapterContentHtml) {
         novelDb.chapters.put({
