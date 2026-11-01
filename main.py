@@ -10,8 +10,17 @@ from pydantic import BaseModel
 
 import database
 from pdf_parser import extract_pdf_chapters
+from epub_parser import extract_epub_chapters
 
 app = FastAPI(title="LightnovelPub Custom Novel Reader")
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -118,24 +127,55 @@ async def chapter_reader(request: Request, slug: str, chapter_number: int):
         }
     )
 
+MAX_UPLOAD_SIZE = 45 * 1024 * 1024  # 45 MB Limit
+
 @app.post("/api/upload")
-async def upload_pdf(
+async def upload_novel(
     file: UploadFile = File(...),
     title: str = Form(None),
     author: str = Form(None),
     synopsis: str = Form(None)
 ):
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        return JSONResponse({"error": "Only PDF files are supported."}, status_code=400)
+    if not file.filename:
+        return JSONResponse({"error": "No file uploaded."}, status_code=400)
     
+    fname = file.filename.lower()
+    is_pdf = fname.endswith(".pdf")
+    is_epub = fname.endswith(".epub")
+
+    if not is_pdf and not is_epub:
+        return JSONResponse({"error": "Only PDF and EPUB files are supported."}, status_code=400)
+    
+    # 1. Inspect first 2KB for Magic Bytes
+    header = await file.read(2048)
+    if is_pdf and not header.startswith(b"%PDF-"):
+        return JSONResponse({"error": "Invalid PDF file: corrupted or invalid magic byte header."}, status_code=400)
+    if is_epub and not header.startswith(b"PK\x03\x04"):
+        return JSONResponse({"error": "Invalid EPUB file: corrupted or invalid zip magic byte signature."}, status_code=400)
+    
+    await file.seek(0)
+
+    # 2. Stream chunked file with 45MB upper limit guard (DoS protection)
+    suffix = ".pdf" if is_pdf else ".epub"
     tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            shutil.copyfileobj(file.file, tmp)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            total_size = 0
+            while chunk := await file.read(65536):  # 64KB chunks
+                total_size += len(chunk)
+                if total_size > MAX_UPLOAD_SIZE:
+                    return JSONResponse({"error": "File exceeds maximum 45MB size limit."}, status_code=413)
+                tmp.write(chunk)
             tmp_path = tmp.name
 
-        detected_title, chapters, cover_bytes = extract_pdf_chapters(tmp_path)
+        if is_epub:
+            detected_title, chapters, cover_bytes = extract_epub_chapters(tmp_path)
+        else:
+            detected_title, chapters, cover_bytes = extract_pdf_chapters(tmp_path)
         
+        if not chapters:
+            return JSONResponse({"error": "Could not extract any readable chapters from the file."}, status_code=400)
+
         final_title = title.strip() if title and title.strip() else detected_title
         if not final_title:
             final_title = os.path.splitext(file.filename)[0].replace("_", " ").title()
@@ -146,14 +186,17 @@ async def upload_pdf(
         if cover_bytes:
             cover_filename = f"{slug}.jpg"
             cover_disk_path = os.path.join(COVERS_DIR, cover_filename)
-            with open(cover_disk_path, "wb") as f_cover:
-                f_cover.write(cover_bytes)
-            cover_url = f"/static/covers/{cover_filename}"
+            try:
+                with open(cover_disk_path, "wb") as f_cover:
+                    f_cover.write(cover_bytes)
+                cover_url = f"/static/covers/{cover_filename}"
+            except Exception as cov_err:
+                print("Cover save note:", cov_err)
             
         saved_slug = database.save_novel(
             title=final_title,
             author=author.strip() if author and author.strip() else "Unknown Author",
-            synopsis=synopsis.strip() if synopsis and synopsis.strip() else f"Converted from {file.filename}.",
+            synopsis=synopsis.strip() if synopsis and synopsis.strip() else f"Imported from {file.filename}.",
             cover_path=cover_url,
             chapters=chapters,
             precomputed_slug=slug
@@ -166,7 +209,7 @@ async def upload_pdf(
             "total_chapters": len(chapters)
         }
     except Exception as e:
-        return JSONResponse({"error": f"Failed to parse PDF: {str(e)}"}, status_code=500)
+        return JSONResponse({"error": f"Failed to parse file: {str(e)}"}, status_code=500)
     finally:
         if tmp_path and os.path.exists(tmp_path):
             try:
@@ -186,7 +229,14 @@ async def save_progress(payload: ProgressPayload):
     return {"status": "ok"}
 
 @app.delete("/api/novel/{slug}")
-async def delete_novel_api(slug: str):
+async def delete_novel_api(slug: str, request: Request):
+    # Admin security guard: if ADMIN_TOKEN is configured in environment, require matching header
+    admin_token = os.environ.get("ADMIN_TOKEN")
+    if admin_token:
+        client_token = request.headers.get("X-Admin-Token")
+        if client_token != admin_token:
+            raise HTTPException(status_code=403, detail="Unauthorized: Invalid admin token")
+
     cover_image = database.delete_novel(slug)
     if cover_image and cover_image.startswith("/static/covers/"):
         filename = cover_image.replace("/static/covers/", "")

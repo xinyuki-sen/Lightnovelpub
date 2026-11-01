@@ -54,6 +54,7 @@
       <div class="theme-pill-dot dot-forest" data-theme="forest" title="Forest Night"></div>
       <div class="theme-pill-dot dot-sepia" data-theme="sepia" title="Parchment Sepia"></div>
       <div class="theme-pill-dot dot-light" data-theme="light" title="Day Light"></div>
+      <div class="theme-pill-dot dot-manga" data-theme="manga-ink" title="Manga Ink (Explore The Space)"></div>
     </div>
 
     <!-- Font Family (5 Curated Reader Fonts) -->
@@ -415,6 +416,62 @@
 
   <!-- Fullscreen Screen Brightness Dimmer Overlay -->
   <div class="reader-brightness-overlay" id="reader-brightness-overlay"></div>
+
+  
+  <!-- Keyboard Shortcuts Cheat Sheet Modal (Triggered by '?' or Shift + /) -->
+  <div class="keyboard-modal-overlay" id="keyboard-help-modal">
+    <div class="keyboard-modal-card">
+      <button type="button" class="modal-close-icon-btn" id="close-keyboard-modal">&times;</button>
+      <div class="keyboard-modal-title">
+        <span>⌨️</span> Reader Shortcuts
+      </div>
+      <div class="keyboard-modal-subtitle">
+        Quick keyboard & touch actions for reading & listening
+      </div>
+      <div class="shortcuts-table-grid">
+        <div class="shortcut-row">
+          <span class="shortcut-label">Play / Pause Audio</span>
+          <span class="keycap-pill">SPACE</span>
+        </div>
+        <div class="shortcut-row">
+          <span class="shortcut-label">Toggle Audio Widget</span>
+          <span class="keycap-pill">A</span>
+        </div>
+        <div class="shortcut-row">
+          <span class="shortcut-label">Rewind 10 Seconds</span>
+          <span class="keycap-pill">J</span>
+        </div>
+        <div class="shortcut-row">
+          <span class="shortcut-label">Forward 10 Seconds</span>
+          <span class="keycap-pill">L</span>
+        </div>
+        <div class="shortcut-row">
+          <span class="shortcut-label">Previous Chapter</span>
+          <span class="keycap-pill">← / Swipe Right</span>
+        </div>
+        <div class="shortcut-row">
+          <span class="shortcut-label">Next Chapter</span>
+          <span class="keycap-pill">→ / Swipe Left</span>
+        </div>
+        <div class="shortcut-row">
+          <span class="shortcut-label">Toggle Fullscreen</span>
+          <span class="keycap-pill">F</span>
+        </div>
+        <div class="shortcut-row">
+          <span class="shortcut-label">Settings Drawer</span>
+          <span class="keycap-pill">T / O</span>
+        </div>
+        <div class="shortcut-row">
+          <span class="shortcut-label">Shortcuts Guide</span>
+          <span class="keycap-pill">?</span>
+        </div>
+        <div class="shortcut-row">
+          <span class="shortcut-label">Close Overlays</span>
+          <span class="keycap-pill">ESC</span>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="/static/js/dexie.min.js?v=11"></script>
   <script src="/static/js/reader.js?v=12"></script>

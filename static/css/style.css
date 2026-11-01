@@ -130,6 +130,32 @@ body[data-reader-theme="light"] {
   --shadow-card: 0 8px 25px rgba(0, 0, 0, 0.06);
 }
 
+
+body[data-reader-theme="manga-ink"] {
+  --bg-base: #09090b;
+  --bg-surface: #111115;
+  --bg-surface-elevated: #181820;
+  --bg-card: #131317;
+  --bg-card-hover: #1b1b22;
+  --border-subtle: rgba(245, 238, 220, 0.15);
+  --border-hover: rgba(245, 238, 220, 0.5);
+  --border-active: #f5eedc;
+  --accent: #f5eedc;
+  --accent-glow: rgba(245, 238, 220, 0.28);
+  --accent-light: #ffffff;
+  --accent-gradient: linear-gradient(135deg, #1f1f26 0%, #3a3a46 100%);
+  --accent-gradient-fire: linear-gradient(135deg, #2b2b35 0%, #4f4f60 100%);
+  --text-primary: #f5eedc;
+  --text-secondary: #c7c1b0;
+  --text-muted: #827d70;
+}
+
+.dot-manga {
+  background: #09090b !important;
+  border: 1.5px solid #f5eedc !important;
+  box-shadow: 0 0 10px rgba(245, 238, 220, 0.35);
+}
+
 /* ========================================= */
 /* BASE & TYPOGRAPHY                         */
 /* ========================================= */
@@ -3360,4 +3386,118 @@ a {
     padding: 0.45rem 0.85rem;
     font-size: 0.8rem;
   }
+}
+
+
+/* ========================================= */
+/* MANGA EDITORIAL & SHORTCUTS MODAL SUITE   */
+/* ========================================= */
+
+.keyboard-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 99999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.keyboard-modal-overlay.active {
+  display: flex !important;
+  opacity: 1;
+}
+
+.keyboard-modal-card {
+  position: relative;
+  background: var(--bg-surface-elevated, #16181d);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  border-radius: 20px;
+  width: 100%;
+  max-width: 580px;
+  padding: 2rem;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.85);
+  animation: modalScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalScaleUp {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.keyboard-modal-title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 1.45rem;
+  margin-bottom: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text-primary);
+}
+
+.keyboard-modal-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+}
+
+.shortcuts-table-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem 1.25rem;
+}
+
+@media (max-width: 560px) {
+  .shortcuts-table-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.65rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.shortcut-label {
+  font-size: 0.86rem;
+  color: var(--text-primary);
+}
+
+.keycap-pill {
+  font-family: monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 5px;
+  padding: 0.15rem 0.45rem;
+  color: var(--accent-light, #34d399);
+}
+
+.modal-close-icon-btn {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.4rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.modal-close-icon-btn:hover {
+  color: var(--text-primary);
 }

@@ -1714,6 +1714,87 @@ function initReader() {
   if (npBtnRewind10) npBtnRewind10.addEventListener('click', rewind10Seconds);
   if (npBtnForward10) npBtnForward10.addEventListener('click', forward10Seconds);
 
+
+  // Keyboard Help Modal Controls
+  const keyboardModal = document.getElementById('keyboard-help-modal');
+  const closeKeyboardBtn = document.getElementById('close-keyboard-modal');
+
+  function toggleKeyboardModal() {
+    if (!keyboardModal) return;
+    keyboardModal.classList.toggle('active');
+  }
+
+  function closeKeyboardModal() {
+    if (!keyboardModal) return;
+    keyboardModal.classList.remove('active');
+  }
+
+  if (closeKeyboardBtn) closeKeyboardBtn.addEventListener('click', closeKeyboardModal);
+  if (keyboardModal) {
+    keyboardModal.addEventListener('click', (e) => {
+      if (e.target === keyboardModal) closeKeyboardModal();
+    });
+  }
+
+  // =========================================================================
+  // ANDROID TOUCH SWIPE GESTURE ENGINE (ONE-HANDED CHAPTER NAVIGATION)
+  // =========================================================================
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchEndX = 0;
+  let touchEndY = 0;
+  const SWIPE_THRESHOLD = 85;
+  const SWIPE_MAX_Y = 55;
+
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchEndX = touchStartX;
+      touchEndY = touchStartY;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (e.touches && e.touches.length === 1) {
+      touchEndX = e.touches[0].clientX;
+      touchEndY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', (e) => {
+    const activeTarget = e.target;
+    if (activeTarget && (
+        activeTarget.closest('#settings-drawer') ||
+        activeTarget.closest('#np-audio-widget') ||
+        activeTarget.closest('.reader-floating-dock') ||
+        activeTarget.closest('.keyboard-modal-card') ||
+        activeTarget.closest('select') ||
+        activeTarget.closest('button') ||
+        activeTarget.closest('input')
+    )) {
+      return;
+    }
+
+    const deltaX = touchEndX - touchStartX;
+    const deltaY = Math.abs(touchEndY - touchStartY);
+
+    // Swipe Left -> Next Chapter
+    if (deltaX < -SWIPE_THRESHOLD && deltaY < SWIPE_MAX_Y) {
+      if (nextBtn && !nextBtn.disabled && nextBtn.href) {
+        if (navigator.vibrate) navigator.vibrate([15]);
+        window.location.href = nextBtn.href;
+      }
+    }
+    // Swipe Right -> Previous Chapter
+    else if (deltaX > SWIPE_THRESHOLD && deltaY < SWIPE_MAX_Y) {
+      if (prevBtn && !prevBtn.disabled && prevBtn.href) {
+        if (navigator.vibrate) navigator.vibrate([15]);
+        window.location.href = prevBtn.href;
+      }
+    }
+  }, { passive: true });
+
   // Keyboard Shortcuts for Reader & Audio Navigation
   document.addEventListener('keydown', (e) => {
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {

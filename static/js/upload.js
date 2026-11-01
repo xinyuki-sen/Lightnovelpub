@@ -53,11 +53,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     dropzone.addEventListener('drop', (e) => {
       const files = e.dataTransfer.files;
-      if (files.length > 0 && files[0].name.toLowerCase().endsWith('.pdf')) {
+      if (files.length > 0 && (files[0].name.toLowerCase().endsWith('.pdf') || files[0].name.toLowerCase().endsWith('.epub'))) {
         fileInput.files = files;
         handleFileSelect(files[0]);
       } else {
-        alert('Please drop a valid PDF file.');
+        alert('Please drop a valid PDF or EPUB file.');
       }
     });
 
@@ -87,16 +87,16 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
 
       if (!fileInput.files || fileInput.files.length === 0) {
-        alert('Please choose a PDF novel file to upload.');
+        alert('Please choose a PDF or EPUB novel file to upload.');
         return;
       }
 
       const formData = new FormData(uploadForm);
       if (uploadProgress) uploadProgress.style.display = 'block';
-      if (uploadStatusText) uploadStatusText.textContent = 'Uploading and processing PDF novel...';
+      if (uploadStatusText) uploadStatusText.textContent = 'Uploading and processing novel chapters...';
       if (btnSubmit) {
         btnSubmit.disabled = true;
-        btnSubmit.textContent = 'Converting PDF...';
+        btnSubmit.textContent = 'Extracting Chapters...';
       }
 
       try {

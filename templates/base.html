@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/static/img/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <title>{% block title %}LightnovelPub — Luxury Novel Reader{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=11">
+  <link rel="stylesheet" href="/static/css/style.css?v=12">
 </head>
 <body data-reader-theme="black" {% block body_attrs %}{% endblock %}>
 
@@ -30,7 +30,7 @@
           <span>📚</span> Library
         </a>
         <button class="btn-upload-gradient open-upload-btn">
-          <span>+</span> Upload Novel PDF
+          <span>+</span> Upload Novel (PDF / EPUB)
         </button>
       </div>
     </div>
@@ -46,20 +46,20 @@
     <div class="modal-card">
       <button class="modal-close-btn" id="close-upload-modal">&times;</button>
       <h2 style="font-size: 1.5rem; font-weight: 800; font-family: 'Montserrat', sans-serif; margin-bottom: 0.35rem;">
-        Upload Novel PDF
+        Upload Novel (PDF or EPUB)
       </h2>
       <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
-        Drop any light novel or web novel PDF. We'll automatically extract the cover, split chapters according to the index/TOC, and format it into the reader!
+        Drop any light novel or web novel PDF or EPUB. We'll automatically extract the cover, split chapters according to the index/TOC, and format it into the reader!
       </p>
 
       <form id="upload-form">
         <div class="dropzone-area" id="pdf-dropzone">
           <div style="font-size: 2.6rem; margin-bottom: 0.5rem;">📖</div>
-          <div style="font-weight: 700; font-size: 1rem;">Click or drag & drop novel PDF here</div>
+          <div style="font-weight: 700; font-size: 1rem;">Click or drag & drop novel PDF or EPUB here</div>
           <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.35rem;">
             Supports standard PDF books (OceanofPDF, Webnovel, EPUB-to-PDF)
           </div>
-          <input type="file" id="pdf-file-input" name="file" accept=".pdf" style="display: none;" required>
+          <input type="file" id="pdf-file-input" name="file" accept=".pdf,.epub" style="display: none;" required>
         </div>
 
         <div id="file-selected-name" style="display: none; font-size: 0.88rem; color: var(--accent-light); margin-bottom: 1rem; font-weight: 700;"></div>
