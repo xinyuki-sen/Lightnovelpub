@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/static/img/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=7">
+  <link rel="stylesheet" href="/static/css/style.css?v=8">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}">
 
@@ -49,23 +49,44 @@
     <div class="setting-ctrl-item">
       <span>Theme:</span>
       <div class="theme-pill-dot dot-black active" data-theme="black" title="Pitch Black (OLED)"></div>
+      <div class="theme-pill-dot dot-emerald" data-theme="emerald" title="Ruined King (Emerald Mist)"></div>
       <div class="theme-pill-dot dot-midnight" data-theme="midnight" title="Deep Midnight"></div>
       <div class="theme-pill-dot dot-forest" data-theme="forest" title="Forest Night"></div>
       <div class="theme-pill-dot dot-sepia" data-theme="sepia" title="Parchment Sepia"></div>
       <div class="theme-pill-dot dot-light" data-theme="light" title="Day Light"></div>
     </div>
 
-    <!-- Font Family -->
+    <!-- Font Family (5 Curated Reader Fonts) -->
     <div class="setting-ctrl-item">
       <span>Font:</span>
       <select id="font-family-select" class="listen-select-box" style="padding: 0.35rem 0.65rem;">
-        <option value="'Nunito Sans', sans-serif">Nunito Sans (Modern Clean)</option>
-        <option value="'Merriweather', serif">Merriweather (Classic Book Serif)</option>
-        <option value="'Lora', serif">Lora (Elegant Editorial)</option>
-        <option value="'Roboto', sans-serif">Roboto (Clean Sans)</option>
-        <option value="'Montserrat', sans-serif">Montserrat (Geometric Sans)</option>
-        <option value="'Open Sans', sans-serif">Open Sans (Balanced)</option>
+        <option value="'Times New Roman', Times, 'Tinos', serif" selected>Times New Roman (Classic Literary Serif)</option>
+        <option value="'Merriweather', Georgia, serif">Merriweather (Warm Screen Book Serif)</option>
+        <option value="'Lora', Georgia, serif">Lora (Calligraphic Contemporary Serif)</option>
+        <option value="'Nunito Sans', -apple-system, sans-serif">Nunito Sans (Modern Clean Sans)</option>
+        <option value="'Open Sans', -apple-system, sans-serif">Open Sans (Balanced Humanist Sans)</option>
       </select>
+    </div>
+
+    <!-- 5 Font Visual Pills for 1-Touch Switching -->
+    <div class="font-pill-row-wrap">
+      <div class="font-pill-row" id="font-pill-row">
+        <button type="button" class="font-pill-tag active" data-font="'Times New Roman', Times, 'Tinos', serif" style="font-family: 'Times New Roman', Times, serif;">
+          Times New Roman
+        </button>
+        <button type="button" class="font-pill-tag" data-font="'Merriweather', Georgia, serif" style="font-family: 'Merriweather', serif;">
+          Merriweather
+        </button>
+        <button type="button" class="font-pill-tag" data-font="'Lora', Georgia, serif" style="font-family: 'Lora', serif;">
+          Lora
+        </button>
+        <button type="button" class="font-pill-tag" data-font="'Nunito Sans', -apple-system, sans-serif" style="font-family: 'Nunito Sans', sans-serif;">
+          Nunito Sans
+        </button>
+        <button type="button" class="font-pill-tag" data-font="'Open Sans', -apple-system, sans-serif" style="font-family: 'Open Sans', sans-serif;">
+          Open Sans
+        </button>
+      </div>
     </div>
 
     <!-- Font Size -->
@@ -364,8 +385,14 @@
         <button type="button" class="dock-step-btn" id="dock-font-inc" title="Increase font size">A+</button>
       </div>
 
-      <!-- Quick Theme Cycle -->
-      <button type="button" class="dock-btn" id="dock-btn-theme-cycle" title="Cycle Reading Themes (OLED Black, Midnight, Forest, Sepia, Light)">
+      <!-- Quick Font Cycler Button (1-touch switch between 5 fonts) -->
+      <button type="button" class="dock-btn" id="dock-btn-font-cycle" title="Quick Cycle between 5 Reading Fonts (Times New Roman, Merriweather, Lora, Nunito Sans, Open Sans)">
+        <span class="dock-icon" style="font-weight: 800; font-family: serif;">Aa</span>
+        <span class="dock-font-name-badge" id="dock-font-badge">Times</span>
+      </button>
+
+      <!-- Quick Theme Cycle (including Ruined King Emerald) -->
+      <button type="button" class="dock-btn" id="dock-btn-theme-cycle" title="Cycle Reading Themes (OLED Black, Emerald Mist, Midnight, Forest, Sepia, Light)">
         <span class="dock-icon">🎨</span>
       </button>
 
@@ -389,7 +416,7 @@
   <!-- Fullscreen Screen Brightness Dimmer Overlay -->
   <div class="reader-brightness-overlay" id="reader-brightness-overlay"></div>
 
-  <script src="/static/js/dexie.min.js?v=7"></script>
-  <script src="/static/js/reader.js?v=7"></script>
+  <script src="/static/js/dexie.min.js?v=8"></script>
+  <script src="/static/js/reader.js?v=8"></script>
 </body>
 </html>

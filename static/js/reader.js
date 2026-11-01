@@ -33,9 +33,18 @@ function initReader() {
   const prevBtn = document.getElementById('prev-chapter-btn');
   const nextBtn = document.getElementById('next-chapter-btn');
 
+  // 5 Curated Desktop & Android Screen Reading Fonts
+  const CURATED_FONTS = [
+    { id: 'times', name: 'Times New Roman', short: 'Times', value: "'Times New Roman', Times, 'Tinos', serif" },
+    { id: 'merriweather', name: 'Merriweather', short: 'Merri', value: "'Merriweather', Georgia, serif" },
+    { id: 'lora', name: 'Lora', short: 'Lora', value: "'Lora', Georgia, serif" },
+    { id: 'nunito', name: 'Nunito Sans', short: 'Nunito', value: "'Nunito Sans', -apple-system, sans-serif" },
+    { id: 'opensans', name: 'Open Sans', short: 'OpenSans', value: "'Open Sans', -apple-system, sans-serif" }
+  ];
+
   // Load preferences from localStorage
   const savedTheme = localStorage.getItem('novel_reader_theme') || 'black';
-  const savedFont = localStorage.getItem('novel_reader_font') || "'Nunito Sans', sans-serif";
+  const savedFont = localStorage.getItem('novel_reader_font') || "'Times New Roman', Times, 'Tinos', serif";
   const savedFontSize = parseInt(localStorage.getItem('novel_reader_font_size') || '19', 10);
   const savedWidth = localStorage.getItem('novel_reader_width') || '860px';
   const savedLineHeight = localStorage.getItem('novel_reader_line_height') || '1.85';
@@ -107,6 +116,23 @@ function initReader() {
     }
     if (fontSelect && fontSelect.value !== font) {
       fontSelect.value = font;
+    }
+
+    // Sync 1-Touch Visual Font Pills
+    const fontPills = document.querySelectorAll('.font-pill-tag');
+    fontPills.forEach(pill => {
+      if (pill.getAttribute('data-font') === font) {
+        pill.classList.add('active');
+      } else {
+        pill.classList.remove('active');
+      }
+    });
+
+    // Sync Quick Dock Font Badge
+    const matched = CURATED_FONTS.find(f => f.value === font);
+    const dockFontBadge = document.getElementById('dock-font-badge');
+    if (dockFontBadge) {
+      dockFontBadge.textContent = matched ? matched.short : 'Font';
     }
   }
 
@@ -838,7 +864,7 @@ function initReader() {
 
   // Dock Theme Cycle
   const dockBtnThemeCycle = document.getElementById('dock-btn-theme-cycle');
-  const themesList = ['black', 'midnight', 'forest', 'sepia', 'light'];
+  const themesList = ['black', 'emerald', 'midnight', 'forest', 'sepia', 'light'];
   if (dockBtnThemeCycle) {
     dockBtnThemeCycle.addEventListener('click', () => {
       const curTheme = document.body.getAttribute('data-reader-theme') || 'black';
@@ -846,6 +872,35 @@ function initReader() {
       const nextTheme = themesList[nextIdx];
       applyTheme(nextTheme);
       localStorage.setItem('novel_reader_theme', nextTheme);
+      showReaderToast(`Theme: ${nextTheme.toUpperCase()}`, '🎨');
+    });
+  }
+
+
+  // Wire 1-Touch Font Selector Pills
+  const fontPills = document.querySelectorAll('.font-pill-tag');
+  fontPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      const f = pill.getAttribute('data-font');
+      applyFont(f);
+      localStorage.setItem('novel_reader_font', f);
+      const matched = CURATED_FONTS.find(cf => cf.value === f);
+      if (matched) showReaderToast(`Font: ${matched.name}`, 'Aa');
+    });
+  });
+
+  // Dock Quick Font Cycler Button (Cycles between 5 Curated Fonts)
+  const dockBtnFontCycle = document.getElementById('dock-btn-font-cycle');
+  if (dockBtnFontCycle) {
+    dockBtnFontCycle.addEventListener('click', () => {
+      const currentFont = localStorage.getItem('novel_reader_font') || CURATED_FONTS[0].value;
+      let curIdx = CURATED_FONTS.findIndex(cf => cf.value === currentFont);
+      if (curIdx === -1) curIdx = 0;
+      const nextIdx = (curIdx + 1) % CURATED_FONTS.length;
+      const nextFont = CURATED_FONTS[nextIdx];
+      applyFont(nextFont.value);
+      localStorage.setItem('novel_reader_font', nextFont.value);
+      showReaderToast(`Font: ${nextFont.name}`, 'Aa');
     });
   }
 
@@ -894,6 +949,24 @@ function initReader() {
   }
   if (localStorage.getItem('novel_dock_minimized') === 'true') {
     setDockMinimized(true);
+  }
+
+
+  // Sleek HUD Floating Toast Feedback (Android & Laptop)
+  function showReaderToast(message, icon = '✦') {
+    let toast = document.getElementById('reader-hud-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'reader-hud-toast';
+      toast.className = 'reader-hud-toast';
+      document.body.appendChild(toast);
+    }
+    toast.innerHTML = `<span class="toast-icon">${icon}</span> <span>${message}</span>`;
+    toast.classList.add('visible');
+    clearTimeout(toast.__timer);
+    toast.__timer = setTimeout(() => {
+      toast.classList.remove('visible');
+    }, 1800);
   }
 
   // Find paragraph currently in viewport

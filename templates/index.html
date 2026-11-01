@@ -1,41 +1,87 @@
 {% extends "base.html" %}
 
-{% block title %}My Novel Library — LightnovelPub{% endblock %}
+{% block title %}LightnovelPub — Luxury Novel Archive{% endblock %}
 
 {% block content %}
-<!-- Cinematic Library Hero Header -->
-<div class="library-hero">
-  <div class="hero-text">
-    <h1>Welcome back, Reader</h1>
-    <p>Read, listen, and manage your personal light novel collection converted directly from your PDFs.</p>
-  </div>
-  <div class="hero-stats">
-    <div class="hero-stat-box">
-      <div class="hero-stat-num">{{ novels|length }}</div>
-      <div class="hero-stat-label">Novels in Library</div>
+<!-- Editorial Manga & Bento Hero Section (Inspired by Ruined King & Swarm Mentality) -->
+<div class="library-hero-bento">
+  <div class="reticle-corner reticle-tl">+</div>
+  <div class="reticle-corner reticle-tr">+</div>
+  <div class="reticle-corner reticle-bl">+</div>
+  <div class="reticle-corner reticle-br">+</div>
+
+  <div class="hero-bento-left">
+    <div class="hero-telemetry-badge-row">
+      <span class="telemetry-chip live-pulse"><span>●</span> ARCHIVE // VOL. 01</span>
+      <span class="telemetry-chip">✦ 5 CURATED FONTS</span>
+      <span class="telemetry-chip">⚡ NEURAL TTS</span>
+      <span class="telemetry-chip">🔒 OFFLINE DEXIE</span>
     </div>
+    
+    <h1 class="hero-bento-title">IMMERSIVE NOVEL ARCHIVE</h1>
+    <p class="hero-bento-desc">
+      High-fidelity reading engine with 5 curated desktop & Android fonts, synchronized ambient audio glow, and intelligent PDF chapter slicing.
+    </p>
+
+    <!-- Quick Action Bar -->
+    <div class="hero-cta-row">
+      <button class="btn-hero-primary open-upload-btn">
+        <span class="btn-icon">⚡</span> Upload Novel PDF
+      </button>
+      <a href="#novel-collection" class="btn-hero-ghost">
+        Explore Collection ↓
+      </a>
+    </div>
+  </div>
+
+  <div class="hero-bento-stats-grid">
+    <div class="bento-stat-card">
+      <div class="bento-stat-icon">📚</div>
+      <div class="bento-stat-num">{{ novels|length }}</div>
+      <div class="bento-stat-label">Novels in Library</div>
+      <div class="bento-stat-sub">Fully Indexed</div>
+    </div>
+
     {% set total_chs = namespace(count=0) %}
     {% for n in novels %}
       {% set total_chs.count = total_chs.count + n.total_chapters %}
     {% endfor %}
-    <div class="hero-stat-box">
-      <div class="hero-stat-num">{{ total_chs.count }}</div>
-      <div class="hero-stat-label">Total Chapters</div>
+    <div class="bento-stat-card">
+      <div class="bento-stat-icon">📑</div>
+      <div class="bento-stat-num">{{ total_chs.count }}</div>
+      <div class="bento-stat-label">Total Chapters</div>
+      <div class="bento-stat-sub">Auto-Segmented</div>
+    </div>
+
+    <div class="bento-stat-card bento-stat-highlight">
+      <div class="bento-stat-icon">🎧</div>
+      <div class="bento-stat-num">5</div>
+      <div class="bento-stat-label">Curated Fonts</div>
+      <div class="bento-stat-sub">Times, Merriweather, Lora...</div>
     </div>
   </div>
 </div>
 
-<div class="section-header-row">
-  <div class="section-title-wrap">
-    <h2>Continue Reading</h2>
-    <span class="badge-pill">{{ novels|length }} Available</span>
+<!-- Collection Controls & Filter Row -->
+<div class="collection-controls-bar" id="novel-collection">
+  <div class="collection-heading-wrap">
+    <h2 class="collection-title">Library Collection</h2>
+    <span class="badge-pill" id="visible-novel-count">{{ novels|length }} Available</span>
+  </div>
+
+  <div class="collection-filter-pills" id="library-filter-pills">
+    <button type="button" class="filter-pill-btn active" data-filter="all">All ({{ novels|length }})</button>
+    <button type="button" class="filter-pill-btn" data-filter="reading">In Progress</button>
+    <button type="button" class="filter-pill-btn" data-filter="unread">Unread</button>
   </div>
 </div>
 
 {% if novels %}
-<div class="novel-grid">
+<div class="novel-grid" id="main-novel-grid">
   {% for novel in novels %}
-  <a href="/novel/{{ novel.slug }}" class="novel-card" data-novel-title="{{ novel.title }}">
+  {% set percent = ((novel.last_read_chapter / novel.total_chapters) * 100)|round|int if novel.total_chapters > 0 else 0 %}
+  {% set status_class = "status-reading" if novel.last_read_chapter > 1 else "status-unread" %}
+  <a href="/novel/{{ novel.slug }}" class="novel-card {{ status_class }}" data-novel-title="{{ novel.title }}" data-novel-author="{{ novel.author }}" data-percent="{{ percent }}" data-ch="{{ novel.last_read_chapter }}">
     <div class="novel-cover-wrap">
       {% if novel.cover_image %}
       <img src="{{ novel.cover_image }}" alt="{{ novel.title }}" class="novel-cover-img" loading="lazy">
@@ -45,19 +91,32 @@
         <div class="short-title">{{ novel.title }}</div>
       </div>
       {% endif %}
-      <span class="novel-card-badge">{{ novel.total_chapters }} Chapters</span>
+      
+      <!-- Top Badges -->
+      <div class="novel-badge-top-row">
+        <span class="novel-card-badge">{{ novel.total_chapters }} Chs</span>
+        {% if novel.last_read_chapter > 1 %}
+        <span class="novel-status-chip">Reading Ch. {{ novel.last_read_chapter }}</span>
+        {% endif %}
+      </div>
+
+      <!-- Quick Action Overlay Pill -->
+      <div class="novel-cover-hover-action">
+        <span>Read Chapter {{ novel.last_read_chapter }} →</span>
+      </div>
     </div>
+    
     <div class="novel-info-body">
       <h3 class="novel-title" title="{{ novel.title }}">{{ novel.title }}</h3>
       <div class="novel-author">{{ novel.author }}</div>
       
       <div class="novel-progress-bar-wrap">
         <div class="progress-header">
-          <span>Chapter {{ novel.last_read_chapter }}</span>
-          <span>{{ ((novel.last_read_chapter / novel.total_chapters) * 100)|round|int if novel.total_chapters > 0 else 0 }}%</span>
+          <span>Chapter {{ novel.last_read_chapter }} / {{ novel.total_chapters }}</span>
+          <span class="progress-pct-text">{{ percent }}%</span>
         </div>
         <div class="progress-track">
-          <div class="progress-fill" style="width: {{ (novel.last_read_chapter / novel.total_chapters * 100) if novel.total_chapters > 0 else 0 }}%;"></div>
+          <div class="progress-fill" style="width: {{ percent }}%;"></div>
         </div>
       </div>
     </div>
@@ -65,15 +124,69 @@
   {% endfor %}
 </div>
 {% else %}
-<div class="empty-library">
-  <div class="empty-icon">📚</div>
-  <h3>Your library is empty</h3>
+<div class="empty-library-bento">
+  <div class="empty-icon-halo">📚</div>
+  <h3>Your Library Archive is Empty</h3>
   <p>
-    Upload your favorite novel PDF to convert it into segmented chapters with high-end typography and audio mode.
+    Upload your favorite novel PDF to convert it into segmented chapters with 5 curated typography options and synchronized audio mode.
   </p>
-  <button class="btn-read-primary open-upload-btn" style="margin: 0 auto;">
+  <button class="btn-hero-primary open-upload-btn" style="margin: 0 auto;">
     <span>+</span> Upload Your First PDF Novel
   </button>
 </div>
 {% endif %}
+
+<script>
+// Instant interactive filtering and search for library
+document.addEventListener('DOMContentLoaded', () => {
+  const searchInput = document.getElementById('library-search-input');
+  const cards = Array.from(document.querySelectorAll('.novel-card'));
+  const filterPills = Array.from(document.querySelectorAll('.filter-pill-btn'));
+  const countBadge = document.getElementById('visible-novel-count');
+
+  let currentFilter = 'all';
+  let searchQuery = '';
+
+  function applyFilters() {
+    let visibleCount = 0;
+    cards.forEach(card => {
+      const title = (card.getAttribute('data-novel-title') || '').toLowerCase();
+      const author = (card.getAttribute('data-novel-author') || '').toLowerCase();
+      const ch = parseInt(card.getAttribute('data-ch') || '1', 10);
+
+      const matchesSearch = !searchQuery || title.includes(searchQuery) || author.includes(searchQuery);
+      let matchesFilter = true;
+      if (currentFilter === 'reading') matchesFilter = ch > 1;
+      if (currentFilter === 'unread') matchesFilter = ch <= 1;
+
+      if (matchesSearch && matchesFilter) {
+        card.style.display = '';
+        visibleCount++;
+      } else {
+        card.style.display = 'none';
+      }
+    });
+
+    if (countBadge) {
+      countBadge.textContent = `${visibleCount} Available`;
+    }
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value.trim().toLowerCase();
+      applyFilters();
+    });
+  }
+
+  filterPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      filterPills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      currentFilter = pill.getAttribute('data-filter') || 'all';
+      applyFilters();
+    });
+  });
+});
+</script>
 {% endblock %}

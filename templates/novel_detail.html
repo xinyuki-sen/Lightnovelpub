@@ -3,104 +3,145 @@
 {% block title %}{{ novel.title }} — LightnovelPub{% endblock %}
 
 {% block content %}
-<!-- Cinematic Blurred Glass Hero Header (Novel Phoenix Signature Style) -->
-<div class="novel-hero-section">
+<!-- Cinematic Blurred Glass Hero Header (Inspired by Ruined King & Manga Editorial) -->
+<div class="novel-hero-section-bento">
   {% if novel.cover_image %}
   <div class="glass-backdrop" style="background-image: url('{{ novel.cover_image }}');"></div>
   {% else %}
-  <div class="glass-backdrop" style="background: linear-gradient(135deg, #7b2cbf 0%, #121217 100%);"></div>
+  <div class="glass-backdrop" style="background: linear-gradient(135deg, #7b2cbf 0%, #0d1117 100%);"></div>
   {% endif %}
   <div class="glass-shade"></div>
 
-  <div class="novel-detail-inner">
-    <div class="detail-cover-container">
+  <div class="novel-detail-inner-bento">
+    <div class="detail-cover-bento-container">
       {% if novel.cover_image %}
-      <img src="{{ novel.cover_image }}" alt="{{ novel.title }}" class="detail-cover-img">
+      <img src="{{ novel.cover_image }}" alt="{{ novel.title }}" class="detail-cover-bento-img">
       {% else %}
-      <div class="detail-cover-img" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #1f1f2e, #13131c); color: var(--accent-light);">
-        <span style="font-size: 3rem;">📖</span>
+      <div class="detail-cover-bento-placeholder">
+        <span style="font-size: 3.5rem;">📖</span>
+        <span style="font-size: 0.85rem; font-weight: 700; opacity: 0.8; margin-top: 0.5rem;">PDF NOVEL</span>
       </div>
       {% endif %}
     </div>
 
-    <div class="detail-header-info">
-      <h1 class="detail-title">{{ novel.title }}</h1>
-      <div class="detail-author-row">
-        <span>✍️ Author:</span>
-        <strong>{{ novel.author }}</strong>
+    <div class="detail-header-bento-info">
+      <div class="detail-telemetry-badge-row">
+        <span class="telemetry-chip live-pulse"><span>●</span> NOVEL ARCHIVE</span>
+        <span class="telemetry-chip">✦ {{ novel.total_chapters }} CHAPTERS</span>
+        <span class="telemetry-chip">⚡ 5 FONTS</span>
       </div>
 
-      <div class="detail-meta-badges">
-        <div class="meta-badge-item">
-          <span>📖</span>
-          <span><strong>{{ novel.total_chapters }}</strong> Chapters</span>
+      <h1 class="detail-bento-title">{{ novel.title }}</h1>
+      
+      <div class="detail-author-bento-row">
+        <span class="author-label">Author</span>
+        <span class="author-name">{{ novel.author }}</span>
+      </div>
+
+      <!-- Bento Meta Chips Grid -->
+      <div class="detail-meta-bento-grid">
+        <div class="meta-bento-chip">
+          <span class="meta-chip-icon">📖</span>
+          <div class="meta-chip-content">
+            <span class="meta-chip-val">{{ novel.total_chapters }}</span>
+            <span class="meta-chip-lbl">Total Chapters</span>
+          </div>
         </div>
-        <div class="meta-badge-item">
-          <span>🔖</span>
-          <span>Last Read: <strong>Chapter {{ novel.last_read_chapter }}</strong></span>
+
+        <div class="meta-bento-chip">
+          <span class="meta-chip-icon">🔖</span>
+          <div class="meta-chip-content">
+            <span class="meta-chip-val">Chapter {{ novel.last_read_chapter }}</span>
+            <span class="meta-chip-lbl">Reading Progress</span>
+          </div>
         </div>
-        <div class="meta-badge-item">
-          <span>🎧</span>
-          <span>Text-to-Speech Ready</span>
+
+        <div class="meta-bento-chip">
+          <span class="meta-chip-icon">🎧</span>
+          <div class="meta-chip-content">
+            <span class="meta-chip-val">Audio TTS</span>
+            <span class="meta-chip-lbl">Word Follower</span>
+          </div>
+        </div>
+
+        {% set est_mins = (novel.total_chapters * 8) %}
+        <div class="meta-bento-chip">
+          <span class="meta-chip-icon">⏱</span>
+          <div class="meta-chip-content">
+            <span class="meta-chip-val">~{{ est_mins }} min</span>
+            <span class="meta-chip-lbl">Estimated Read</span>
+          </div>
         </div>
       </div>
 
-      <div class="detail-actions-row">
-        <a href="/novel/{{ novel.slug }}/chapter/{{ novel.last_read_chapter }}" class="btn-read-primary">
+      <!-- Action Buttons -->
+      <div class="detail-actions-bento-row">
+        <a href="/novel/{{ novel.slug }}/chapter/{{ novel.last_read_chapter }}" class="btn-read-primary-bento">
           {% if novel.last_read_chapter > 1 %}
-          ▶ Continue Chapter {{ novel.last_read_chapter }}
+          <span>▶</span> Continue Chapter {{ novel.last_read_chapter }}
           {% else %}
-          ▶ Start Reading Chapter 1
+          <span>▶</span> Start Reading Chapter 1
           {% endif %}
         </a>
-        <button class="btn-delete-ghost" onclick="deleteNovel('{{ novel.slug }}')">
-          🗑️ Delete Novel
+        <button class="btn-delete-ghost-bento" onclick="deleteNovel('{{ novel.slug }}')">
+          <span>🗑️</span> Delete Novel
         </button>
       </div>
 
-      <div class="detail-synopsis-box">
-        <h4>Synopsis</h4>
-        <p>{{ novel.synopsis }}</p>
+      <!-- Synopsis -->
+      <div class="detail-synopsis-bento-box">
+        <h4 class="synopsis-title">Synopsis</h4>
+        <p class="synopsis-text">{{ novel.synopsis }}</p>
       </div>
     </div>
   </div>
 </div>
 
 <!-- Chapters Directory Section -->
-<div class="chapters-section-card">
-  <div class="chapters-toolbar">
+<div class="chapters-section-card-bento">
+  <div class="reticle-corner reticle-tl">+</div>
+  <div class="reticle-corner reticle-tr">+</div>
+
+  <div class="chapters-toolbar-bento">
     <div class="section-title-wrap">
-      <h2>Table of Contents</h2>
+      <h2 class="chapters-heading">Table of Contents</h2>
       <span class="badge-pill" id="total-chapters-badge">{{ novel.chapters|length }} Chapters</span>
     </div>
 
-    <div class="chapter-search-box">
-      <input type="text" id="chapter-filter-input" placeholder="Quick find chapter (e.g. 15, boss, safe)...">
+    <div class="chapter-search-box-bento">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="chapter-filter-input" placeholder="Quick find chapter (e.g. 15, battle, safe)...">
     </div>
 
-    <div style="display: flex; gap: 0.5rem;">
+    <div class="sort-action-wrap">
       <button class="reader-tool-btn" id="sort-order-btn" title="Toggle Sort Order (Ascending / Descending)">
         <span id="sort-order-icon">↕️</span> <span id="sort-order-text">Ascending (1 → {{ novel.chapters|length }})</span>
       </button>
     </div>
   </div>
 
-  <div class="chapters-grid-view" id="chapters-grid-container">
+  <div class="chapters-grid-view-bento" id="chapters-grid-container">
     {% for ch in novel.chapters %}
-    <a href="/novel/{{ novel.slug }}/chapter/{{ ch.chapter_number }}" class="chapter-pill-item" data-chapter-title="{{ ch.title }}">
-      <span class="chapter-pill-title">{{ ch.title }}</span>
-      <span class="chapter-pill-words">{{ ch.word_count }} words</span>
+    {% set ch_mins = (ch.word_count / 220)|round|int %}
+    {% if ch_mins < 1 %}{% set ch_mins = 1 %}{% endif %}
+    <a href="/novel/{{ novel.slug }}/chapter/{{ ch.chapter_number }}" class="chapter-pill-item-bento" data-chapter-title="{{ ch.title }}">
+      <div class="chapter-item-left">
+        <span class="chapter-item-number">#{{ ch.chapter_number }}</span>
+        <span class="chapter-item-title">{{ ch.title }}</span>
+      </div>
+      <div class="chapter-item-right">
+        <span class="chapter-pill-words">{{ ch.word_count }} words</span>
+        <span class="chapter-pill-time">~{{ ch_mins }}m read</span>
+      </div>
     </a>
     {% endfor %}
   </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
 <script>
 // Filter chapters in real-time
 const filterInput = document.getElementById('chapter-filter-input');
-const chapterItems = Array.from(document.querySelectorAll('.chapter-pill-item'));
+const chapterItems = Array.from(document.querySelectorAll('.chapter-pill-item-bento'));
 const gridContainer = document.getElementById('chapters-grid-container');
 
 if (filterInput) {

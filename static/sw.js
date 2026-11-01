@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lightnovelpub-v7';
+const CACHE_NAME = 'lightnovelpub-v8';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/reader.js',
