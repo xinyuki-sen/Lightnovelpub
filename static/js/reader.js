@@ -274,72 +274,37 @@ function initReader() {
     });
   }
 
-  // Reading Progress Calculation on Scroll
+  // Pre-index all chapter paragraphs with deterministic data-para-idx
+  const paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p'));
+  paragraphNodes.forEach((node, idx) => {
+    node.setAttribute('data-para-idx', String(idx));
+  });
+
+  // =========================================================================
+  // 2.5 RESILIENT DUAL-TIER PROGRESS TRACKING & PARAGRAPH ANCHOR ENGINE
+  // =========================================================================
   const novelSlug = document.body.getAttribute('data-novel-slug');
   const currentChapterNum = parseInt(document.body.getAttribute('data-chapter-num') || '1', 10);
   const nextChapterUrl = document.body.getAttribute('data-next-url');
-  const storageKey = `progress_${novelSlug}_ch${currentChapterNum}`;
+  const storageKey = progress__ch;
+  const paraStorageKey = progress_para__ch;
+  const pctStorageKey = progress_pct__ch;
+  const novelSummaryKey = 
+ovel_progress_;
 
-  let syncTimeout = null;
-
-  function updateProgress() {
-    const scrollTop = window.scrollY || document.documentElement.scrollTop;
-    const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-    let progress = 0;
-    if (scrollHeight > 0) {
-      progress = Math.min(100, Math.max(0, (scrollTop / scrollHeight) * 100));
-    }
-
-    if (progressBar) {
-      progressBar.style.width = `${progress}%`;
-    }
-
-    localStorage.setItem(storageKey, scrollTop);
-
-    clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(() => {
-      if (novelSlug) {
-        fetch('/api/progress', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            slug: novelSlug,
-            chapter_number: currentChapterNum,
-            percent: Math.round(progress * 10) / 10
-          })
-        }).catch(() => {});
-      }
-    }, 1000);
-  }
-
-  window.addEventListener('scroll', updateProgress, { passive: true });
-
-  // Restore Scroll Position on load
-  const savedScroll = localStorage.getItem(storageKey);
-  if (savedScroll && parseInt(savedScroll, 10) > 100) {
-    setTimeout(() => {
-      window.scrollTo({
-        top: parseInt(savedScroll, 10),
-        behavior: 'smooth'
-      });
-    }, 150);
-  }
-
-  // =========================================================================
-  // 2.5 DEXIE.JS OFFLINE NOVEL & AUDIO CACHE LAYER
-  // =========================================================================
+  // Dexie IndexedDB Initialization (Tier 2 Offline Cache)
   let novelDb = null;
   if (typeof Dexie !== 'undefined') {
     try {
       novelDb = new Dexie('LightnovelpubDB');
       novelDb.version(1).stores({
         chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
-        progress: 'novelSlug, chapterNumber, percent, updated_at',
+        progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
         audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
       });
 
       // Automatically cache current chapter into IndexedDB for 100% offline access
-      const chapterHeadline = document.querySelector('.chapter-headline-title')?.textContent?.trim() || `Chapter ${currentChapterNum}`;
+      const chapterHeadline = document.querySelector('.chapter-headline-title')?.textContent?.trim() || Chapter ;
       const chapterContentHtml = document.getElementById('chapter-content')?.innerHTML || '';
       if (novelSlug && chapterContentHtml) {
         novelDb.chapters.put({
@@ -354,6 +319,136 @@ function initReader() {
       console.warn('Dexie initialization error:', e);
     }
   }
+
+  let syncTimeout = null;
+
+  // Active paragraph detection with focal reading-line offset (28% from top)
+  function getActiveParagraphIndex() {
+    if (!paragraphNodes || paragraphNodes.length === 0) return 0;
+    const focalY = window.innerHeight * 0.28;
+    let closestIdx = 0;
+    let minDistance = Infinity;
+
+    for (let i = 0; i < paragraphNodes.length; i++) {
+      const rect = paragraphNodes[i].getBoundingClientRect();
+      if (rect.top <= focalY && rect.bottom >= focalY) {
+        return i;
+      }
+      const dist = Math.abs(rect.top - focalY);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestIdx = i;
+      }
+    }
+    return closestIdx;
+  }
+
+  // Unified Multi-Tier Progress Recorder (Local + Dexie + Server Sync)
+  function recordReadingProgress(overrideParaIdx, fromAudio = false) {
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+    const activeIdx = (overrideParaIdx !== undefined) ? overrideParaIdx : getActiveParagraphIndex();
+
+    let progress = 0;
+    if (fromAudio && overrideParaIdx !== undefined && paragraphNodes.length > 0) {
+      progress = Math.min(100, Math.max(0, Math.round(((overrideParaIdx + 1) / paragraphNodes.length) * 1000) / 10));
+    } else if (scrollHeight > 0) {
+      // If user reaches within 40px of chapter end, mark as 100% complete
+      if ((scrollHeight - scrollTop) <= 40) {
+        progress = 100;
+      } else {
+        const paraRatio = paragraphNodes.length > 1 ? (activeIdx / (paragraphNodes.length - 1)) : 0;
+        const scrollRatio = scrollTop / scrollHeight;
+        // Blended: 70% paragraph anchor + 30% pixel scroll
+        const blended = (paraRatio * 0.70) + (scrollRatio * 0.30);
+        progress = Math.min(100, Math.max(0, Math.round(blended * 1000) / 10));
+      }
+    }
+
+    if (progressBar) {
+      progressBar.style.width = `${progress}%`;
+    }
+
+    // Tier 1: LocalStorage (Instant, synchronous, survive refresh & orientation flip)
+    try {
+      localStorage.setItem(storageKey, String(scrollTop));
+      localStorage.setItem(paraStorageKey, String(activeIdx));
+      localStorage.setItem(pctStorageKey, String(progress));
+      localStorage.setItem(novelSummaryKey, JSON.stringify({
+        chapter: currentChapterNum,
+        percent: progress,
+        paraIndex: activeIdx,
+        timestamp: Date.now()
+      }));
+    } catch (e) {}
+
+    // Tier 2: Dexie IndexedDB (Structured, offline-ready, quota-free)
+    if (novelDb && novelDb.progress) {
+      novelDb.progress.put({
+        novelSlug: novelSlug,
+        chapterNumber: currentChapterNum,
+        percent: progress,
+        paraIndex: activeIdx,
+        updated_at: Date.now()
+      }).catch(() => {});
+    }
+
+    // Tier 3: Debounced Network Sync to Backend API
+    clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => {
+      if (novelSlug) {
+        fetch('/api/progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slug: novelSlug,
+            chapter_number: currentChapterNum,
+            percent: progress,
+            para_index: activeIdx
+          })
+        }).catch(() => {});
+      }
+    }, 800);
+  }
+
+  window.addEventListener('scroll', () => recordReadingProgress(), { passive: true });
+
+  // Resilient Position Restoration: Paragraph Anchor First, Pixel Scroll Fallback
+  function restoreReadingPosition() {
+    const savedPara = localStorage.getItem(paraStorageKey);
+    const savedScroll = localStorage.getItem(storageKey);
+
+    if (savedPara !== null && paragraphNodes && paragraphNodes.length > 0) {
+      const paraIdx = parseInt(savedPara, 10);
+      if (!isNaN(paraIdx) && paraIdx >= 0 && paraIdx < paragraphNodes.length) {
+        setTimeout(() => {
+          const targetNode = paragraphNodes[paraIdx];
+          if (targetNode) {
+            targetNode.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Subtle emerald flash to anchor user focus
+            targetNode.style.transition = 'background-color 0.8s ease';
+            const prevBg = targetNode.style.backgroundColor;
+            targetNode.style.backgroundColor = 'rgba(74, 222, 128, 0.12)';
+            setTimeout(() => {
+              targetNode.style.backgroundColor = prevBg;
+            }, 1200);
+          }
+        }, 150);
+        return;
+      }
+    }
+
+    if (savedScroll && parseInt(savedScroll, 10) > 100) {
+      setTimeout(() => {
+        window.scrollTo({
+          top: parseInt(savedScroll, 10),
+          behavior: 'smooth'
+        });
+      }, 150);
+    }
+  }
+
+  restoreReadingPosition();
 
   // =========================================================================
   // 3. OFFLINE-FIRST, BULLETPROOF AUDIO TTS ENGINE (NEURAL + DEVICE DUAL-TIER)
@@ -408,7 +503,7 @@ function initReader() {
   const npBtnForward10 = document.getElementById('np-btn-forward-10');
   const npBtnNext = document.getElementById('np-btn-next');
 
-  const paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p'));
+  // (paragraphNodes pre-indexed above)
 
   // Saved audio & display states
   const savedRate = parseFloat(localStorage.getItem('novel_reader_audio_rate') || '1.0');
@@ -1262,6 +1357,7 @@ function initReader() {
       pauseAudioPipeline();
       updatePlayStateUI(false);
       updateMediaSession();
+      recordReadingProgress(paragraphNodes.length - 1, true);
 
       if (audioState.autoNext && nextChapterUrl) {
         localStorage.setItem('novel_auto_play_tts', 'true');
@@ -1275,6 +1371,7 @@ function initReader() {
     if (index < 0) index = 0;
 
     audioState.currentIndex = index;
+    recordReadingProgress(index, true);
     const targetNode = paragraphNodes[index];
     const textToSpeak = targetNode.textContent.trim();
 

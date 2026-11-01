@@ -44,9 +44,18 @@ def init_db():
                 total_chapters INTEGER DEFAULT 0,
                 last_read_chapter INTEGER DEFAULT 1,
                 last_read_percent REAL DEFAULT 0.0,
+                last_read_para INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """)
+            # Migration check: Ensure last_read_para column exists in existing SQLite databases
+            cursor.execute("PRAGMA table_info(novels)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "last_read_para" not in columns:
+                try:
+                    cursor.execute("ALTER TABLE novels ADD COLUMN last_read_para INTEGER DEFAULT 0")
+                except Exception:
+                    pass
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS chapters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -172,16 +181,16 @@ def get_chapter(slug: str, chapter_number: int) -> Optional[Tuple[Dict, Dict]]:
     finally:
         conn.close()
 
-def update_reading_progress(slug: str, chapter_number: int, percent: float):
+def update_reading_progress(slug: str, chapter_number: int, percent: float, para_index: int = 0):
     conn = get_connection()
     try:
         with conn:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE novels 
-                SET last_read_chapter = ?, last_read_percent = ?
+                SET last_read_chapter = ?, last_read_percent = ?, last_read_para = ?
                 WHERE slug = ?
-            """, (chapter_number, percent, slug))
+            """, (chapter_number, percent, para_index, slug))
     finally:
         conn.close()
 

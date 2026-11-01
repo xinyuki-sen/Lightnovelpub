@@ -1,6 +1,69 @@
 {% extends "base.html" %}
 
-{% block title %}{{ novel.title }} — LightnovelPub{% endblock %}
+{% block title %}{{ novel.title }} — LightnovelPub
+<!-- Dexie.js Client-Side Authoritative Hydration (Resilient Offline Detail Progress) -->
+<script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  if (typeof Dexie !== 'undefined') {
+    try {
+      const db = new Dexie('LightnovelpubDB');
+      db.version(1).stores({
+        chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
+        progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
+        audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
+      });
+      const novelSlug = "{{ novel.slug }}";
+      const progressList = await db.progress.where('novelSlug').equals(novelSlug).toArray();
+      if (!progressList || progressList.length === 0) return;
+      
+      // Find latest progress
+      progressList.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
+      const latest = progressList[0];
+      if (latest && latest.chapterNumber) {
+        const valSpan = document.getElementById('detail-progress-val');
+        if (valSpan) valSpan.textContent = `Chapter ${latest.chapterNumber} (${Math.round(latest.percent)}%)`;
+        
+        const ctaBtn = document.querySelector('.btn-read-primary-bento');
+        if (ctaBtn) {
+          ctaBtn.href = `/novel/${novelSlug}/chapter/${latest.chapterNumber}`;
+          ctaBtn.innerHTML = `<span>▶</span> Continue Chapter ${latest.chapterNumber}`;
+        }
+
+        // Update TOC badges
+        document.querySelectorAll('.chapter-pill-item-bento').forEach(item => {
+          const chNum = parseInt(item.getAttribute('data-chapter-num') || '0', 10);
+          const leftWrap = item.querySelector('.chapter-item-left');
+          const existingBadge = leftWrap ? leftWrap.querySelector('.ch-badge') : null;
+          if (existingBadge) existingBadge.remove();
+          item.classList.remove('ch-finished', 'ch-reading');
+
+          if (chNum < latest.chapterNumber) {
+            item.classList.add('ch-finished');
+            if (leftWrap) {
+              const b = document.createElement('span');
+              b.className = 'ch-badge ch-badge-done';
+              b.textContent = '✓ Finished';
+              leftWrap.appendChild(b);
+            }
+          } else if (chNum === latest.chapterNumber) {
+            item.classList.add('ch-reading');
+            if (leftWrap) {
+              const b = document.createElement('span');
+              b.className = 'ch-badge ch-badge-reading';
+              b.textContent = `▶ Reading ${Math.round(latest.percent)}%`;
+              leftWrap.appendChild(b);
+            }
+          }
+        });
+      }
+    } catch(err) {
+      console.warn('Dexie detail hydration note:', err);
+    }
+  }
+});
+</script>
+{% endblock %}
 
 {% block content %}
 <!-- Cinematic Blurred Glass Hero Header (Inspired by Ruined King & Manga Editorial) -->
@@ -51,7 +114,7 @@
         <div class="meta-bento-chip">
           <span class="meta-chip-icon">🔖</span>
           <div class="meta-chip-content">
-            <span class="meta-chip-val">Chapter {{ novel.last_read_chapter }}</span>
+            <span class="meta-chip-val" id="detail-progress-val">Chapter {{ novel.last_read_chapter }} ({{ novel.last_read_percent|round|int }}%)</span>
             <span class="meta-chip-lbl">Reading Progress</span>
           </div>
         </div>
@@ -124,10 +187,17 @@
     {% for ch in novel.chapters %}
     {% set ch_mins = (ch.word_count / 220)|round|int %}
     {% if ch_mins < 1 %}{% set ch_mins = 1 %}{% endif %}
-    <a href="/novel/{{ novel.slug }}/chapter/{{ ch.chapter_number }}" class="chapter-pill-item-bento" data-chapter-title="{{ ch.title }}">
+    {% set is_read = (ch.chapter_number < novel.last_read_chapter) %}
+    {% set is_curr = (ch.chapter_number == novel.last_read_chapter and (novel.last_read_percent > 3.0 or novel.last_read_chapter > 1)) %}
+    <a href="/novel/{{ novel.slug }}/chapter/{{ ch.chapter_number }}" class="chapter-pill-item-bento {% if is_read %}ch-finished{% elif is_curr %}ch-reading{% endif %}" data-chapter-num="{{ ch.chapter_number }}" data-chapter-title="{{ ch.title }}">
       <div class="chapter-item-left">
         <span class="chapter-item-number">#{{ ch.chapter_number }}</span>
         <span class="chapter-item-title">{{ ch.title }}</span>
+        {% if is_read %}
+        <span class="ch-badge ch-badge-done">✓ Finished</span>
+        {% elif is_curr %}
+        <span class="ch-badge ch-badge-reading">▶ Reading {{ novel.last_read_percent|round|int }}%</span>
+        {% endif %}
       </div>
       <div class="chapter-item-right">
         <span class="chapter-pill-words">{{ ch.word_count }} words</span>
@@ -186,5 +256,68 @@ async function deleteNovel(slug) {
     }
   }
 }
+</script>
+
+<!-- Dexie.js Client-Side Authoritative Hydration (Resilient Offline Detail Progress) -->
+<script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  if (typeof Dexie !== 'undefined') {
+    try {
+      const db = new Dexie('LightnovelpubDB');
+      db.version(1).stores({
+        chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
+        progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
+        audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
+      });
+      const novelSlug = "{{ novel.slug }}";
+      const progressList = await db.progress.where('novelSlug').equals(novelSlug).toArray();
+      if (!progressList || progressList.length === 0) return;
+      
+      // Find latest progress
+      progressList.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
+      const latest = progressList[0];
+      if (latest && latest.chapterNumber) {
+        const valSpan = document.getElementById('detail-progress-val');
+        if (valSpan) valSpan.textContent = `Chapter ${latest.chapterNumber} (${Math.round(latest.percent)}%)`;
+        
+        const ctaBtn = document.querySelector('.btn-read-primary-bento');
+        if (ctaBtn) {
+          ctaBtn.href = `/novel/${novelSlug}/chapter/${latest.chapterNumber}`;
+          ctaBtn.innerHTML = `<span>▶</span> Continue Chapter ${latest.chapterNumber}`;
+        }
+
+        // Update TOC badges
+        document.querySelectorAll('.chapter-pill-item-bento').forEach(item => {
+          const chNum = parseInt(item.getAttribute('data-chapter-num') || '0', 10);
+          const leftWrap = item.querySelector('.chapter-item-left');
+          const existingBadge = leftWrap ? leftWrap.querySelector('.ch-badge') : null;
+          if (existingBadge) existingBadge.remove();
+          item.classList.remove('ch-finished', 'ch-reading');
+
+          if (chNum < latest.chapterNumber) {
+            item.classList.add('ch-finished');
+            if (leftWrap) {
+              const b = document.createElement('span');
+              b.className = 'ch-badge ch-badge-done';
+              b.textContent = '✓ Finished';
+              leftWrap.appendChild(b);
+            }
+          } else if (chNum === latest.chapterNumber) {
+            item.classList.add('ch-reading');
+            if (leftWrap) {
+              const b = document.createElement('span');
+              b.className = 'ch-badge ch-badge-reading';
+              b.textContent = `▶ Reading ${Math.round(latest.percent)}%`;
+              leftWrap.appendChild(b);
+            }
+          }
+        });
+      }
+    } catch(err) {
+      console.warn('Dexie detail hydration note:', err);
+    }
+  }
+});
 </script>
 {% endblock %}

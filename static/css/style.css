@@ -3069,3 +3069,45 @@ a {
     text-align: center;
   }
 }
+
+
+/* Chapter Progress Badges (Editorial & Bento Design) */
+.ch-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ch-badge-done {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.ch-badge-reading {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  animation: pulseReadingBadge 2.5s infinite ease-in-out;
+}
+
+@keyframes pulseReadingBadge {
+  0%, 100% { opacity: 0.95; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+
+.chapter-pill-item-bento.ch-reading {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.chapter-pill-item-bento.ch-finished {
+  border-color: rgba(16, 185, 129, 0.25);
+}

@@ -1,6 +1,53 @@
 {% extends "base.html" %}
 
-{% block title %}LightnovelPub — Luxury Novel Archive{% endblock %}
+{% block title %}LightnovelPub — Luxury Novel Archive
+<!-- Dexie.js Client-Side Authoritative Hydration (Resilient Offline Progress) -->
+<script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  if (typeof Dexie !== 'undefined') {
+    try {
+      const db = new Dexie('LightnovelpubDB');
+      db.version(1).stores({
+        chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
+        progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
+        audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
+      });
+      const items = await db.progress.toArray();
+      if (!items || items.length === 0) return;
+      items.forEach(p => {
+        const card = document.querySelector(`.novel-card[data-novel-slug="${p.novelSlug}"]`);
+        if (card) {
+          const totalChs = parseInt(card.getAttribute('data-total-chs') || '1', 10);
+          const compPct = Math.min(100, Math.max(0, Math.round((((p.chapterNumber - 1) + (p.percent / 100)) / totalChs) * 1000) / 10));
+          
+          const fill = card.querySelector('.progress-fill');
+          const pctText = card.querySelector('.progress-pct-text');
+          const chLabel = card.querySelector('.progress-header span:first-child');
+          const statusChip = card.querySelector('.novel-status-chip');
+          const hoverBtn = card.querySelector('.novel-cover-hover-action span');
+
+          if (fill) fill.style.width = compPct + '%';
+          if (pctText) pctText.textContent = compPct + '%';
+          if (chLabel) chLabel.textContent = `Chapter ${p.chapterNumber} / ${totalChs}`;
+          if (statusChip) statusChip.textContent = `Reading Ch. ${p.chapterNumber} (${Math.round(p.percent)}%)`;
+          if (hoverBtn) hoverBtn.textContent = `Continue Chapter ${p.chapterNumber} →`;
+          
+          card.setAttribute('data-percent', String(compPct));
+          card.setAttribute('data-ch', String(p.chapterNumber));
+          if (p.chapterNumber > 1 || p.percent > 3) {
+            card.classList.remove('status-unread');
+            card.classList.add('status-reading');
+          }
+        }
+      });
+    } catch(err) {
+      console.warn('Dexie library hydration note:', err);
+    }
+  }
+});
+</script>
+{% endblock %}
 
 {% block content %}
 <!-- Editorial Manga & Bento Hero Section (Inspired by Ruined King & Swarm Mentality) -->
@@ -79,9 +126,13 @@
 {% if novels %}
 <div class="novel-grid" id="main-novel-grid">
   {% for novel in novels %}
-  {% set percent = ((novel.last_read_chapter / novel.total_chapters) * 100)|round|int if novel.total_chapters > 0 else 0 %}
-  {% set status_class = "status-reading" if novel.last_read_chapter > 1 else "status-unread" %}
-  <a href="/novel/{{ novel.slug }}" class="novel-card {{ status_class }}" data-novel-title="{{ novel.title }}" data-novel-author="{{ novel.author }}" data-percent="{{ percent }}" data-ch="{{ novel.last_read_chapter }}">
+  {% set cur_ch = novel.last_read_chapter if novel.last_read_chapter else 1 %}
+  {% set cur_pct = novel.last_read_percent if novel.last_read_percent else 0.0 %}
+  {% set composite_raw = (((cur_ch - 1) + (cur_pct / 100.0)) / novel.total_chapters * 100)|round(1) if novel.total_chapters > 0 else 0 %}
+  {% set percent = 100 if composite_raw > 100 else (0 if composite_raw < 0 else composite_raw) %}
+  {% set is_reading = (cur_ch > 1 or cur_pct > 3.0) %}
+  {% set status_class = "status-reading" if is_reading else "status-unread" %}
+  <a href="/novel/{{ novel.slug }}" class="novel-card {{ status_class }}" data-novel-slug="{{ novel.slug }}" data-novel-title="{{ novel.title }}" data-novel-author="{{ novel.author }}" data-percent="{{ percent }}" data-ch="{{ cur_ch }}" data-total-chs="{{ novel.total_chapters }}">
     <div class="novel-cover-wrap">
       {% if novel.cover_image %}
       <img src="{{ novel.cover_image }}" alt="{{ novel.title }}" class="novel-cover-img" loading="lazy">
@@ -95,14 +146,14 @@
       <!-- Top Badges -->
       <div class="novel-badge-top-row">
         <span class="novel-card-badge">{{ novel.total_chapters }} Chs</span>
-        {% if novel.last_read_chapter > 1 %}
-        <span class="novel-status-chip">Reading Ch. {{ novel.last_read_chapter }}</span>
+        {% if is_reading %}
+        <span class="novel-status-chip">Reading Ch. {{ cur_ch }} ({{ cur_pct|round|int }}%)</span>
         {% endif %}
       </div>
 
       <!-- Quick Action Overlay Pill -->
       <div class="novel-cover-hover-action">
-        <span>Read Chapter {{ novel.last_read_chapter }} →</span>
+        <span>{% if is_reading %}Continue Chapter {{ cur_ch }} →{% else %}Start Reading →{% endif %}</span>
       </div>
     </div>
     
@@ -112,7 +163,7 @@
       
       <div class="novel-progress-bar-wrap">
         <div class="progress-header">
-          <span>Chapter {{ novel.last_read_chapter }} / {{ novel.total_chapters }}</span>
+          <span>Chapter {{ cur_ch }} / {{ novel.total_chapters }}</span>
           <span class="progress-pct-text">{{ percent }}%</span>
         </div>
         <div class="progress-track">
@@ -187,6 +238,53 @@ document.addEventListener('DOMContentLoaded', () => {
       applyFilters();
     });
   });
+});
+</script>
+
+<!-- Dexie.js Client-Side Authoritative Hydration (Resilient Offline Progress) -->
+<script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  if (typeof Dexie !== 'undefined') {
+    try {
+      const db = new Dexie('LightnovelpubDB');
+      db.version(1).stores({
+        chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
+        progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
+        audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
+      });
+      const items = await db.progress.toArray();
+      if (!items || items.length === 0) return;
+      items.forEach(p => {
+        const card = document.querySelector(`.novel-card[data-novel-slug="${p.novelSlug}"]`);
+        if (card) {
+          const totalChs = parseInt(card.getAttribute('data-total-chs') || '1', 10);
+          const compPct = Math.min(100, Math.max(0, Math.round((((p.chapterNumber - 1) + (p.percent / 100)) / totalChs) * 1000) / 10));
+          
+          const fill = card.querySelector('.progress-fill');
+          const pctText = card.querySelector('.progress-pct-text');
+          const chLabel = card.querySelector('.progress-header span:first-child');
+          const statusChip = card.querySelector('.novel-status-chip');
+          const hoverBtn = card.querySelector('.novel-cover-hover-action span');
+
+          if (fill) fill.style.width = compPct + '%';
+          if (pctText) pctText.textContent = compPct + '%';
+          if (chLabel) chLabel.textContent = `Chapter ${p.chapterNumber} / ${totalChs}`;
+          if (statusChip) statusChip.textContent = `Reading Ch. ${p.chapterNumber} (${Math.round(p.percent)}%)`;
+          if (hoverBtn) hoverBtn.textContent = `Continue Chapter ${p.chapterNumber} →`;
+          
+          card.setAttribute('data-percent', String(compPct));
+          card.setAttribute('data-ch', String(p.chapterNumber));
+          if (p.chapterNumber > 1 || p.percent > 3) {
+            card.classList.remove('status-unread');
+            card.classList.add('status-reading');
+          }
+        }
+      });
+    } catch(err) {
+      console.warn('Dexie library hydration note:', err);
+    }
+  }
 });
 </script>
 {% endblock %}

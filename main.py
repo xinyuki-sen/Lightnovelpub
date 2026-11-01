@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from typing import Optional
 from pydantic import BaseModel
 
 import database
@@ -170,10 +171,11 @@ class ProgressPayload(BaseModel):
     slug: str
     chapter_number: int
     percent: float
+    para_index: Optional[int] = 0
 
 @app.post("/api/progress")
 async def save_progress(payload: ProgressPayload):
-    database.update_reading_progress(payload.slug, payload.chapter_number, payload.percent)
+    database.update_reading_progress(payload.slug, payload.chapter_number, payload.percent, payload.para_index or 0)
     return {"status": "ok"}
 
 @app.delete("/api/novel/{slug}")
