@@ -1005,16 +1005,20 @@ function initReader() {
     // Split into words while keeping delimiters
     const tokens = text.split(/(\s+)/);
     const fragment = document.createDocumentFragment();
+    let charOffset = 0;
 
     tokens.forEach((t) => {
       if (/\S/.test(t)) {
         const span = document.createElement('span');
         span.className = 'np-word-token';
         span.textContent = t;
+        span.setAttribute('data-start', charOffset);
+        span.setAttribute('data-end', charOffset + t.length);
         fragment.appendChild(span);
       } else {
         fragment.appendChild(document.createTextNode(t));
       }
+      charOffset += t.length;
     });
 
     node.innerHTML = '';
@@ -1046,24 +1050,27 @@ function initReader() {
     utterance.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
 
     const wordSpans = targetNode.querySelectorAll('.np-word-token');
+    let hasReceivedBoundary = false;
 
     // Word boundary event (smooth, non-destructive)
     utterance.onboundary = (e) => {
+      hasReceivedBoundary = true;
       if (!audioState.isPlaying || audioState.isPaused) return;
 
       if (audioState.highlightMode === 'word' && wordSpans.length > 0) {
-        let charIdx = e.charIndex || 0;
-        let cumulative = 0;
+        const charIdx = e.charIndex || 0;
         let matchedSpan = null;
 
         for (let i = 0; i < wordSpans.length; i++) {
-          const span = wordSpans[i];
-          const spanLen = span.textContent.length;
-          if (cumulative <= charIdx && charIdx <= cumulative + spanLen + 2) {
-            matchedSpan = span;
+          const start = parseInt(wordSpans[i].getAttribute('data-start') || '0', 10);
+          const end = parseInt(wordSpans[i].getAttribute('data-end') || '0', 10);
+          if (charIdx >= start && charIdx < end + 2) {
+            matchedSpan = wordSpans[i];
             break;
           }
-          cumulative += spanLen + 1;
+        }
+        if (!matchedSpan && wordSpans.length > 0) {
+          matchedSpan = wordSpans.find(s => parseInt(s.getAttribute('data-start') || '0', 10) >= charIdx) || wordSpans[0];
         }
 
         if (matchedSpan) {
@@ -1127,7 +1134,6 @@ function initReader() {
 
   // Unified multi-tier audio runner: Dexie Cached Audio -> Neural Edge-TTS -> Web Speech API
   async function speakParagraph(index, isContinuous = false) {
-    const currentEpoch = ++audioPlaybackEpoch;
     if (!paragraphNodes || paragraphNodes.length === 0) return;
 
     if (index >= paragraphNodes.length) {
@@ -1158,10 +1164,12 @@ function initReader() {
       return;
     }
 
-    // Only cancel previous speech if this was a manual seek or non-continuous transition
+    // CRITICAL FIX: Stop previous speech BEFORE stamping the new audioPlaybackEpoch!
     if (!isContinuous) {
       stopSpeech();
     }
+    const currentEpoch = ++audioPlaybackEpoch;
+
     restoreParagraphDOM();
 
     // Prepare non-destructive word spans
@@ -1171,6 +1179,11 @@ function initReader() {
     if (audioState.autoScroll) {
       targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+
+    // Immediate visual feedback so the UI indicates playing status
+    audioState.isPlaying = true;
+    audioState.isPaused = false;
+    updatePlayStateUI(true);
 
     const currentVoice = audioState.selectedVoice || NEURAL_VOICES[0];
 
