@@ -26,6 +26,25 @@ try:
 except Exception:
     pass
 
+# Dedicated cover image route to ensure Vercel /tmp/covers and local static/covers both resolve without 404
+@app.get("/static/covers/{filename}")
+async def serve_cover_image(filename: str):
+    # Check COVERS_DIR first (covers uploaded on Vercel or locally)
+    disk_cover = os.path.join(COVERS_DIR, filename)
+    if os.path.exists(disk_cover):
+        return FileResponse(disk_cover, media_type="image/jpeg")
+    
+    # Fallback to repo static/covers
+    static_cover = os.path.join(STATIC_DIR, "covers", filename)
+    if os.path.exists(static_cover):
+        return FileResponse(static_cover, media_type="image/jpeg")
+        
+    # Default fallback to logo if cover doesn't exist
+    fallback_logo = os.path.join(STATIC_DIR, "img", "logo.png")
+    if os.path.exists(fallback_logo):
+        return FileResponse(fallback_logo, media_type="image/png")
+    return Response(status_code=404)
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
@@ -40,7 +59,7 @@ async def service_worker():
         media_type="application/javascript",
         headers={
             "Service-Worker-Allowed": "/",
-            "Cache-Control": "no-cache"
+            "Cache-Control": "no-cache, no-store, must-revalidate"
         }
     )
 
@@ -71,11 +90,13 @@ async def chapter_reader(request: Request, slug: str, chapter_number: int):
         raise HTTPException(status_code=404, detail="Chapter not found")
     novel, chapter = data
     
-    novel_full = database.get_novel_by_slug(slug)
-    all_chapters = novel_full.get("chapters", [])
+    all_chapters = novel.get("chapters", [])
+    if not all_chapters:
+        full_novel = database.get_novel_by_slug(slug)
+        all_chapters = full_novel.get("chapters", []) if full_novel else []
     
     prev_chapter = chapter_number - 1 if chapter_number > 1 else None
-    next_chapter = chapter_number + 1 if chapter_number < novel["total_chapters"] else None
+    next_chapter = chapter_number + 1 if chapter_number < novel.get("total_chapters", len(all_chapters)) else None
     
     return templates.TemplateResponse(
         request=request,
@@ -96,47 +117,57 @@ async def upload_pdf(
     author: str = Form(None),
     synopsis: str = Form(None)
 ):
-    if not file.filename.lower().endswith(".pdf"):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
         return JSONResponse({"error": "Only PDF files are supported."}, status_code=400)
     
-    # Save uploaded file temporarily
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        tmp_path = tmp.name
-
+    tmp_path = None
     try:
+        # Save uploaded file temporarily inside try block for guaranteed cleanup
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
         detected_title, chapters, cover_bytes = extract_pdf_chapters(tmp_path)
         
         final_title = title.strip() if title and title.strip() else detected_title
+        if not final_title:
+            final_title = os.path.splitext(file.filename)[0].replace("_", " ").title()
+            
+        # Generate unique slug first to avoid cover image collisions
+        slug = database.generate_unique_slug(final_title)
         cover_url = ""
         
-        # Save cover image if extracted
+        # Save cover image using unique slug
         if cover_bytes:
-            cover_filename = f"{database.slugify(final_title)}.jpg"
+            cover_filename = f"{slug}.jpg"
             cover_disk_path = os.path.join(COVERS_DIR, cover_filename)
             with open(cover_disk_path, "wb") as f_cover:
                 f_cover.write(cover_bytes)
             cover_url = f"/static/covers/{cover_filename}"
             
-        slug = database.save_novel(
+        saved_slug = database.save_novel(
             title=final_title,
-            author=author.strip() if author and author.strip() else "Unknown",
+            author=author.strip() if author and author.strip() else "Unknown Author",
             synopsis=synopsis.strip() if synopsis and synopsis.strip() else f"Converted from {file.filename}.",
             cover_path=cover_url,
-            chapters=chapters
+            chapters=chapters,
+            precomputed_slug=slug
         )
         
         return {
             "success": True,
-            "slug": slug,
+            "slug": saved_slug,
             "title": final_title,
             "total_chapters": len(chapters)
         }
     except Exception as e:
         return JSONResponse({"error": f"Failed to parse PDF: {str(e)}"}, status_code=500)
     finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
 class ProgressPayload(BaseModel):
     slug: str
@@ -150,7 +181,17 @@ async def save_progress(payload: ProgressPayload):
 
 @app.delete("/api/novel/{slug}")
 async def delete_novel_api(slug: str):
-    database.delete_novel(slug)
+    cover_image = database.delete_novel(slug)
+    # Clean up disk file for the deleted cover image
+    if cover_image and cover_image.startswith("/static/covers/"):
+        filename = cover_image.replace("/static/covers/", "")
+        for target_dir in [COVERS_DIR, os.path.join(STATIC_DIR, "covers")]:
+            target_path = os.path.join(target_dir, filename)
+            if os.path.exists(target_path):
+                try:
+                    os.remove(target_path)
+                except Exception:
+                    pass
     return {"status": "deleted"}
 
 class TTSRequest(BaseModel):

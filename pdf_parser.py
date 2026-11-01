@@ -17,9 +17,9 @@ CHAPTER_PATTERNS = [
     re.compile(r'^\s*(prologue|epilogue|interlude|introduction|afterword|preface)(?:[\s:\-–—\.]+(.*))?$', re.IGNORECASE),
     # Volume 1 Chapter 1 / Act 1 / Part 1
     re.compile(r'^\s*(?:volume\s+\d+\s+)?(?:act|chapter|part|book)\s+(\d+|[ivxlcdm]+)(?:[\s:\-–—\.]+(.*))?$', re.IGNORECASE),
-    # Standalone numbers on a single line: 1, 2, 3...
-    re.compile(r'^\s*(\d{1,3})\s*$'),
 ]
+
+PAGE_NUMBER_PATTERN = re.compile(r'^(?:page\s+)?[-–—]?\s*\d+\s*[-–—]?$', re.IGNORECASE)
 
 def clean_lines_into_paragraphs(lines: List[str]) -> List[str]:
     """
@@ -45,7 +45,7 @@ def clean_lines_into_paragraphs(lines: List[str]) -> List[str]:
             continue
 
         # Skip isolated page numbers: "14", "Page 14", "- 14 -"
-        if re.match(r'^(?:page\s+)?[-–—]?\s*\d+\s*[-–—]?$', line, re.IGNORECASE):
+        if PAGE_NUMBER_PATTERN.match(line):
             continue
 
         current_para.append(line)
@@ -66,6 +66,10 @@ def check_heading(line: str) -> Tuple[Optional[str], str]:
     """
     t = line.strip()
     
+    # Ignore isolated numbers (they are page numbers, not chapters)
+    if PAGE_NUMBER_PATTERN.match(t):
+        return None, t
+
     # 1. Check if line starts with bracketed chapter like: '[ 1 ] THE TRANSFORMATION...' or '[ 1 ]'
     m_bracket = re.match(r'^\s*\[\s*(\d+|[ivxlcdm]+)\s*\]\s*(.*)$', t, re.IGNORECASE)
     if m_bracket:
@@ -90,6 +94,7 @@ def extract_pdf_toc_bookmarks(file_path: str) -> List[Tuple[str, int]]:
     entries = []
     
     # 1. Try pypdfium2 first
+    pdf = None
     try:
         import pypdfium2
         pdf = pypdfium2.PdfDocument(file_path)
@@ -102,6 +107,12 @@ def extract_pdf_toc_bookmarks(file_path: str) -> List[Tuple[str, int]]:
                     entries.append((title, page_idx))
     except Exception as e:
         print(f"pypdfium2 TOC extraction notice: {e}")
+    finally:
+        if pdf is not None:
+            try:
+                pdf.close()
+            except Exception:
+                pass
 
     # 2. Try pypdf if pypdfium2 returned empty
     if not entries:
@@ -160,8 +171,9 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
         if meta_title and len(meta_title) < 120 and meta_title.lower() != "untitled":
             title = meta_title
 
-    # 2. Cover image extraction from page 0
+    # 2. Cover image extraction from page 0 (safely closed to avoid Windows file lock)
     cover_bytes = None
+    pdf_doc = None
     try:
         pdf_doc = pypdfium2.PdfDocument(file_path)
         if len(pdf_doc) > 0:
@@ -172,6 +184,12 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
             cover_bytes = img_buffer.getvalue()
     except Exception as e:
         print(f"Cover extraction note: {e}")
+    finally:
+        if pdf_doc is not None:
+            try:
+                pdf_doc.close()
+            except Exception:
+                pass
 
     # Extract raw text per page
     pages_text = []
@@ -220,7 +238,10 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
     all_lines = []
     for p_text in pages_text:
         for l in p_text.splitlines():
-            all_lines.append(l.strip())
+            line_str = l.strip()
+            # Filter out running page numbers during scanning
+            if not PAGE_NUMBER_PATTERN.match(line_str):
+                all_lines.append(line_str)
         all_lines.append("")
 
     chapters = []

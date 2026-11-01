@@ -1,8 +1,16 @@
 import sqlite3
 import json
 import re
+import os
 
-conn = sqlite3.connect(r'C:\Users\pradh\.gemini\antigravity\scratch\novel-reader\data\library.db')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "data", "library.db")
+
+if not os.path.exists(DB_PATH):
+    print(f"Database not found at {DB_PATH}")
+    exit(0)
+
+conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
 
 # Get the existing novel 4
@@ -26,11 +34,15 @@ CHAPTER_PATTERNS = [
     re.compile(r'^\s*(?:chapter)\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)(?:[\s:\-–—\.]+(.*))?$', re.IGNORECASE),
     re.compile(r'^\s*(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s*$', re.IGNORECASE),
     re.compile(r'^\s*(prologue|epilogue|interlude|introduction|afterword|preface)(?:[\s:\-–—\.]+(.*))?$', re.IGNORECASE),
-    re.compile(r'^\s*(\d{1,3})\s*$'),
 ]
+
+PAGE_NUMBER_PATTERN = re.compile(r'^(?:page\s+)?[-–—]?\s*\d+\s*[-–—]?$', re.IGNORECASE)
 
 def check_heading(text):
     t = text.strip()
+    if PAGE_NUMBER_PATTERN.match(t):
+        return None, t
+
     m_bracket = re.match(r'^\s*\[\s*(\d+)\s*\]\s*(.*)$', t)
     if m_bracket:
         ch_num = m_bracket.group(1)
@@ -76,7 +88,7 @@ print(f"Reparsing Novel 4 into {len(chapters)} chapters...")
 # Clear old chapters for novel_id 4
 cursor.execute('DELETE FROM chapters WHERE novel_id = 4')
 
-# Insert the 48 split chapters
+# Insert the split chapters
 for i, ch in enumerate(chapters):
     cursor.execute('''
         INSERT INTO chapters (novel_id, chapter_number, title, content_json, word_count)

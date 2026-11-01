@@ -1,12 +1,10 @@
-const CACHE_NAME = 'lightnovelpub-v2';
+const CACHE_NAME = 'lightnovelpub-v3';
 const STATIC_ASSETS = [
-  '/',
   '/static/css/style.css',
   '/static/js/reader.js',
   '/static/js/upload.js',
   '/static/js/dexie.min.js',
-  '/static/img/logo.png',
-  'https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&family=Montserrat:wght@400;500;600;700;800&family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,400;0,6..12,600;0,6..12,700;1,6..12,400&family=Open+Sans:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap'
+  '/static/img/logo.png'
 ];
 
 self.addEventListener('install', (e) => {
@@ -31,27 +29,42 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
-// Stale-while-revalidate strategy: serve from cache if available, update in background
+// Cache static assets only; always pass HTML and API requests to network first
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
-  
-  // Don't intercept API mutating routes
+
   const url = new URL(e.request.url);
+
+  // Skip browser extensions, chrome-extension://, non-http schemes
+  if (!url.protocol.startsWith('http')) return;
+
+  // Never cache API routes
   if (url.pathname.startsWith('/api/')) return;
 
-  e.respondWith(
-    caches.match(e.request).then((cachedResponse) => {
-      const fetchPromise = fetch(e.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(e.request, responseClone);
-          });
-        }
-        return networkResponse;
-      }).catch(() => cachedResponse);
+  // Never cache dynamic HTML page navigations (ensures newly uploaded novels appear immediately)
+  if (e.request.mode === 'navigate' || url.pathname === '/' || url.pathname.startsWith('/novel/')) {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request))
+    );
+    return;
+  }
 
-      return cachedResponse || fetchPromise;
-    })
-  );
+  // Cache-first / stale-while-revalidate for static assets (CSS, JS, images, fonts)
+  if (url.pathname.startsWith('/static/') || url.origin.includes('fonts.googleapis.com') || url.origin.includes('fonts.gstatic.com')) {
+    e.respondWith(
+      caches.match(e.request).then((cachedResponse) => {
+        const fetchPromise = fetch(e.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(e.request, responseClone);
+            });
+          }
+          return networkResponse;
+        }).catch(() => cachedResponse);
+
+        return cachedResponse || fetchPromise;
+      })
+    );
+  }
 });

@@ -330,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let activeHtml5Audio = null;
   let activeAudioUrl = null;
+  let audioPlaybackEpoch = 0;
 
   // Topbar Button
   const listenToggleBtn = document.getElementById('listen-toggle-btn');
@@ -952,16 +953,17 @@ document.addEventListener('DOMContentLoaded', () => {
   function restoreParagraphDOM() {
     paragraphNodes.forEach(p => {
       p.classList.remove('listen-active-paragraph');
-      // If words were tokenized with spans, remove word highlights
       p.querySelectorAll('.np-word-token').forEach(span => {
-        span.classList.remove('np-spoken-word');
+        span.classList.remove('np-spoken-word', 'np-spoken-word-done');
       });
     });
   }
 
   function stopSpeech() {
+    audioPlaybackEpoch++;
     if (activeHtml5Audio) {
       activeHtml5Audio.pause();
+      activeHtml5Audio.ontimeupdate = null;
       activeHtml5Audio.onended = null;
       activeHtml5Audio.onerror = null;
       activeHtml5Audio = null;
@@ -1066,8 +1068,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (matchedSpan) {
-          wordSpans.forEach(s => s.classList.remove('np-spoken-word'));
-          matchedSpan.classList.add('np-spoken-word');
+          let hasPassed = false;
+          wordSpans.forEach(s => {
+            if (s === matchedSpan) {
+              s.classList.add('np-spoken-word');
+              s.classList.remove('np-spoken-word-done');
+              hasPassed = true;
+            } else if (!hasPassed) {
+              s.classList.add('np-spoken-word-done');
+              s.classList.remove('np-spoken-word');
+            } else {
+              s.classList.remove('np-spoken-word', 'np-spoken-word-done');
+            }
+          });
 
           if (audioState.autoScroll) {
             const rect = matchedSpan.getBoundingClientRect();
@@ -1115,6 +1128,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Unified multi-tier audio runner: Dexie Cached Audio -> Neural Edge-TTS -> Web Speech API
   async function speakParagraph(index, isContinuous = false) {
+    const currentEpoch = ++audioPlaybackEpoch;
     if (!paragraphNodes || paragraphNodes.length === 0) return;
 
     if (index >= paragraphNodes.length) {
@@ -1184,6 +1198,7 @@ document.addEventListener('DOMContentLoaded', () => {
               rate: audioState.rate || 1.0
             })
           });
+          if (currentEpoch !== audioPlaybackEpoch) return; // Stale audio request canceled
           if (res.ok) {
             audioBlob = await res.blob();
             if (novelDb) {
@@ -1200,6 +1215,7 @@ document.addEventListener('DOMContentLoaded', () => {
           console.warn("Neural audio fetch note, falling back to Web Speech:", fetchErr);
         }
       }
+      if (currentEpoch !== audioPlaybackEpoch) return;
 
       if (audioBlob) {
         if (activeAudioUrl) {
@@ -1209,6 +1225,34 @@ document.addEventListener('DOMContentLoaded', () => {
         activeHtml5Audio = new Audio(activeAudioUrl);
         activeHtml5Audio.playbackRate = audioState.rate || 1.0;
         activeHtml5Audio.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
+
+        const wordSpans = targetNode.querySelectorAll('.np-word-token');
+        activeHtml5Audio.ontimeupdate = () => {
+          if (!activeHtml5Audio || activeHtml5Audio.paused || wordSpans.length === 0) return;
+          const duration = activeHtml5Audio.duration || 1;
+          const current = activeHtml5Audio.currentTime || 0;
+          const progress = Math.min(1, Math.max(0, current / duration));
+          const targetIdx = Math.min(wordSpans.length - 1, Math.floor(progress * wordSpans.length));
+
+          for (let w = 0; w < wordSpans.length; w++) {
+            if (w < targetIdx) {
+              wordSpans[w].classList.add('np-spoken-word-done');
+              wordSpans[w].classList.remove('np-spoken-word');
+            } else if (w === targetIdx) {
+              wordSpans[w].classList.add('np-spoken-word');
+              wordSpans[w].classList.remove('np-spoken-word-done');
+            } else {
+              wordSpans[w].classList.remove('np-spoken-word', 'np-spoken-word-done');
+            }
+          }
+
+          if (audioState.autoScroll && wordSpans[targetIdx]) {
+            const rect = wordSpans[targetIdx].getBoundingClientRect();
+            if (rect.top < 80 || rect.bottom > window.innerHeight - 150) {
+              wordSpans[targetIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }
+        };
 
         activeHtml5Audio.onplay = () => {
           audioState.isPlaying = true;
