@@ -1,9 +1,11 @@
-const CACHE_NAME = 'lightnovelpub-v1';
+const CACHE_NAME = 'lightnovelpub-v2';
 const STATIC_ASSETS = [
   '/',
   '/static/css/style.css',
   '/static/js/reader.js',
   '/static/js/upload.js',
+  '/static/js/dexie.min.js',
+  '/static/img/logo.png',
   'https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&family=Montserrat:wght@400;500;600;700;800&family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,400;0,6..12,600;0,6..12,700;1,6..12,400&family=Open+Sans:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap'
 ];
 

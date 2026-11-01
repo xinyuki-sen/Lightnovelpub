@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -152,6 +152,38 @@ async def save_progress(payload: ProgressPayload):
 async def delete_novel_api(slug: str):
     database.delete_novel(slug)
     return {"status": "deleted"}
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "en-US-ChristopherNeural"
+    rate: float = 1.0
+
+@app.post("/api/tts")
+async def generate_tts(req: TTSRequest):
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+    
+    if len(text) > 1500:
+        text = text[:1500]
+
+    rate_percent = int((req.rate - 1.0) * 100)
+    rate_str = f"{rate_percent:+d}%"
+
+    try:
+        import edge_tts
+        comm = edge_tts.Communicate(text=text, voice=req.voice, rate=rate_str)
+        chunks = []
+        async for chunk in comm.stream():
+            if chunk["type"] == "audio":
+                chunks.append(chunk["data"])
+        
+        audio_data = b"".join(chunks)
+        return Response(content=audio_data, media_type="audio/mpeg", headers={
+            "Cache-Control": "public, max-age=86400, immutable"
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 if __name__ == "__main__":
     import uvicorn

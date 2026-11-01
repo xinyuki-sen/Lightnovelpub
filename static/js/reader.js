@@ -284,11 +284,52 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // =========================================================================
-  // 3. OFFLINE-FIRST, BULLETPROOF AUDIO TTS ENGINE
+  // 2.5 DEXIE.JS OFFLINE NOVEL & AUDIO CACHE LAYER
+  // =========================================================================
+  let novelDb = null;
+  if (typeof Dexie !== 'undefined') {
+    try {
+      novelDb = new Dexie('LightnovelpubDB');
+      novelDb.version(1).stores({
+        chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
+        progress: 'novelSlug, chapterNumber, percent, updated_at',
+        audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
+      });
+
+      // Automatically cache current chapter into IndexedDB for 100% offline access
+      const chapterHeadline = document.querySelector('.chapter-headline-title')?.textContent?.trim() || `Chapter ${currentChapterNum}`;
+      const chapterContentHtml = document.getElementById('chapter-content')?.innerHTML || '';
+      if (novelSlug && chapterContentHtml) {
+        novelDb.chapters.put({
+          novelSlug: novelSlug,
+          chapterNumber: currentChapterNum,
+          title: chapterHeadline,
+          content: chapterContentHtml,
+          updated_at: Date.now()
+        }).catch(err => console.warn('Dexie chapter cache note:', err));
+      }
+    } catch (e) {
+      console.warn('Dexie initialization error:', e);
+    }
+  }
+
+  // =========================================================================
+  // 3. OFFLINE-FIRST, BULLETPROOF AUDIO TTS ENGINE (NEURAL + DEVICE DUAL-TIER)
   // =========================================================================
 
   const synth = window.speechSynthesis;
   const isSpeechSupported = ('speechSynthesis' in window) && ('SpeechSynthesisUtterance' in window);
+
+  // High-fidelity neural voice definitions (Edge-TTS via HTML5 Audio with Dexie caching)
+  const NEURAL_VOICES = [
+    { voiceURI: 'edge:en-US-ChristopherNeural', name: 'Christopher (Deep Storyteller)', lang: 'en-US', isNeural: true, edgeVoice: 'en-US-ChristopherNeural' },
+    { voiceURI: 'edge:en-US-JennyNeural', name: 'Jenny (Natural Warm)', lang: 'en-US', isNeural: true, edgeVoice: 'en-US-JennyNeural' },
+    { voiceURI: 'edge:en-US-GuyNeural', name: 'Guy (Rich Expressive)', lang: 'en-US', isNeural: true, edgeVoice: 'en-US-GuyNeural' },
+    { voiceURI: 'edge:en-US-AriaNeural', name: 'Aria (Clear Studio)', lang: 'en-US', isNeural: true, edgeVoice: 'en-US-AriaNeural' }
+  ];
+
+  let activeHtml5Audio = null;
+  let activeAudioUrl = null;
 
   // Topbar Button
   const listenToggleBtn = document.getElementById('listen-toggle-btn');
@@ -471,58 +512,67 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderVoiceOptions() {
-    if (!npVoiceSelect || !audioState.voices) return;
-
-    const filtered = audioState.voices.filter(v => {
-      if (!audioState.selectedLang || audioState.selectedLang === 'all') return true;
-      return v.lang === audioState.selectedLang;
-    });
-
-    // Offline-first sorting:
-    // 1. localService === true (offline built-in device voice)
-    // 2. English languages (en-US, en-GB)
-    // 3. Name
-    filtered.sort((a, b) => {
-      // Prioritize local offline voices
-      if (a.localService && !b.localService) return -1;
-      if (!a.localService && b.localService) return 1;
-
-      // Prioritize English
-      const aEn = a.lang.toLowerCase().startsWith('en');
-      const bEn = b.lang.toLowerCase().startsWith('en');
-      if (aEn && !bEn) return -1;
-      if (!aEn && bEn) return 1;
-
-      return a.name.localeCompare(b.name);
-    });
+    if (!npVoiceSelect) return;
 
     npVoiceSelect.innerHTML = '';
     let matched = null;
 
-    filtered.forEach(voice => {
+    // 1. Add High-Fidelity Neural Voices Group (HTML5 Audio + Dexie Caching)
+    const neuralGroup = document.createElement('optgroup');
+    neuralGroup.label = '🌟 Neural Voices (Android Background & Offline Cache)';
+    NEURAL_VOICES.forEach(nv => {
       const opt = document.createElement('option');
-      opt.value = voice.voiceURI;
-      const offlineBadge = voice.localService ? '⚡ [Offline]' : '🌐';
-      opt.textContent = `${offlineBadge} ${voice.name} (${voice.lang})`;
-
-      if (savedVoiceURI && voice.voiceURI === savedVoiceURI) {
-        matched = voice;
+      opt.value = nv.voiceURI;
+      opt.textContent = `✨ [Neural] ${nv.name}`;
+      if (savedVoiceURI && savedVoiceURI === nv.voiceURI) {
+        matched = nv;
         opt.selected = true;
-      } else if (!matched && voice.localService && voice.lang.toLowerCase().startsWith('en')) {
-        matched = voice;
-        opt.selected = true;
-      } else if (!matched && (voice.default || voice.lang.toLowerCase().startsWith('en'))) {
-        matched = voice;
+      } else if (!savedVoiceURI && !matched) {
+        matched = nv;
         opt.selected = true;
       }
-
-      npVoiceSelect.appendChild(opt);
+      neuralGroup.appendChild(opt);
     });
+    npVoiceSelect.appendChild(neuralGroup);
 
-    if (!matched && filtered.length > 0) {
-      matched = filtered[0];
+    // 2. Add System / Device Voices Group
+    if (audioState.voices && audioState.voices.length > 0) {
+      const deviceGroup = document.createElement('optgroup');
+      deviceGroup.label = '⚡ Device System Voices (Instant OS)';
+
+      const filtered = audioState.voices.filter(v => {
+        if (!audioState.selectedLang || audioState.selectedLang === 'all') return true;
+        return v.lang === audioState.selectedLang;
+      });
+
+      filtered.sort((a, b) => {
+        if (a.localService && !b.localService) return -1;
+        if (!a.localService && b.localService) return 1;
+        const aEn = a.lang.toLowerCase().startsWith('en');
+        const bEn = b.lang.toLowerCase().startsWith('en');
+        if (aEn && !bEn) return -1;
+        if (!aEn && bEn) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      filtered.forEach(voice => {
+        const opt = document.createElement('option');
+        opt.value = voice.voiceURI;
+        const offlineBadge = voice.localService ? '⚡ [Offline]' : '🌐';
+        opt.textContent = `${offlineBadge} ${voice.name} (${voice.lang})`;
+
+        if (savedVoiceURI && voice.voiceURI === savedVoiceURI) {
+          matched = voice;
+          opt.selected = true;
+        }
+        deviceGroup.appendChild(opt);
+      });
+      npVoiceSelect.appendChild(deviceGroup);
     }
 
+    if (!matched) {
+      matched = NEURAL_VOICES[0];
+    }
     audioState.selectedVoice = matched;
   }
 
@@ -531,6 +581,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (synth.onvoiceschanged !== undefined) {
       synth.onvoiceschanged = loadVoices;
     }
+  } else {
+    // If browser lacks Web Speech API, neural audio via HTML5 Audio still works!
+    renderVoiceOptions();
   }
 
   // Language change
@@ -545,12 +598,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (npVoiceSelect) {
     npVoiceSelect.addEventListener('change', (e) => {
       const uri = e.target.value;
-      const v = audioState.voices.find(item => item.voiceURI === uri);
+      const v = NEURAL_VOICES.find(item => item.voiceURI === uri) || audioState.voices.find(item => item.voiceURI === uri);
       if (v) {
         audioState.selectedVoice = v;
         localStorage.setItem('novel_reader_voice_uri', uri);
         if (audioState.isPlaying && !audioState.isPaused) {
-          speakParagraph(audioState.currentIndex);
+          speakParagraph(audioState.currentIndex, false);
         }
       }
     });
@@ -582,8 +635,11 @@ document.addEventListener('DOMContentLoaded', () => {
     audioState.rate = newRate;
     updateSpeedDisplays(newRate);
     localStorage.setItem('novel_reader_audio_rate', String(newRate));
+    if (activeHtml5Audio) {
+      activeHtml5Audio.playbackRate = newRate;
+    }
     if (audioState.isPlaying && !audioState.isPaused) {
-      speakParagraph(audioState.currentIndex);
+      speakParagraph(audioState.currentIndex, false);
     }
   }
 
@@ -699,6 +755,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function stopSpeech() {
+    if (activeHtml5Audio) {
+      activeHtml5Audio.pause();
+      activeHtml5Audio.onended = null;
+      activeHtml5Audio.onerror = null;
+      activeHtml5Audio = null;
+    }
+    if (activeAudioUrl) {
+      URL.revokeObjectURL(activeAudioUrl);
+      activeAudioUrl = null;
+    }
     if (isSpeechSupported) {
       window.__activeNovelUtterance = null;
       synth.cancel();
@@ -750,63 +816,20 @@ document.addEventListener('DOMContentLoaded', () => {
     node.setAttribute('data-tokenized', 'true');
   }
 
-  // Speak paragraph synchronously without breaking user gesture context
-  function speakParagraph(index, isContinuous = false) {
-    if (!paragraphNodes || paragraphNodes.length === 0) return;
+  // Web Speech API fallback engine (Instant, 0MB overhead, device offline)
+  function speakParagraphWebSpeech(index, textToSpeak, targetNode) {
+    if (!isSpeechSupported) return;
 
-    if (index >= paragraphNodes.length) {
-      restoreParagraphDOM();
-      audioState.isPlaying = false;
-      audioState.isPaused = false;
-      pauseAudioPipeline();
-      if (npPlayIcon) npPlayIcon.textContent = '▶';
-      if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
-      updateMediaSession();
-
-      if (audioState.autoNext && nextChapterUrl) {
-        localStorage.setItem('novel_auto_play_tts', 'true');
-        setTimeout(() => {
-          window.location.href = nextChapterUrl;
-        }, 800);
+    if (!audioState.selectedVoice || audioState.selectedVoice.isNeural) {
+      if (audioState.voices.length > 0) {
+        audioState.selectedVoice = audioState.voices.find(v => v.localService && v.lang.startsWith('en')) || audioState.voices[0];
       }
-      return;
-    }
-
-    if (index < 0) index = 0;
-
-    audioState.currentIndex = index;
-    const targetNode = paragraphNodes[index];
-    const textToSpeak = targetNode.textContent.trim();
-
-    if (!textToSpeak) {
-      speakParagraph(index + 1, true);
-      return;
-    }
-
-    // Only cancel previous speech if this was a manual seek or non-continuous transition
-    // Calling synth.cancel() right before synth.speak() during natural progression wipes out the new utterance in Chromium
-    if (!isContinuous) {
-      stopSpeech();
-    }
-    restoreParagraphDOM();
-
-    // Prepare non-destructive word spans
-    tokenizeParagraphWords(targetNode);
-    targetNode.classList.add('listen-active-paragraph');
-
-    if (audioState.autoScroll) {
-      targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-
-    // Ensure voice selection (prefer offline/local)
-    if (!audioState.selectedVoice && audioState.voices.length > 0) {
-      audioState.selectedVoice = audioState.voices.find(v => v.localService && v.lang.startsWith('en')) || audioState.voices[0];
     }
 
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     window.__activeNovelUtterance = utterance; // Shield against Garbage Collection
 
-    if (audioState.selectedVoice) {
+    if (audioState.selectedVoice && !audioState.selectedVoice.isNeural) {
       utterance.voice = audioState.selectedVoice;
       utterance.lang = audioState.selectedVoice.lang || 'en-US';
     } else {
@@ -882,8 +905,142 @@ document.addEventListener('DOMContentLoaded', () => {
       synth.resume();
     }
 
-    // SYNCHRONOUS speech start to guarantee user activation token is valid
     synth.speak(utterance);
+  }
+
+  // Unified multi-tier audio runner: Dexie Cached Audio -> Neural Edge-TTS -> Web Speech API
+  async function speakParagraph(index, isContinuous = false) {
+    if (!paragraphNodes || paragraphNodes.length === 0) return;
+
+    if (index >= paragraphNodes.length) {
+      restoreParagraphDOM();
+      audioState.isPlaying = false;
+      audioState.isPaused = false;
+      pauseAudioPipeline();
+      if (npPlayIcon) npPlayIcon.textContent = '▶';
+      if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
+      updateMediaSession();
+
+      if (audioState.autoNext && nextChapterUrl) {
+        localStorage.setItem('novel_auto_play_tts', 'true');
+        setTimeout(() => {
+          window.location.href = nextChapterUrl;
+        }, 800);
+      }
+      return;
+    }
+
+    if (index < 0) index = 0;
+
+    audioState.currentIndex = index;
+    const targetNode = paragraphNodes[index];
+    const textToSpeak = targetNode.textContent.trim();
+
+    if (!textToSpeak) {
+      speakParagraph(index + 1, true);
+      return;
+    }
+
+    // Only cancel previous speech if this was a manual seek or non-continuous transition
+    if (!isContinuous) {
+      stopSpeech();
+    }
+    restoreParagraphDOM();
+
+    // Prepare non-destructive word spans
+    tokenizeParagraphWords(targetNode);
+    targetNode.classList.add('listen-active-paragraph');
+
+    if (audioState.autoScroll) {
+      targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    const currentVoice = audioState.selectedVoice || NEURAL_VOICES[0];
+
+    // TIER 1: Neural Edge-TTS with Dexie.js Audio Cache (Standard HTML5 Audio with Android lock-screen)
+    if (currentVoice && currentVoice.isNeural) {
+      let audioBlob = null;
+      if (novelDb) {
+        try {
+          const cached = await novelDb.audioCache.get([novelSlug, currentChapterNum, index]);
+          if (cached && cached.audioBlob) {
+            audioBlob = cached.audioBlob;
+          }
+        } catch (e) {}
+      }
+
+      if (!audioBlob && navigator.onLine) {
+        try {
+          const res = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: textToSpeak,
+              voice: currentVoice.edgeVoice || 'en-US-ChristopherNeural',
+              rate: audioState.rate || 1.0
+            })
+          });
+          if (res.ok) {
+            audioBlob = await res.blob();
+            if (novelDb) {
+              novelDb.audioCache.put({
+                novelSlug: novelSlug,
+                chapterNumber: currentChapterNum,
+                paraIndex: index,
+                audioBlob: audioBlob,
+                created_at: Date.now()
+              }).catch(() => {});
+            }
+          }
+        } catch (fetchErr) {
+          console.warn("Neural audio fetch note, falling back to Web Speech:", fetchErr);
+        }
+      }
+
+      if (audioBlob) {
+        if (activeAudioUrl) {
+          URL.revokeObjectURL(activeAudioUrl);
+        }
+        activeAudioUrl = URL.createObjectURL(audioBlob);
+        activeHtml5Audio = new Audio(activeAudioUrl);
+        activeHtml5Audio.playbackRate = audioState.rate || 1.0;
+
+        activeHtml5Audio.onplay = () => {
+          audioState.isPlaying = true;
+          audioState.isPaused = false;
+          startAudioPipeline();
+          if (npPlayIcon) npPlayIcon.textContent = '⏸';
+          if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+          updateMediaSession();
+        };
+
+        activeHtml5Audio.onended = () => {
+          if (activeAudioUrl) {
+            URL.revokeObjectURL(activeAudioUrl);
+            activeAudioUrl = null;
+          }
+          activeHtml5Audio = null;
+          if (audioState.isPlaying && !audioState.isPaused) {
+            speakParagraph(index + 1, true);
+          }
+        };
+
+        activeHtml5Audio.onerror = () => {
+          activeHtml5Audio = null;
+          speakParagraphWebSpeech(index, textToSpeak, targetNode);
+        };
+
+        try {
+          await activeHtml5Audio.play();
+          return;
+        } catch (e) {
+          // Playback error, fall through to Web Speech API
+        }
+      }
+    }
+
+    // TIER 2: Native Web Speech API fallback
+    speakParagraphWebSpeech(index, textToSpeak, targetNode);
   }
 
   // Toggle Play / Pause
@@ -894,7 +1051,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (audioState.isPlaying && !audioState.isPaused) {
-      synth.pause();
+      if (activeHtml5Audio) {
+        activeHtml5Audio.pause();
+      }
+      if (isSpeechSupported && synth.speaking) {
+        synth.pause();
+      }
       pauseAudioPipeline();
       audioState.isPaused = true;
       if (npPlayIcon) npPlayIcon.textContent = '▶';
@@ -902,18 +1064,17 @@ document.addEventListener('DOMContentLoaded', () => {
       updateMediaSession();
     } else if (audioState.isPaused) {
       startAudioPipeline();
-      synth.resume();
+      if (activeHtml5Audio) {
+        activeHtml5Audio.play().catch(() => {});
+      } else if (isSpeechSupported && synth.paused) {
+        synth.resume();
+      } else {
+        speakParagraph(audioState.currentIndex, false);
+      }
       audioState.isPaused = false;
       if (npPlayIcon) npPlayIcon.textContent = '⏸';
       if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
       updateMediaSession();
-
-      // Guard: if speech didn't resume after unpause, restart paragraph
-      setTimeout(() => {
-        if (audioState.isPlaying && !audioState.isPaused && !synth.speaking) {
-          speakParagraph(audioState.currentIndex, false);
-        }
-      }, 150);
     } else {
       speakParagraph(audioState.currentIndex, false);
     }
