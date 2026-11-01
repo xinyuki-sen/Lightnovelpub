@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -31,6 +31,18 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # Initialize database
 database.init_db()
+
+@app.get("/sw.js")
+async def service_worker():
+    sw_path = os.path.join(STATIC_DIR, "sw.js")
+    return FileResponse(
+        sw_path, 
+        media_type="application/javascript",
+        headers={
+            "Service-Worker-Allowed": "/",
+            "Cache-Control": "no-cache"
+        }
+    )
 
 @app.get("/", response_class=HTMLResponse)
 async def library_home(request: Request):

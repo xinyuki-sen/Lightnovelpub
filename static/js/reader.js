@@ -4,8 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // =========================================================================
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/static/sw.js')
-        .then(reg => console.log('PWA ServiceWorker registered:', reg.scope))
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(reg => console.log('PWA ServiceWorker registered with root scope:', reg.scope))
         .catch(err => console.log('ServiceWorker notice:', err));
     });
   }
@@ -334,6 +334,60 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedAutoNext = localStorage.getItem('novel_reader_autonext') !== 'false';
   const savedAutoScroll = localStorage.getItem('novel_reader_autoscroll') !== 'false';
 
+  // Silent audio pipeline anchor for Android & Laptop battery-saver backgrounding
+  let silentAudioElement = null;
+  function getSilentAudioPipe() {
+    if (!silentAudioElement) {
+      silentAudioElement = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      silentAudioElement.loop = true;
+    }
+    return silentAudioElement;
+  }
+
+  function startAudioPipeline() {
+    try {
+      const audioPipe = getSilentAudioPipe();
+      audioPipe.play().catch(() => {});
+    } catch (e) {}
+    updateMediaSession();
+  }
+
+  function pauseAudioPipeline() {
+    try {
+      if (silentAudioElement) {
+        silentAudioElement.pause();
+      }
+    } catch (e) {}
+  }
+
+  function updateMediaSession() {
+    if ('mediaSession' in navigator) {
+      try {
+        const novelTitle = document.querySelector('.np-audio-novel-name')?.textContent || 'Novel';
+        const chapterTitle = document.getElementById('np-audio-chapter-title')?.textContent || 'Chapter';
+        const coverImg = document.getElementById('np-audio-cover')?.src || '/static/img/logo.png';
+
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: chapterTitle,
+          artist: novelTitle,
+          album: 'Lightnovelpub Reader',
+          artwork: [
+            { src: coverImg, sizes: '512x512', type: 'image/png' }
+          ]
+        });
+
+        navigator.mediaSession.playbackState = audioState.isPlaying && !audioState.isPaused ? 'playing' : 'paused';
+
+        navigator.mediaSession.setActionHandler('play', () => toggleAudioPlay());
+        navigator.mediaSession.setActionHandler('pause', () => toggleAudioPlay());
+        navigator.mediaSession.setActionHandler('previoustrack', () => playPrevParagraph());
+        navigator.mediaSession.setActionHandler('nexttrack', () => playNextParagraph());
+      } catch (err) {
+        console.warn('MediaSession init error:', err);
+      }
+    }
+  }
+
   const audioState = {
     isOpen: false,
     isPlaying: false,
@@ -350,7 +404,8 @@ document.addEventListener('DOMContentLoaded', () => {
     autoNext: savedAutoNext,
     autoScroll: savedAutoScroll,
     wakeLock: null,
-    keepAliveTimer: null
+    keepAliveTimer: null,
+    isTransitioning: false
   };
 
   // Sync initial UI values
@@ -609,13 +664,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
 
     requestWakeLock();
+    startAudioPipeline();
     startKeepAlive();
-    speakParagraph(startIndex);
+    speakParagraph(startIndex, false);
   }
 
   // Close Audio Player
   function closeAudioPlayer() {
     stopSpeech();
+    pauseAudioPipeline();
     audioState.isOpen = false;
     audioState.isPlaying = false;
     audioState.isPaused = false;
@@ -628,6 +685,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     releaseWakeLock();
     localStorage.removeItem('novel_auto_play_tts');
+    updateMediaSession();
   }
 
   function restoreParagraphDOM() {
@@ -642,6 +700,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function stopSpeech() {
     if (isSpeechSupported) {
+      window.__activeNovelUtterance = null;
       synth.cancel();
       if (synth.paused) {
         synth.resume();
@@ -649,7 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Chrome 15s pause keep-alive
+  // Chrome 15s pause keep-alive: prevents silent stall on long paragraphs
   function startKeepAlive() {
     stopKeepAlive();
     audioState.keepAliveTimer = setInterval(() => {
@@ -657,7 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
         synth.pause();
         synth.resume();
       }
-    }, 8500);
+    }, 10000);
   }
 
   function stopKeepAlive() {
@@ -692,21 +751,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Speak paragraph synchronously without breaking user gesture context
-  function speakParagraph(index) {
+  function speakParagraph(index, isContinuous = false) {
     if (!paragraphNodes || paragraphNodes.length === 0) return;
 
     if (index >= paragraphNodes.length) {
       restoreParagraphDOM();
       audioState.isPlaying = false;
       audioState.isPaused = false;
+      pauseAudioPipeline();
       if (npPlayIcon) npPlayIcon.textContent = '▶';
       if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
+      updateMediaSession();
 
       if (audioState.autoNext && nextChapterUrl) {
         localStorage.setItem('novel_auto_play_tts', 'true');
         setTimeout(() => {
           window.location.href = nextChapterUrl;
-        }, 1000);
+        }, 800);
       }
       return;
     }
@@ -718,12 +779,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const textToSpeak = targetNode.textContent.trim();
 
     if (!textToSpeak) {
-      speakParagraph(index + 1);
+      speakParagraph(index + 1, true);
       return;
     }
 
-    // Cancel previous speech
-    stopSpeech();
+    // Only cancel previous speech if this was a manual seek or non-continuous transition
+    // Calling synth.cancel() right before synth.speak() during natural progression wipes out the new utterance in Chromium
+    if (!isContinuous) {
+      stopSpeech();
+    }
     restoreParagraphDOM();
 
     // Prepare non-destructive word spans
@@ -744,19 +808,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (audioState.selectedVoice) {
       utterance.voice = audioState.selectedVoice;
+      utterance.lang = audioState.selectedVoice.lang || 'en-US';
+    } else {
+      utterance.lang = 'en-US';
     }
     utterance.rate = audioState.rate || 1.0;
     utterance.pitch = audioState.pitch || 1.0;
 
     const wordSpans = targetNode.querySelectorAll('.np-word-token');
-    let lastWordIndex = -1;
 
     // Word boundary event (smooth, non-destructive)
     utterance.onboundary = (e) => {
       if (!audioState.isPlaying || audioState.isPaused) return;
 
       if (audioState.highlightMode === 'word' && wordSpans.length > 0) {
-        // Approximate matching by char index or sequential progression
         let charIdx = e.charIndex || 0;
         let cumulative = 0;
         let matchedSpan = null;
@@ -766,7 +831,6 @@ document.addEventListener('DOMContentLoaded', () => {
           const spanLen = span.textContent.length;
           if (cumulative <= charIdx && charIdx <= cumulative + spanLen + 2) {
             matchedSpan = span;
-            lastWordIndex = i;
             break;
           }
           cumulative += spanLen + 1;
@@ -789,24 +853,34 @@ document.addEventListener('DOMContentLoaded', () => {
     utterance.onstart = () => {
       audioState.isPlaying = true;
       audioState.isPaused = false;
+      startAudioPipeline();
       if (npPlayIcon) npPlayIcon.textContent = '⏸';
       if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+      updateMediaSession();
     };
 
     utterance.onend = () => {
+      window.__activeNovelUtterance = null;
       if (audioState.isPlaying && !audioState.isPaused) {
-        speakParagraph(index + 1);
+        speakParagraph(index + 1, true);
       }
     };
 
     utterance.onerror = (e) => {
       console.warn("SpeechSynthesis error:", e.error);
+      window.__activeNovelUtterance = null;
       if (audioState.isPlaying && !audioState.isPaused) {
         if (e.error !== 'interrupted' && e.error !== 'canceled') {
-          speakParagraph(index + 1);
+          setTimeout(() => {
+            speakParagraph(index + 1, true);
+          }, 50);
         }
       }
     };
+
+    if (synth.paused) {
+      synth.resume();
+    }
 
     // SYNCHRONOUS speech start to guarantee user activation token is valid
     synth.speak(utterance);
@@ -821,33 +895,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (audioState.isPlaying && !audioState.isPaused) {
       synth.pause();
+      pauseAudioPipeline();
       audioState.isPaused = true;
       if (npPlayIcon) npPlayIcon.textContent = '▶';
       if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
+      updateMediaSession();
     } else if (audioState.isPaused) {
+      startAudioPipeline();
       synth.resume();
       audioState.isPaused = false;
       if (npPlayIcon) npPlayIcon.textContent = '⏸';
       if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
+      updateMediaSession();
+
+      // Guard: if speech didn't resume after unpause, restart paragraph
+      setTimeout(() => {
+        if (audioState.isPlaying && !audioState.isPaused && !synth.speaking) {
+          speakParagraph(audioState.currentIndex, false);
+        }
+      }, 150);
     } else {
-      speakParagraph(audioState.currentIndex);
+      speakParagraph(audioState.currentIndex, false);
     }
   }
 
   function playPrevParagraph() {
     if (audioState.currentIndex > 0) {
-      speakParagraph(audioState.currentIndex - 1);
+      speakParagraph(audioState.currentIndex - 1, false);
     }
   }
 
   function playNextParagraph() {
     if (audioState.currentIndex < paragraphNodes.length - 1) {
-      speakParagraph(audioState.currentIndex + 1);
+      speakParagraph(audioState.currentIndex + 1, false);
     }
   }
 
   function restartChapter() {
-    speakParagraph(0);
+    speakParagraph(0, false);
   }
 
   // WakeLock: prevents sleep when listening

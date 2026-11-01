@@ -92,6 +92,15 @@
 
   <script src="/static/js/upload.js"></script>
   <script>
+    // PWA Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          .then(reg => console.log('LightnovelPub offline PWA ready:', reg.scope))
+          .catch(err => console.log('PWA ServiceWorker notice:', err));
+      });
+    }
+
     // Live filter novels in library
     const searchInput = document.getElementById('library-search-input');
     if (searchInput) {
