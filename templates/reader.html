@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#09090b">
   <link rel="icon" type="image/png" href="/static/img/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=6">
+  <link rel="stylesheet" href="/static/css/style.css?v=7">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}">
 
@@ -26,19 +26,19 @@
     <div class="reader-toolbar-actions">
       <!-- High-End Audio Text-to-Speech Button -->
       <button class="reader-tool-btn btn-audio-listen" id="listen-toggle-btn" title="Headphones Mode: Listen to chapter audio from current reading position!">
-        <span>🎧</span> Audio Mode
+        <span>🎧</span> <span class="topbar-btn-label">Audio</span>
       </button>
 
       <button class="reader-tool-btn" id="toggle-settings-btn" title="Optimize Reading Experience (Theme, Font, Size, Width, Spacing)">
-        <span>⚙️</span> Optimize
+        <span>⚙️</span> <span class="topbar-btn-label">Optimize</span>
       </button>
 
       <button class="reader-tool-btn" id="toggle-fullscreen-btn" title="Toggle Fullscreen Reading (F)">
         <span id="fullscreen-icon">⛶</span>
       </button>
 
-      <a href="/" class="reader-tool-btn" title="Back to Library">
-        <span>📚</span> Library
+      <a href="/" class="reader-tool-btn topbar-library-btn" title="Back to Library">
+        <span>📚</span> <span class="topbar-btn-label">Library</span>
       </a>
     </div>
   </header>
@@ -62,9 +62,9 @@
         <option value="'Nunito Sans', sans-serif">Nunito Sans (Modern Clean)</option>
         <option value="'Merriweather', serif">Merriweather (Classic Book Serif)</option>
         <option value="'Lora', serif">Lora (Elegant Editorial)</option>
-        <option value="'Roboto', sans-serif">Roboto</option>
-        <option value="'Montserrat', sans-serif">Montserrat</option>
-        <option value="'Open Sans', sans-serif">Open Sans</option>
+        <option value="'Roboto', sans-serif">Roboto (Clean Sans)</option>
+        <option value="'Montserrat', sans-serif">Montserrat (Geometric Sans)</option>
+        <option value="'Open Sans', sans-serif">Open Sans (Balanced)</option>
       </select>
     </div>
 
@@ -389,7 +389,7 @@
   <!-- Fullscreen Screen Brightness Dimmer Overlay -->
   <div class="reader-brightness-overlay" id="reader-brightness-overlay"></div>
 
-  <script src="/static/js/dexie.min.js?v=6"></script>
-  <script src="/static/js/reader.js?v=6"></script>
+  <script src="/static/js/dexie.min.js?v=7"></script>
+  <script src="/static/js/reader.js?v=7"></script>
 </body>
 </html>

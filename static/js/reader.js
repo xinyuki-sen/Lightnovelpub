@@ -89,10 +89,23 @@ function initReader() {
   }
 
   function applyFont(font) {
+    if (!font) return;
+    document.documentElement.style.setProperty('--reader-font-family', font);
     if (readerContainer) {
+      readerContainer.style.setProperty('--reader-font-family', font);
       readerContainer.style.fontFamily = font;
     }
-    if (fontSelect) {
+    const canvas = document.querySelector('.reader-article-canvas');
+    if (canvas) {
+      canvas.style.setProperty('--reader-font-family', font);
+      canvas.style.fontFamily = font;
+    }
+    const chapterContent = document.getElementById('chapter-content');
+    if (chapterContent) {
+      chapterContent.style.setProperty('--reader-font-family', font);
+      chapterContent.style.fontFamily = font;
+    }
+    if (fontSelect && fontSelect.value !== font) {
       fontSelect.value = font;
     }
   }
@@ -907,6 +920,7 @@ function initReader() {
 
     audioState.isOpen = true;
     if (npWidget) npWidget.classList.add('active');
+    dockExtension?.classList.add('audio-active-hidden');
     if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
 
     requestWakeLock();
@@ -942,6 +956,7 @@ function initReader() {
     stopKeepAlive();
 
     if (npWidget) npWidget.classList.remove('active');
+    dockExtension?.classList.remove('audio-active-hidden');
     updatePlayStateUI(false);
 
     releaseWakeLock();
@@ -1132,6 +1147,37 @@ function initReader() {
     synth.speak(utterance);
   }
 
+
+  // Synchronize glowing amber word highlight and smooth autoscroll for HTML5 Audio
+  function syncHtml5AudioHighlight(audio, targetNode) {
+    if (!audio || !targetNode) return;
+    const wordSpans = targetNode.querySelectorAll('.np-word-token');
+    if (wordSpans.length === 0) return;
+    const duration = audio.duration || 1;
+    const current = audio.currentTime || 0;
+    const progress = Math.min(1, Math.max(0, current / duration));
+    const targetIdx = Math.min(wordSpans.length - 1, Math.floor(progress * wordSpans.length));
+
+    for (let w = 0; w < wordSpans.length; w++) {
+      if (w < targetIdx) {
+        wordSpans[w].classList.add('np-spoken-word-done');
+        wordSpans[w].classList.remove('np-spoken-word');
+      } else if (w === targetIdx) {
+        wordSpans[w].classList.add('np-spoken-word');
+        wordSpans[w].classList.remove('np-spoken-word-done');
+      } else {
+        wordSpans[w].classList.remove('np-spoken-word', 'np-spoken-word-done');
+      }
+    }
+
+    if (audioState.autoScroll && wordSpans[targetIdx]) {
+      const rect = wordSpans[targetIdx].getBoundingClientRect();
+      if (rect.top < 80 || rect.bottom > window.innerHeight - 150) {
+        wordSpans[targetIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }
+
   // Unified multi-tier audio runner: Dexie Cached Audio -> Neural Edge-TTS -> Web Speech API
   async function speakParagraph(index, isContinuous = false) {
     if (!paragraphNodes || paragraphNodes.length === 0) return;
@@ -1238,32 +1284,9 @@ function initReader() {
         activeHtml5Audio.playbackRate = audioState.rate || 1.0;
         activeHtml5Audio.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
 
-        const wordSpans = targetNode.querySelectorAll('.np-word-token');
         activeHtml5Audio.ontimeupdate = () => {
-          if (!activeHtml5Audio || activeHtml5Audio.paused || wordSpans.length === 0) return;
-          const duration = activeHtml5Audio.duration || 1;
-          const current = activeHtml5Audio.currentTime || 0;
-          const progress = Math.min(1, Math.max(0, current / duration));
-          const targetIdx = Math.min(wordSpans.length - 1, Math.floor(progress * wordSpans.length));
-
-          for (let w = 0; w < wordSpans.length; w++) {
-            if (w < targetIdx) {
-              wordSpans[w].classList.add('np-spoken-word-done');
-              wordSpans[w].classList.remove('np-spoken-word');
-            } else if (w === targetIdx) {
-              wordSpans[w].classList.add('np-spoken-word');
-              wordSpans[w].classList.remove('np-spoken-word-done');
-            } else {
-              wordSpans[w].classList.remove('np-spoken-word', 'np-spoken-word-done');
-            }
-          }
-
-          if (audioState.autoScroll && wordSpans[targetIdx]) {
-            const rect = wordSpans[targetIdx].getBoundingClientRect();
-            if (rect.top < 80 || rect.bottom > window.innerHeight - 150) {
-              wordSpans[targetIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-          }
+          if (!activeHtml5Audio || activeHtml5Audio.paused) return;
+          syncHtml5AudioHighlight(activeHtml5Audio, targetNode);
         };
 
         activeHtml5Audio.onplay = () => {
@@ -1344,6 +1367,40 @@ function initReader() {
     }
   }
 
+
+  // True 10-Second Seek Controls for HTML5 Audio (with seamless paragraph wrap fallback)
+  function rewind10Seconds() {
+    if (activeHtml5Audio && activeHtml5Audio.duration) {
+      if (activeHtml5Audio.currentTime > 10) {
+        activeHtml5Audio.currentTime -= 10;
+        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex]);
+      } else if (audioState.currentIndex > 0) {
+        playPrevParagraph();
+      } else {
+        activeHtml5Audio.currentTime = 0;
+        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex]);
+      }
+    } else {
+      playPrevParagraph();
+    }
+  }
+
+  function forward10Seconds() {
+    if (activeHtml5Audio && activeHtml5Audio.duration) {
+      if (activeHtml5Audio.currentTime + 10 < activeHtml5Audio.duration) {
+        activeHtml5Audio.currentTime += 10;
+        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex]);
+      } else if (audioState.currentIndex < paragraphNodes.length - 1) {
+        playNextParagraph();
+      } else {
+        activeHtml5Audio.currentTime = Math.max(0, activeHtml5Audio.duration - 0.2);
+        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex]);
+      }
+    } else {
+      playNextParagraph();
+    }
+  }
+
   function playNextParagraph() {
     if (audioState.currentIndex < paragraphNodes.length - 1) {
       speakParagraph(audioState.currentIndex + 1, false);
@@ -1394,9 +1451,9 @@ function initReader() {
   if (npBtnNext) npBtnNext.addEventListener('click', playNextParagraph);
   if (npBtnRestart) npBtnRestart.addEventListener('click', restartChapter);
 
-  // Rewind & Forward 10s (moves backwards / forwards 1 paragraph)
-  if (npBtnRewind10) npBtnRewind10.addEventListener('click', playPrevParagraph);
-  if (npBtnForward10) npBtnForward10.addEventListener('click', playNextParagraph);
+  // Rewind & Forward 10s Seeking
+  if (npBtnRewind10) npBtnRewind10.addEventListener('click', rewind10Seconds);
+  if (npBtnForward10) npBtnForward10.addEventListener('click', forward10Seconds);
 
   // Keyboard Shortcuts for Reader & Audio Navigation
   document.addEventListener('keydown', (e) => {
@@ -1418,9 +1475,11 @@ function initReader() {
       e.preventDefault();
       toggleAudioPlay();
     } else if (e.key.toLowerCase() === 'j' && audioState.isOpen) {
-      playPrevParagraph();
+      rewind10Seconds();
+    } else if (e.key.toLowerCase() === 'l' && audioState.isOpen) {
+      forward10Seconds();
     } else if (e.key.toLowerCase() === 'k' && audioState.isOpen) {
-      playNextParagraph();
+      toggleAudioPlay();
     }
   });
 

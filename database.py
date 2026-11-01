@@ -1,18 +1,19 @@
-import sqlite3
-import json
 import os
 import re
+import json
+import shutil
+import sqlite3
 from typing import List, Dict, Optional, Tuple
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Vercel serverless functions run on read-only filesystem except /tmp
 if os.environ.get("VERCEL"):
     DB_DIR = "/tmp/data"
     os.makedirs(DB_DIR, exist_ok=True)
     DB_PATH = os.path.join(DB_DIR, "library.db")
     seed_db = os.path.join(BASE_DIR, "data", "library.db")
     if os.path.exists(seed_db) and not os.path.exists(DB_PATH):
-        import shutil
         try:
             shutil.copyfile(seed_db, DB_PATH)
         except Exception as e:
@@ -95,7 +96,7 @@ def save_novel(title: str, author: str, synopsis: str, cover_path: str, chapters
             
             novel_id = cursor.lastrowid
             
-            # Batch chapter insertion using executemany for high performance
+            # Batch chapter insertion using executemany for peak performance
             batch_data = [
                 (
                     novel_id,
@@ -136,7 +137,6 @@ def get_novel_by_slug(slug: str) -> Optional[Dict]:
             return None
         novel = dict(row)
         
-        # Fetch chapters
         cursor.execute("""
             SELECT chapter_number, title, word_count 
             FROM chapters 
@@ -186,7 +186,7 @@ def update_reading_progress(slug: str, chapter_number: int, percent: float):
         conn.close()
 
 def delete_novel(slug: str) -> Optional[str]:
-    """Deletes novel and returns cover image path for disk cleanup."""
+    """Deletes novel from database and returns cover image path for disk cleanup."""
     conn = get_connection()
     cover_image = None
     try:

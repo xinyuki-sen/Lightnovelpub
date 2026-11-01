@@ -1,8 +1,14 @@
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 .DS_Store
 *.pdf
 scratch/
 test_*.py
+reparse_*.py
 .vercel/
+*.db-shm
+*.db-wal
+*.db-journal
+.pytest_cache/

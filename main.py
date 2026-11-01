@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -10,7 +10,7 @@ from pydantic import BaseModel
 import database
 from pdf_parser import extract_pdf_chapters
 
-app = FastAPI(title="Novel Phoenix Custom Reader")
+app = FastAPI(title="LightnovelPub Custom Novel Reader")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -26,10 +26,10 @@ try:
 except Exception:
     pass
 
-# Dedicated cover image route to ensure Vercel /tmp/covers and local static/covers both resolve without 404
+# Dedicated cover image route supporting both Vercel /tmp/covers and static/covers
 @app.get("/static/covers/{filename}")
 async def serve_cover_image(filename: str):
-    # Check COVERS_DIR first (covers uploaded on Vercel or locally)
+    # Check COVERS_DIR first
     disk_cover = os.path.join(COVERS_DIR, filename)
     if os.path.exists(disk_cover):
         return FileResponse(disk_cover, media_type="image/jpeg")
@@ -48,7 +48,7 @@ async def serve_cover_image(filename: str):
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-# Initialize database
+# Initialize database schema
 database.init_db()
 
 @app.get("/sw.js")
@@ -122,7 +122,6 @@ async def upload_pdf(
     
     tmp_path = None
     try:
-        # Save uploaded file temporarily inside try block for guaranteed cleanup
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             shutil.copyfileobj(file.file, tmp)
             tmp_path = tmp.name
@@ -133,11 +132,9 @@ async def upload_pdf(
         if not final_title:
             final_title = os.path.splitext(file.filename)[0].replace("_", " ").title()
             
-        # Generate unique slug first to avoid cover image collisions
         slug = database.generate_unique_slug(final_title)
         cover_url = ""
         
-        # Save cover image using unique slug
         if cover_bytes:
             cover_filename = f"{slug}.jpg"
             cover_disk_path = os.path.join(COVERS_DIR, cover_filename)
@@ -182,7 +179,6 @@ async def save_progress(payload: ProgressPayload):
 @app.delete("/api/novel/{slug}")
 async def delete_novel_api(slug: str):
     cover_image = database.delete_novel(slug)
-    # Clean up disk file for the deleted cover image
     if cover_image and cover_image.startswith("/static/covers/"):
         filename = cover_image.replace("/static/covers/", "")
         for target_dir in [COVERS_DIR, os.path.join(STATIC_DIR, "covers")]:
@@ -229,7 +225,7 @@ async def generate_tts(req: TTSRequest):
 if __name__ == "__main__":
     import uvicorn
     print("\n" + "="*50)
-    print("Novel Phoenix Custom Reader Starting...")
+    print("LightnovelPub Novel Reader Starting...")
     print("Open http://localhost:8000 in your browser!")
     print("="*50 + "\n")
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
