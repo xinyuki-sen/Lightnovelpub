@@ -1,6 +1,6 @@
 @echo off
-title Novel Phoenix Custom Reader
-echo Starting Novel Phoenix Custom Reader...
+title LightnovelPub - Luxury Novel Reader
+echo Starting LightnovelPub Novel Reader on http://localhost:8000...
 cd /d "%~dp0"
 python main.py
 pause

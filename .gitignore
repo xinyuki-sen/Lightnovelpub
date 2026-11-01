@@ -12,3 +12,5 @@ reparse_*.py
 *.db-wal
 *.db-journal
 .pytest_cache/
+benchmark_results*.json
+*.log
