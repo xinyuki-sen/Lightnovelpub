@@ -1,4 +1,5 @@
-document.addEventListener('DOMContentLoaded', () => {
+function initReader() {
+  try {
   // =========================================================================
   // 0. PWA SERVICE WORKER REGISTRATION (OFFLINE SUPPORT)
   // =========================================================================
@@ -39,6 +40,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedWidth = localStorage.getItem('novel_reader_width') || '860px';
   const savedLineHeight = localStorage.getItem('novel_reader_line_height') || '1.85';
   const savedParaGap = localStorage.getItem('novel_reader_para_gap') || '1.6rem';
+
+  // Current font size initialized immediately to prevent Temporal Dead Zone ReferenceError
+  let currentFontSize = savedFontSize;
 
   // Apply saved preferences immediately
   applyTheme(savedTheme);
@@ -93,8 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Font Size Adjuster
-  let currentFontSize = savedFontSize;
+  // Font Size Adjuster (already declared above)
   if (btnFontDec) {
     btnFontDec.addEventListener('click', () => {
       if (currentFontSize > 14) {
@@ -581,14 +584,14 @@ document.addEventListener('DOMContentLoaded', () => {
     audioState.selectedVoice = matched;
   }
 
+  // Always render voice options immediately so Neural voices are populated instantly on page load
+  renderVoiceOptions();
+
   if (isSpeechSupported) {
     loadVoices();
     if (synth.onvoiceschanged !== undefined) {
       synth.onvoiceschanged = loadVoices;
     }
-  } else {
-    // If browser lacks Web Speech API, neural audio via HTML5 Audio still works!
-    renderVoiceOptions();
   }
 
   // Language change
@@ -897,10 +900,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Open Audio Player & start immediately
   function openAudioPlayer(startIndex = null) {
-    if (!isSpeechSupported) {
-      alert("Text-to-speech is not supported on this browser.");
-      return;
-    }
 
     if (startIndex === null) {
       startIndex = getParagraphCurrentlyInView();
@@ -1418,4 +1417,13 @@ document.addEventListener('DOMContentLoaded', () => {
       openAudioPlayer(0);
     }, 450);
   }
-});
+  } catch (readerInitErr) {
+    console.error("Critical error during Reader initialization:", readerInitErr);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initReader);
+} else {
+  initReader();
+}

@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/static/img/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/style.css?v=5">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}">
 
@@ -389,7 +389,7 @@
   <!-- Fullscreen Screen Brightness Dimmer Overlay -->
   <div class="reader-brightness-overlay" id="reader-brightness-overlay"></div>
 
-  <script src="/static/js/dexie.min.js"></script>
-  <script src="/static/js/reader.js"></script>
+  <script src="/static/js/dexie.min.js?v=5"></script>
+  <script src="/static/js/reader.js?v=5"></script>
 </body>
 </html>
