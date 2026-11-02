@@ -21,6 +21,31 @@ CHAPTER_PATTERNS = [
 
 PAGE_NUMBER_PATTERN = re.compile(r'^(?:page\s+)?[-–—]?\s*\d+\s*[-–—]?$', re.IGNORECASE)
 
+IGNORE_FRONTMATTER_TITLES = {
+    "cover", "title page", "title", "copyright", "also in series",
+    "contents", "table of contents", "dedication", "acknowledgments",
+    "acknowledgements", "about the author", "author's note"
+}
+
+def clean_watermarks_and_dropcaps(text: str) -> str:
+    """
+    Strips OceanofPDF.com watermarks and decodes PDF drop-cap artifacts like
+    'R C H A P T E R O N E andidly' -> 'Randidly Ghosthound'.
+    """
+    # 1. Clean OceanofPDF watermark variations
+    text = re.sub(r'\s*(?:https?://)?(?:www\.)?oceanofpdf\.com\s*', ' ', text, flags=re.IGNORECASE)
+    
+    # 2. Fix Drop Cap Chapter headings in fantasy/LitRPG PDFs
+    def dropcap_sub(m):
+        cap = m.group(1)
+        rest = m.group(2)
+        return cap + rest
+    text = re.sub(r'^([A-Z])\s+C\s*H\s*A\s*P\s*T\s*E\s*R\s+[A-Z\s]+\s+([a-z]\w+)', dropcap_sub, text)
+    
+    # 3. Clean multiple spaces
+    text = re.sub(r'[ \t]+', ' ', text).strip()
+    return text
+
 def clean_lines_into_paragraphs(lines: List[str]) -> List[str]:
     """
     Takes raw lines from PDF pages, removes running headers/footers,
@@ -39,6 +64,7 @@ def clean_lines_into_paragraphs(lines: List[str]) -> List[str]:
                 # Fix hyphenated words: "tele-\nphone" -> "telephone"
                 para_text = re.sub(r'(\w+)-\s+(\w+)', r'\1\2', para_text)
                 para_text = re.sub(r'\s+', ' ', para_text)
+                para_text = clean_watermarks_and_dropcaps(para_text)
                 if len(para_text) > 0:
                     paragraphs.append(para_text)
                 current_para = []
@@ -54,6 +80,7 @@ def clean_lines_into_paragraphs(lines: List[str]) -> List[str]:
         para_text = " ".join(current_para).strip()
         para_text = re.sub(r'(\w+)-\s+(\w+)', r'\1\2', para_text)
         para_text = re.sub(r'\s+', ' ', para_text)
+        para_text = clean_watermarks_and_dropcaps(para_text)
         if len(para_text) > 0:
             paragraphs.append(para_text)
 
@@ -62,34 +89,44 @@ def clean_lines_into_paragraphs(lines: List[str]) -> List[str]:
 def format_novel_paragraphs(paragraphs: List[str]) -> List[str]:
     """
     Intelligently splits monolithic paragraphs into well-spaced dialogue,
-    MC narrative, and System HUD blocks with clean spacing.
+    MC narrative, MC inner thoughts, and System HUD blocks with clean spacing.
     """
     structured_paras = []
 
     for p in paragraphs:
-        t = p.strip()
+        t = clean_watermarks_and_dropcaps(p.strip())
         if not t:
             continue
 
-        # Split before known system triggers
+        # 1. Split before known LitRPG & System Triggers
         t = re.sub(r'(\bNew\s+achievement!\s*)', r'\n\n\1', t, flags=re.IGNORECASE)
         t = re.sub(r'(\bReward:\s*)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bCongratulations!\s*)', r'\n\n\1', t, flags=re.IGNORECASE)
         t = re.sub(r'(\bCrawler\s*#\d+)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bLevel:\s*(?:N/A|\d+))', r'\n\n\1', t, flags=re.IGNORECASE)
         t = re.sub(r'(\bLevel\s+\d+\.\s*(?:Race:|Class:|Small,|Engineers\.|\b))', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bHealth\([^)]*\):)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bMana\([^)]*\):)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bStam\([^)]*\):)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bVitality:\s*\d+)', r'\n\n\1', t, flags=re.IGNORECASE)
         t = re.sub(r'(\bGoblin\s+Murder\s+Dozer)', r'\n\n\1', t, flags=re.IGNORECASE)
         t = re.sub(r'(\bGoblin\s+Engineer\.\s+Level)', r'\n\n\1', t, flags=re.IGNORECASE)
         t = re.sub(r'(\bGoblin\.\s+Level)', r'\n\n\1', t, flags=re.IGNORECASE)
         t = re.sub(r'(\bYou\s+have\s+been\s+designated\s+Crawler)', r'\n\n\1', t, flags=re.IGNORECASE)
         t = re.sub(r'(\bPlease\s+pay\s+careful\s+attention\b)', r'\n\n\1', t, flags=re.IGNORECASE)
         t = re.sub(r'(\bDungeon\s+Floor\s+\d+\.\s*Time\s+to\s+Level\s+Collapse:[^\.]+\.)', r'\n\n\1\n\n', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bYour\s+Skill\s+.*?\s+has\s+grown\s+to\s+Level\s+\d+!)', r'\n\n\1\n\n', t, flags=re.IGNORECASE)
 
-        # Split dialogue
+        # 2. Split Dialogue:
+        # Before opening quote preceded by terminal sentence punctuation
         t = re.sub(r'([.!?])\s*([“"][A-Z])', r'\1\n\n\2', t)
+        # After closing quote followed by narrative sentence starter
         t = re.sub(r'([”"][.!?]?)\s+([A-Z][a-z]+(?:\s+[a-z]+){0,3}\s+[a-z]+)', r'\1\n\n\2', t)
 
         for chunk in t.split('\n\n'):
-            chunk = chunk.strip()
+            chunk = clean_watermarks_and_dropcaps(chunk.strip())
             if chunk:
+                # Merge 'Reward:' directly into preceding achievement card
                 if re.match(r'^Reward:\s*', chunk, re.IGNORECASE) and structured_paras:
                     structured_paras[-1] += "\n" + chunk
                 else:
@@ -194,6 +231,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
     2. Heading Pattern Scanner (supports [1], Chapter 1, Words, etc.)
     3. Proportional Word Chunking (fallback)
 
+    Filters out front-matter junk (Copyright, Contents, Cover, Also In Series).
     Returns: (novel_title, chapters_list, cover_image_bytes)
     """
     import pypdf
@@ -204,6 +242,8 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
 
     # 1. Title detection
     title = os.path.splitext(os.path.basename(file_path))[0]
+    # Clean leading underscore or oceanofpdf prefix
+    title = re.sub(r'^_?(?:oceanofpdf\.com_)?', '', title, flags=re.IGNORECASE).replace('_', ' ').title()
     if reader.metadata and reader.metadata.title:
         meta_title = reader.metadata.title.strip()
         if meta_title and len(meta_title) < 120 and meta_title.lower() != "untitled":
@@ -243,7 +283,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
     toc_bookmarks = extract_pdf_toc_bookmarks(file_path)
     if len(toc_bookmarks) >= 2:
         print(f"[PDF Parser] Found {len(toc_bookmarks)} chapter bookmarks in PDF Index! Slicing chapters by index.")
-        chapters = []
+        raw_chapters = []
         for i, (bm_title, start_page) in enumerate(toc_bookmarks):
             end_page = toc_bookmarks[i + 1][1] if (i + 1) < len(toc_bookmarks) else total_pages
             start_page = max(0, min(start_page, total_pages - 1))
@@ -259,15 +299,24 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
             paragraphs = clean_lines_into_paragraphs(chapter_lines)
             word_count = sum(len(p.split()) for p in paragraphs)
             if word_count > 0:
-                chapters.append({
-                    "number": len(chapters) + 1,
+                raw_chapters.append({
                     "title": bm_title,
                     "content": paragraphs,
                     "word_count": word_count
                 })
 
-        if chapters:
-            return title, chapters, cover_bytes
+        # Filter out front-matter (Copyright, Contents, Dedication, Cover, Also in series)
+        final_chapters = []
+        for ch in raw_chapters:
+            t_lower = ch["title"].lower().strip()
+            w = ch["word_count"]
+            if t_lower in IGNORE_FRONTMATTER_TITLES or w < 18:
+                continue
+            ch["number"] = len(final_chapters) + 1
+            final_chapters.append(ch)
+
+        if final_chapters:
+            return title, final_chapters, cover_bytes
 
     # =========================================================================
     # STRATEGY 2: Scan for Chapter Headings Line by Line across all pages
@@ -282,7 +331,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
                 all_lines.append(line_str)
         all_lines.append("")
 
-    chapters = []
+    raw_chapters = []
     cur_title = "Prologue"
     cur_lines = []
     found_any_chapter_heading = False
@@ -290,17 +339,21 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
     for line in all_lines:
         heading, rest = check_heading(line)
         if heading:
-            found_any_chapter_heading = True
             if cur_lines:
                 paras = clean_lines_into_paragraphs(cur_lines)
                 if paras:
-                    chapters.append({
-                        "number": len(chapters) + 1,
-                        "title": cur_title,
-                        "content": paras,
-                        "word_count": sum(len(p.split()) for p in paras)
-                    })
+                    total_w = sum(len(p.split()) for p in paras)
+                    combined = " ".join(paras).lower()
+                    # If this is text before the first chapter heading and it's copyright/publisher front-matter, skip it
+                    is_frontmatter = (not found_any_chapter_heading) and (total_w < 400 and any(k in combined for k in ["copyright", "all rights reserved", "isbn", "published by", "dandy house"]))
+                    if not is_frontmatter:
+                        raw_chapters.append({
+                            "title": cur_title,
+                            "content": paras,
+                            "word_count": total_w
+                        })
                 cur_lines = []
+            found_any_chapter_heading = True
             cur_title = heading
             if rest and len(rest.strip()) > 0:
                 cur_lines.append(rest.strip())
@@ -311,49 +364,68 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
     if cur_lines:
         paras = clean_lines_into_paragraphs(cur_lines)
         if paras:
-            chapters.append({
-                "number": len(chapters) + 1,
+            raw_chapters.append({
                 "title": cur_title,
                 "content": paras,
                 "word_count": sum(len(p.split()) for p in paras)
             })
 
-    # =========================================================================
-    # STRATEGY 3: Fallback Chunking (~2200 words/chapter) if single giant block
-    # =========================================================================
-    if not found_any_chapter_heading or (len(chapters) == 1 and chapters[0]["word_count"] > 3500):
-        print("[PDF Parser] Falling back to intelligent section chunking so content is comfortably readable.")
-        all_paras = []
-        for ch in chapters:
-            all_paras.extend(ch["content"])
-        if not all_paras:
-            all_paras = clean_lines_into_paragraphs(all_lines)
+    # Filter out non-story junk
+    final_chapters = []
+    for ch in raw_chapters:
+        t_lower = ch["title"].lower().strip()
+        w = ch["word_count"]
+        if t_lower in IGNORE_FRONTMATTER_TITLES or w < 18:
+            continue
+        ch["number"] = len(final_chapters) + 1
+        final_chapters.append(ch)
 
-        chunked_chapters = []
-        cur_chunk = []
-        cur_words = 0
-        ch_idx = 1
-        for p in all_paras:
-            w = len(p.split())
-            cur_chunk.append(p)
-            cur_words += w
-            if cur_words >= 2200:
-                chunked_chapters.append({
-                    "number": ch_idx,
-                    "title": f"Chapter {ch_idx}",
-                    "content": list(cur_chunk),
-                    "word_count": cur_words
-                })
-                cur_chunk = []
-                cur_words = 0
-                ch_idx += 1
-        if cur_chunk:
-            chunked_chapters.append({
-                "number": ch_idx,
-                "title": f"Chapter {ch_idx}",
-                "content": cur_chunk,
-                "word_count": cur_words
+    if final_chapters and (len(final_chapters) > 1 or found_any_chapter_heading):
+        return title, final_chapters, cover_bytes
+
+    # =========================================================================
+    # STRATEGY 3: Equal-Word Fallback Chunking (If PDF had no headings/TOC)
+    # =========================================================================
+    print("[PDF Parser] No explicit chapter markers found. Using proportional chunking...")
+    all_paras = clean_lines_into_paragraphs(all_lines)
+    total_words = sum(len(p.split()) for p in all_paras)
+
+    if total_words < 500:
+        return title, [{
+            "number": 1,
+            "title": "Complete Novel Text",
+            "content": all_paras,
+            "word_count": total_words
+        }], cover_bytes
+
+    WORDS_PER_CHUNK = 2500
+    chunk_paras = []
+    chunk_word_acc = 0
+    fallback_chapters = []
+    part_idx = 1
+
+    for p in all_paras:
+        w_len = len(p.split())
+        chunk_paras.append(p)
+        chunk_word_acc += w_len
+
+        if chunk_word_acc >= WORDS_PER_CHUNK:
+            fallback_chapters.append({
+                "number": part_idx,
+                "title": f"Chapter {part_idx}",
+                "content": chunk_paras,
+                "word_count": chunk_word_acc
             })
-        chapters = chunked_chapters
+            part_idx += 1
+            chunk_paras = []
+            chunk_word_acc = 0
 
-    return title, chapters, cover_bytes
+    if chunk_paras:
+        fallback_chapters.append({
+            "number": part_idx,
+            "title": f"Chapter {part_idx}",
+            "content": chunk_paras,
+            "word_count": chunk_word_acc
+        })
+
+    return title, fallback_chapters, cover_bytes

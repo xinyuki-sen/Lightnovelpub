@@ -4416,6 +4416,17 @@ a {
   margin-bottom: 0.65rem;
 }
 
+/* MC Inner Thoughts / Monologue (Distinguishes MC mental voice) */
+.reader-article-canvas p.reader-thought {
+  font-style: italic;
+  color: #cbd5e1;
+  border-left: 3px solid rgba(56, 189, 248, 0.5) !important;
+  background: rgba(56, 189, 248, 0.04) !important;
+  padding-left: 1.15rem !important;
+  margin-top: 0.65rem;
+  margin-bottom: 0.65rem;
+}
+
 /* System Card Active Speech Glow */
 .reader-system-card.listen-active-paragraph {
   border-color: #a855f7 !important;

@@ -345,7 +345,7 @@ function initReader() {
 
   function buildParagraphElement(pText, idx) {
     const text = (pText || '').trim();
-    if (text.includes('New achievement!') || text.startsWith('Reward:')) {
+    if (text.includes('New achievement!') || text.startsWith('Reward:') || text.includes('Congratulations!') || text.includes('Achievement Unlocked:') || text.includes('Quest Completed:') || text.includes('+1 Stat point')) {
       const card = document.createElement('div');
       card.className = 'reader-system-card system-card-achievement';
       card.setAttribute('data-para-idx', String(idx));
@@ -358,7 +358,7 @@ function initReader() {
         <div class="system-card-body">${text}</div>
       `;
       return card;
-    } else if (text.includes('Crawler #') || text.includes('Race: Cat') || text.includes('Class:')) {
+    } else if (text.includes('Crawler #') || text.includes('Race:') || text.includes('Class:') || text.includes('Health(') || text.includes('Mana(') || text.includes('Stam(') || text.includes('Vitality:') || text.includes('Endurance:') || text.includes('Strength:') || text.includes('Agility:') || text.includes('Perception:') || text.includes('Level: N/A') || text.includes('Status:')) {
       const card = document.createElement('div');
       card.className = 'reader-system-card system-card-stats';
       card.setAttribute('data-para-idx', String(idx));
@@ -371,7 +371,7 @@ function initReader() {
         <div class="system-card-body">${text}</div>
       `;
       return card;
-    } else if (text.includes('Goblin Murder Dozer') || text.includes('Goblin. Level') || text.includes('Goblin Engineer') || text.includes('A tooltip popped up')) {
+    } else if (text.includes('Goblin Murder Dozer') || text.includes('Goblin. Level') || text.includes('Goblin Engineer') || text.includes('A tooltip popped up') || text.includes('A tool-tip') || text.includes('information box popped up') || text.includes('Contraption.') || text.includes('Level 1. A') || text.includes('Level 2. Small') || text.includes('Level 3. Engineers')) {
       const card = document.createElement('div');
       card.className = 'reader-system-card system-card-tooltip';
       card.setAttribute('data-para-idx', String(idx));
@@ -384,7 +384,7 @@ function initReader() {
         <div class="system-card-body">${text}</div>
       `;
       return card;
-    } else if (text.includes('Please pay careful attention') || text.includes('You have been designated Crawler') || text.includes('Time to Level Collapse:')) {
+    } else if (text.includes('Please pay careful attention') || text.includes('You have been designated Crawler') || text.includes('Time to Level Collapse:') || text.includes('Dungeon Floor') || text.includes('System initializing') || text.startsWith('[System')) {
       const card = document.createElement('div');
       card.className = 'reader-system-card system-card-broadcast';
       card.setAttribute('data-para-idx', String(idx));
@@ -397,7 +397,15 @@ function initReader() {
         <div class="system-card-body">${text}</div>
       `;
       return card;
-    } else if (text.startsWith('"') || text.startsWith('“')) {
+    } else if (text.endsWith('I thought.') || text.endsWith('I thought') || text.includes('thought Carl') || text.includes('thought Randidly') || text.startsWith('*')) {
+      const p = document.createElement('p');
+      p.className = 'reader-thought';
+      p.setAttribute('data-para-index', String(idx));
+      p.setAttribute('data-para-idx', String(idx));
+      p.title = 'Click to start audio reading from here';
+      p.textContent = text;
+      return p;
+    } else if (text.startsWith('"') || text.startsWith('“') || text.startsWith("'") || text.startsWith('‘')) {
       const p = document.createElement('p');
       p.className = 'reader-dialogue';
       p.setAttribute('data-para-index', String(idx));
@@ -437,25 +445,57 @@ function initReader() {
       } catch (e) {}
     }
     // Fetch JSON from high-speed backend API
-    const res = await fetch(`/api/novel/${novelSlug}/chapter/${chNum}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    chapterCache.set(chNum, data);
-    if (novelDb) {
-      novelDb.chapters.put({
-        novelSlug: novelSlug,
-        chapterNumber: chNum,
-        title: data.title,
-        content: data.paragraphs.join('\n\n'),
-        paragraphs: data.paragraphs,
-        word_count: data.word_count,
-        read_time_mins: data.read_time_mins,
-        prev_chapter: data.prev_chapter,
-        next_chapter: data.next_chapter,
-        updated_at: Date.now()
-      }).catch(() => {});
+    try {
+      const res = await fetch(`/api/novel/${novelSlug}/chapter/${chNum}`);
+      if (res.ok) {
+        const data = await res.json();
+        chapterCache.set(chNum, data);
+        if (novelDb) {
+          novelDb.chapters.put({
+            novelSlug: novelSlug,
+            chapterNumber: chNum,
+            title: data.title,
+            content: (data.paragraphs || []).join('\n\n'),
+            paragraphs: data.paragraphs,
+            word_count: data.word_count,
+            read_time_mins: data.read_time_mins,
+            prev_chapter: data.prev_chapter,
+            next_chapter: data.next_chapter,
+            updated_at: Date.now()
+          }).catch(() => {});
+        }
+        return data;
+      }
+    } catch (netErr) {
+      console.warn("Backend fetch failed, attempting IndexedDB fallback:", netErr);
     }
-    return data;
+
+    // Dexie IndexedDB Fallback (handles Vercel ephemeral container restart or offline)
+    if (novelDb) {
+      try {
+        const local = await novelDb.chapters.get([novelSlug, chNum]);
+        if (local) {
+          const paras = local.paragraphs || (local.content ? local.content.split('\n\n') : []);
+          const formatted = {
+            slug: novelSlug,
+            novel_title: document.body.getAttribute('data-novel-title') || novelSlug,
+            chapter_number: chNum,
+            title: local.title || `Chapter ${chNum}`,
+            paragraphs: paras,
+            word_count: local.word_count || paras.reduce((acc, p) => acc + p.split(/\s+/).length, 0),
+            read_time_mins: local.read_time_mins || Math.max(1, Math.round((local.word_count || 1000) / 220)),
+            prev_chapter: local.prev_chapter,
+            next_chapter: local.next_chapter,
+            total_chapters: 0
+          };
+          chapterCache.set(chNum, formatted);
+          return formatted;
+        }
+      } catch (dbErr) {
+        console.warn("Dexie fallback error:", dbErr);
+      }
+    }
+    throw new Error(`Failed to load Chapter ${chNum}`);
   }
 
   function prefetchAdjacentChapters(curNum) {
@@ -2071,8 +2111,8 @@ function initReader() {
             body: JSON.stringify({
               text: textToSpeak,
               voice: currentVoice.edgeVoice || 'en-US-ChristopherNeural',
-              rate: isSystemCard ? (audioState.rate || 1.0) * 1.04 : (audioState.rate || 1.0),
-              pitch: isSystemCard ? Math.min(1.4, (audioState.pitch || 1.0) * 1.15) : (audioState.pitch || 1.0)
+              rate: isSystemCard ? (audioState.rate || 1.0) * 1.04 : (targetNode.classList.contains('reader-thought') ? (audioState.rate || 1.0) * 0.96 : (audioState.rate || 1.0)),
+              pitch: isSystemCard ? Math.min(1.4, (audioState.pitch || 1.0) * 1.15) : (targetNode.classList.contains('reader-thought') ? Math.max(0.85, (audioState.pitch || 1.0) * 0.94) : (audioState.pitch || 1.0))
             })
           });
           if (currentEpoch !== audioPlaybackEpoch) return; // Stale request cancelled

@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/static/img/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=16">
+  <link rel="stylesheet" href="/static/css/style.css?v=17">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
@@ -190,7 +190,7 @@
     <div id="chapter-content">
       {% for para in chapter.paragraphs %}
         {% set p_text = para.strip() %}
-        {% if 'New achievement!' in p_text or p_text.startswith('Reward:') %}
+        {% if 'New achievement!' in p_text or p_text.startswith('Reward:') or 'Congratulations!' in p_text or 'Achievement Unlocked:' in p_text or 'Quest Completed:' in p_text or '+1 Stat point' in p_text %}
           <div class="reader-system-card system-card-achievement" data-para-idx="{{ loop.index0 }}" data-system-type="achievement" title="Click to start audio reading from here">
             <div class="system-card-header">
               <span class="system-badge">✦ ACHIEVEMENT UNLOCKED</span>
@@ -199,7 +199,7 @@
               {{ p_text }}
             </div>
           </div>
-        {% elif 'Crawler #' in p_text or 'Race: Cat' in p_text or 'Class:' in p_text %}
+        {% elif 'Crawler #' in p_text or 'Race:' in p_text or 'Class:' in p_text or 'Health(' in p_text or 'Mana(' in p_text or 'Stam(' in p_text or 'Vitality:' in p_text or 'Endurance:' in p_text or 'Strength:' in p_text or 'Agility:' in p_text or 'Perception:' in p_text or 'Level: N/A' in p_text or 'Status:' in p_text %}
           <div class="reader-system-card system-card-stats" data-para-idx="{{ loop.index0 }}" data-system-type="stats" title="Click to start audio reading from here">
             <div class="system-card-header">
               <span class="system-badge">📊 CRAWLER TELEMETRY // STATS</span>
@@ -208,7 +208,7 @@
               {{ p_text }}
             </div>
           </div>
-        {% elif 'Goblin Murder Dozer' in p_text or 'Goblin. Level' in p_text or 'Goblin Engineer' in p_text or 'A tooltip popped up' in p_text %}
+        {% elif 'Goblin Murder Dozer' in p_text or 'Goblin. Level' in p_text or 'Goblin Engineer' in p_text or 'A tooltip popped up' in p_text or 'A tool-tip' in p_text or 'information box popped up' in p_text or 'Contraption.' in p_text or 'Level 1. A' in p_text or 'Level 2. Small' in p_text or 'Level 3. Engineers' in p_text %}
           <div class="reader-system-card system-card-tooltip" data-para-idx="{{ loop.index0 }}" data-system-type="tooltip" title="Click to start audio reading from here">
             <div class="system-card-header">
               <span class="system-badge">⚡ ENTITY SCAN // TOOLTIP</span>
@@ -217,7 +217,7 @@
               {{ p_text }}
             </div>
           </div>
-        {% elif 'Please pay careful attention' in p_text or 'You have been designated Crawler' in p_text or 'Time to Level Collapse:' in p_text %}
+        {% elif 'Please pay careful attention' in p_text or 'You have been designated Crawler' in p_text or 'Time to Level Collapse:' in p_text or 'Dungeon Floor' in p_text or 'System initializing' in p_text or p_text.startswith('[System') %}
           <div class="reader-system-card system-card-broadcast" data-para-idx="{{ loop.index0 }}" data-system-type="broadcast" title="Click to start audio reading from here">
             <div class="system-card-header">
               <span class="system-badge">📢 DUNGEON DIRECTIVE</span>
@@ -226,7 +226,9 @@
               {{ p_text }}
             </div>
           </div>
-        {% elif p_text.startswith('"') or p_text.startswith('“') %}
+        {% elif p_text.endswith('I thought.') or p_text.endswith('I thought') or 'thought Carl' in p_text or 'thought Randidly' in p_text or p_text.startswith('*') %}
+          <p class="reader-thought" data-para-idx="{{ loop.index0 }}" data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para }}</p>
+        {% elif p_text.startswith('"') or p_text.startswith('“') or p_text.startswith("'") or p_text.startswith('‘') %}
           <p class="reader-dialogue" data-para-idx="{{ loop.index0 }}" data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para }}</p>
         {% else %}
           <p class="reader-narrative" data-para-idx="{{ loop.index0 }}" data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para }}</p>
@@ -546,7 +548,7 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=16"></script>
-  <script src="/static/js/reader.js?v=16"></script>
+  <script src="/static/js/dexie.min.js?v=17"></script>
+  <script src="/static/js/reader.js?v=17"></script>
 </body>
 </html>

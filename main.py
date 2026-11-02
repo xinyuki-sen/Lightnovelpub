@@ -4,7 +4,7 @@ import os
 import shutil
 import tempfile
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from typing import Optional
@@ -99,6 +99,10 @@ async def novel_detail(request: Request, slug: str):
 async def chapter_reader(request: Request, slug: str, chapter_number: int):
     data = database.get_chapter(slug, chapter_number)
     if not data:
+        full_novel = database.get_novel_by_slug(slug)
+        if full_novel and full_novel.get("chapters"):
+            first_ch = full_novel["chapters"][0]["chapter_number"]
+            return RedirectResponse(url=f"/novel/{slug}/chapter/{first_ch}", status_code=302)
         raise HTTPException(status_code=404, detail="Chapter not found")
     novel, chapter = data
     
@@ -134,7 +138,12 @@ async def get_chapter_json(slug: str, chapter_number: int):
     """High-speed JSON endpoint for instantaneous client-side chapter transitions (<50ms)."""
     data = database.get_chapter(slug, chapter_number)
     if not data:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+        full_novel = database.get_novel_by_slug(slug)
+        if full_novel and full_novel.get("chapters"):
+            first_ch = full_novel["chapters"][0]["chapter_number"]
+            data = database.get_chapter(slug, first_ch)
+        if not data:
+            raise HTTPException(status_code=404, detail="Chapter not found")
     novel, chapter = data
     
     all_chapters = novel.get("chapters", [])
