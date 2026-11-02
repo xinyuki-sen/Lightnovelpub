@@ -2087,6 +2087,13 @@ function initReader() {
     tokenizeParagraphWords(targetNode);
     targetNode.classList.add('listen-active-paragraph');
 
+    // Tactile Haptic Immersion on LitRPG System Cards
+    if (targetNode.classList.contains('system-card-achievement')) {
+      triggerHaptic([35, 45, 35]); // Double vibration buzz on achievement unlock!
+    } else if (targetNode.classList.contains('system-card-stats') || targetNode.classList.contains('system-card-tooltip')) {
+      triggerHaptic([20]); // Subtle tactile pulse on stat telemetry
+    }
+
     if (audioState.autoScroll) {
       targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -2543,14 +2550,62 @@ function initReader() {
   }
 
   // =========================================================================
-  // ANDROID TOUCH SWIPE GESTURE ENGINE (ONE-HANDED CHAPTER NAVIGATION)
+  // ELITE ANDROID EDGE-GESTURE BEZEL & HAPTIC ENGINE (ONE-THUMB IMMERSION)
   // =========================================================================
+  const edgeHudBrightness = document.getElementById('edge-hud-brightness');
+  const edgeFillBrightness = document.getElementById('edge-fill-brightness');
+  const edgeValBrightness = document.getElementById('edge-val-brightness');
+
+  const edgeHudVolume = document.getElementById('edge-hud-volume');
+  const edgeFillVolume = document.getElementById('edge-fill-volume');
+  const edgeValVolume = document.getElementById('edge-val-volume');
+
+  const nightOverlay = document.getElementById('sub-nit-night-overlay');
+
+  let activeEdgeMode = null; // 'brightness' | 'volume' | null
+  let edgeStartY = 0;
+  let edgeStartVal = 0;
+  let edgeHudTimer = null;
+  let lastHapticVal = 0;
+
+  function triggerHaptic(pattern = [15]) {
+    if ('vibrate' in navigator) {
+      try { navigator.vibrate(pattern); } catch (e) {}
+    }
+  }
+
+  function setNightOverlayAlpha(brightnessVal) {
+    if (!nightOverlay) return;
+    // When brightness goes below 45%, smoothly introduce amber night attenuation
+    if (brightnessVal < 45) {
+      const alpha = Math.min(0.35, ((45 - brightnessVal) / 45) * 0.35);
+      nightOverlay.style.setProperty('--night-amber-alpha', String(alpha));
+    } else {
+      nightOverlay.style.setProperty('--night-amber-alpha', '0');
+    }
+  }
+
+  // Sync edge brightness display
+  function syncEdgeBrightnessUI(val) {
+    if (edgeFillBrightness) edgeFillBrightness.style.height = `${val}%`;
+    if (edgeValBrightness) edgeValBrightness.textContent = `${val}%`;
+    setNightOverlayAlpha(val);
+  }
+
+  // Sync edge volume display
+  function syncEdgeVolumeUI(val) {
+    const pct = Math.round(val * 100);
+    if (edgeFillVolume) edgeFillVolume.style.height = `${pct}%`;
+    if (edgeValVolume) edgeValVolume.textContent = `${pct}%`;
+  }
+
   let touchStartX = 0;
   let touchStartY = 0;
   let touchEndX = 0;
   let touchEndY = 0;
   const SWIPE_THRESHOLD = 85;
   const SWIPE_MAX_Y = 55;
+  const BEZEL_WIDTH = 48; // 48px thumb zone on screen margins
 
   document.addEventListener('touchstart', (e) => {
     if (e.touches && e.touches.length === 1) {
@@ -2558,6 +2613,34 @@ function initReader() {
       touchStartY = e.touches[0].clientY;
       touchEndX = touchStartX;
       touchEndY = touchStartY;
+
+      const screenW = window.innerWidth;
+      // Left Bezel Gesture: Screen Brightness
+      if (touchStartX <= BEZEL_WIDTH) {
+        activeEdgeMode = 'brightness';
+        edgeStartY = touchStartY;
+        edgeStartVal = audioState.brightness || 100;
+        lastHapticVal = edgeStartVal;
+        syncEdgeBrightnessUI(edgeStartVal);
+        if (edgeHudBrightness) {
+          clearTimeout(edgeHudTimer);
+          edgeHudBrightness.classList.add('active');
+        }
+      }
+      // Right Bezel Gesture: Audio Volume
+      else if (touchStartX >= screenW - BEZEL_WIDTH) {
+        activeEdgeMode = 'volume';
+        edgeStartY = touchStartY;
+        edgeStartVal = (audioState.volume !== undefined ? audioState.volume : 1.0) * 100;
+        lastHapticVal = edgeStartVal;
+        syncEdgeVolumeUI(audioState.volume !== undefined ? audioState.volume : 1.0);
+        if (edgeHudVolume) {
+          clearTimeout(edgeHudTimer);
+          edgeHudVolume.classList.add('active');
+        }
+      } else {
+        activeEdgeMode = null;
+      }
     }
   }, { passive: true });
 
@@ -2565,10 +2648,52 @@ function initReader() {
     if (e.touches && e.touches.length === 1) {
       touchEndX = e.touches[0].clientX;
       touchEndY = e.touches[0].clientY;
+
+      if (activeEdgeMode === 'brightness') {
+        const dy = edgeStartY - touchEndY;
+        // 200px drag = 100% range
+        const deltaPct = Math.round((dy / 200) * 100);
+        const newBrightness = Math.max(20, Math.min(100, edgeStartVal + deltaPct));
+        audioState.brightness = newBrightness;
+        localStorage.setItem('novel_reader_brightness', String(newBrightness));
+        setScreenBrightness(newBrightness);
+        syncEdgeBrightnessUI(newBrightness);
+
+        // Tactile tick on every 15% increment
+        if (Math.abs(newBrightness - lastHapticVal) >= 15) {
+          triggerHaptic(8);
+          lastHapticVal = newBrightness;
+        }
+      } else if (activeEdgeMode === 'volume') {
+        const dy = edgeStartY - touchEndY;
+        const deltaPct = Math.round((dy / 200) * 100);
+        const newVolPct = Math.max(0, Math.min(100, edgeStartVal + deltaPct));
+        const newVol = newVolPct / 100;
+        audioState.volume = newVol;
+        localStorage.setItem('novel_reader_volume', String(newVol));
+        if (activeHtml5Audio) activeHtml5Audio.volume = newVol;
+        syncEdgeVolumeUI(newVol);
+
+        if (Math.abs(newVolPct - lastHapticVal) >= 15) {
+          triggerHaptic(8);
+          lastHapticVal = newVolPct;
+        }
+      }
     }
   }, { passive: true });
 
   document.addEventListener('touchend', (e) => {
+    if (activeEdgeMode) {
+      // Fade out edge HUD indicators after 850ms of inactivity
+      clearTimeout(edgeHudTimer);
+      edgeHudTimer = setTimeout(() => {
+        if (edgeHudBrightness) edgeHudBrightness.classList.remove('active');
+        if (edgeHudVolume) edgeHudVolume.classList.remove('active');
+      }, 850);
+      activeEdgeMode = null;
+      return;
+    }
+
     const activeTarget = e.target;
     if (activeTarget && (
         activeTarget.closest('#settings-drawer') ||
@@ -2585,21 +2710,21 @@ function initReader() {
     const deltaX = touchEndX - touchStartX;
     const deltaY = Math.abs(touchEndY - touchStartY);
 
-    // Swipe Left -> Next Chapter
+    // Center Swipe Left -> Next Chapter (with tactile feedback)
     if (deltaX < -SWIPE_THRESHOLD && deltaY < SWIPE_MAX_Y) {
       const nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
       if (nextNum > 0) {
-        if (navigator.vibrate) navigator.vibrate([15]);
+        triggerHaptic(20);
         navigateToChapter(nextNum, audioState.isPlaying && !audioState.isPaused);
       } else if (nextBtn && !nextBtn.disabled && nextBtn.href) {
         window.location.href = nextBtn.href;
       }
     }
-    // Swipe Right -> Previous Chapter
+    // Center Swipe Right -> Previous Chapter
     else if (deltaX > SWIPE_THRESHOLD && deltaY < SWIPE_MAX_Y) {
       const prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
       if (prevNum > 0) {
-        if (navigator.vibrate) navigator.vibrate([15]);
+        triggerHaptic(20);
         navigateToChapter(prevNum, audioState.isPlaying && !audioState.isPaused);
       } else if (prevBtn && !prevBtn.disabled && prevBtn.href) {
         window.location.href = prevBtn.href;

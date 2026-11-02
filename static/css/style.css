@@ -4447,3 +4447,100 @@ body.system-hud-disabled .reader-system-card {
 body.system-hud-disabled .reader-system-card .system-card-header {
   display: none !important;
 }
+
+
+/* ========================================================================= */
+/* ELITE ANDROID SUPERPOWERS: 120HZ LOCK, SUB-1 NIT & MINIMALIST EDGE HUD    */
+/* ========================================================================= */
+
+/* 120Hz Hardware Compositor Lock (Zero-Reflow 120fps Touch Canvas) */
+.reader-article-canvas p,
+.reader-system-card {
+  contain: content;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Sub-1 Nit Nocturnal Amber Dimmer (Deep Midnight Eye Strain Guard) */
+#sub-nit-night-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99998;
+  background-color: rgba(245, 158, 11, var(--night-amber-alpha, 0));
+  mix-blend-mode: multiply;
+  transition: background-color 0.25s ease;
+}
+
+/* Minimalist Edge-Gesture HUD Indicators (Slide thumb on bezels) */
+.edge-gesture-hud {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%) scale(0.9);
+  z-index: 99999;
+  background: rgba(13, 14, 18, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), inset 0 0 12px rgba(255, 255, 255, 0.04);
+  border-radius: 9999px;
+  padding: 0.7rem 0.42rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  color: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.edge-gesture-hud.active {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+.edge-hud-left {
+  left: 10px;
+}
+
+.edge-hud-right {
+  right: 10px;
+}
+
+.edge-hud-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.edge-hud-track {
+  width: 4px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.edge-hud-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: linear-gradient(180deg, #c084fc, #9333ea);
+  border-radius: 2px;
+  transition: height 0.06s ease-out;
+}
+
+.edge-hud-fill.brightness-fill {
+  background: linear-gradient(180deg, #fde047, #eab308);
+}
+
+.edge-hud-val {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.9);
+  min-width: 28px;
+  text-align: center;
+}
