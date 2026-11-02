@@ -129,6 +129,44 @@ async def chapter_reader(request: Request, slug: str, chapter_number: int):
         }
     )
 
+@app.get("/api/novel/{slug}/chapter/{chapter_number}")
+async def get_chapter_json(slug: str, chapter_number: int):
+    """High-speed JSON endpoint for instantaneous client-side chapter transitions (<50ms)."""
+    data = database.get_chapter(slug, chapter_number)
+    if not data:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    novel, chapter = data
+    
+    all_chapters = novel.get("chapters", [])
+    if not all_chapters:
+        full_novel = database.get_novel_by_slug(slug)
+        all_chapters = full_novel.get("chapters", []) if full_novel else []
+    
+    ch_nums = [c["chapter_number"] for c in all_chapters] if all_chapters else []
+    if chapter_number in ch_nums:
+        idx = ch_nums.index(chapter_number)
+        prev_ch = ch_nums[idx - 1] if idx > 0 else None
+        next_ch = ch_nums[idx + 1] if idx < len(ch_nums) - 1 else None
+    else:
+        prev_ch = chapter_number - 1 if chapter_number > 1 else None
+        next_ch = chapter_number + 1 if chapter_number < novel.get("total_chapters", len(all_chapters)) else None
+
+    word_count = chapter.get("word_count", 0)
+    mins = max(1, round(word_count / 220))
+
+    return {
+        "slug": slug,
+        "novel_title": novel["title"],
+        "chapter_number": chapter["chapter_number"],
+        "title": chapter["title"],
+        "paragraphs": chapter.get("paragraphs", []),
+        "word_count": word_count,
+        "read_time_mins": mins,
+        "prev_chapter": prev_ch,
+        "next_chapter": next_ch,
+        "total_chapters": novel.get("total_chapters", len(all_chapters))
+    }
+
 MAX_UPLOAD_SIZE = 45 * 1024 * 1024  # 45 MB Limit
 
 @app.post("/api/upload")

@@ -320,15 +320,268 @@ function initReader() {
     }
   }
 
-  // Chapter Dropdown Jump
-  if (chapterSelect) {
-    chapterSelect.addEventListener('change', (e) => {
-      window.location.href = e.target.value;
+  // =========================================================================
+  // SEAMLESS INSTANT SPA CHAPTER NAVIGATION ENGINE (<100MS ZERO-LAG TRANSITION)
+  // =========================================================================
+  const chapterCache = new Map();
+  let isChapterLoading = false;
+
+  async function fetchChapterData(chNum) {
+    if (chapterCache.has(chNum)) {
+      return chapterCache.get(chNum);
+    }
+    // Check Dexie IndexedDB
+    if (novelDb) {
+      try {
+        const cached = await novelDb.chapters.get([novelSlug, chNum]);
+        if (cached && cached.paragraphs && cached.paragraphs.length > 0) {
+          chapterCache.set(chNum, cached);
+          return cached;
+        }
+      } catch (e) {}
+    }
+    // Fetch JSON from high-speed backend API
+    const res = await fetch(`/api/novel/${novelSlug}/chapter/${chNum}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    chapterCache.set(chNum, data);
+    if (novelDb) {
+      novelDb.chapters.put({
+        novelSlug: novelSlug,
+        chapterNumber: chNum,
+        title: data.title,
+        content: data.paragraphs.join('\n\n'),
+        paragraphs: data.paragraphs,
+        word_count: data.word_count,
+        read_time_mins: data.read_time_mins,
+        prev_chapter: data.prev_chapter,
+        next_chapter: data.next_chapter,
+        updated_at: Date.now()
+      }).catch(() => {});
+    }
+    return data;
+  }
+
+  function prefetchAdjacentChapters(curNum) {
+    const nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+    const prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
+    if (nextNum > 0 && !chapterCache.has(nextNum)) {
+      fetchChapterData(nextNum).catch(() => {});
+    }
+    if (prevNum > 0 && !chapterCache.has(prevNum)) {
+      fetchChapterData(prevNum).catch(() => {});
+    }
+  }
+
+  function updateNavButtons(prevCh, nextCh) {
+    const topPrev = document.getElementById('prev-chapter-btn');
+    const topNext = document.getElementById('next-chapter-btn');
+    const btmPrev = document.getElementById('prev-chapter-btn-bottom');
+    const btmNext = document.getElementById('next-chapter-btn-bottom');
+
+    [topPrev, btmPrev].forEach(btn => {
+      if (!btn) return;
+      if (prevCh) {
+        btn.removeAttribute('disabled');
+        btn.setAttribute('href', `/novel/${novelSlug}/chapter/${prevCh}`);
+      } else {
+        btn.setAttribute('disabled', 'true');
+        btn.removeAttribute('href');
+      }
+    });
+
+    [topNext, btmNext].forEach(btn => {
+      if (!btn) return;
+      if (nextCh) {
+        btn.removeAttribute('disabled');
+        btn.setAttribute('href', `/novel/${novelSlug}/chapter/${nextCh}`);
+      } else {
+        btn.setAttribute('disabled', 'true');
+        btn.removeAttribute('href');
+      }
     });
   }
 
+  async function navigateToChapter(targetChapterNum, continueAudio = false) {
+    if (!targetChapterNum || isChapterLoading) return;
+    if (targetChapterNum === currentChapterNum) return;
+    isChapterLoading = true;
+
+    const progBar = document.getElementById('reader-progress-bar');
+    if (progBar) {
+      progBar.style.width = '65%';
+      progBar.style.transition = 'width 0.15s ease';
+    }
+
+    try {
+      const data = await fetchChapterData(targetChapterNum);
+      if (!data || !data.paragraphs) throw new Error('Invalid chapter data');
+
+      // 1. Update Chapter Number and State
+      currentChapterNum = data.chapter_number;
+      storageKey = `progress_${novelSlug}_ch${currentChapterNum}`;
+      paraStorageKey = `progress_para_${novelSlug}_ch${currentChapterNum}`;
+      pctStorageKey = `progress_pct_${novelSlug}_ch${currentChapterNum}`;
+
+      document.body.setAttribute('data-chapter-num', String(data.chapter_number));
+      document.body.setAttribute('data-next-num', data.next_chapter ? String(data.next_chapter) : '');
+      document.body.setAttribute('data-prev-num', data.prev_chapter ? String(data.prev_chapter) : '');
+      nextChapterUrl = data.next_chapter ? `/novel/${novelSlug}/chapter/${data.next_chapter}` : '';
+      const prevChapterUrl = data.prev_chapter ? `/novel/${novelSlug}/chapter/${data.prev_chapter}` : '';
+      document.body.setAttribute('data-next-url', nextChapterUrl);
+      document.body.setAttribute('data-prev-url', prevChapterUrl);
+
+      // 2. Update Browser History & Document Title
+      const pageTitle = `${data.title} — ${data.novel_title} — LightnovelPub`;
+      document.title = pageTitle;
+      window.history.pushState({ chapterNumber: data.chapter_number }, pageTitle, `/novel/${novelSlug}/chapter/${data.chapter_number}`);
+
+      // 3. Update Titles in Topbar & Reading Canvas
+      const topbarTitle = document.querySelector('.reader-chapter-title-text');
+      if (topbarTitle) topbarTitle.textContent = data.title;
+
+      const headlineTitle = document.querySelector('.chapter-headline-title');
+      if (headlineTitle) headlineTitle.textContent = data.title;
+
+      const headlineWords = document.querySelector('.chapter-headline-words');
+      if (headlineWords) {
+        headlineWords.innerHTML = `${data.word_count} Words &bull; Estimated read: ${data.read_time_mins || 1} mins`;
+      }
+
+      const audioChapterTitle = document.getElementById('np-audio-chapter-title');
+      if (audioChapterTitle) audioChapterTitle.textContent = data.title;
+
+      // 4. Update Navigation Controls
+      updateNavButtons(data.prev_chapter, data.next_chapter);
+
+      if (chapterSelect) {
+        chapterSelect.value = `/novel/${novelSlug}/chapter/${data.chapter_number}`;
+      }
+
+      // 5. Swap Chapter Content in-place
+      const chapterContent = document.getElementById('chapter-content');
+      if (chapterContent) {
+        chapterContent.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+        data.paragraphs.forEach((pText, idx) => {
+          const p = document.createElement('p');
+          p.setAttribute('data-para-index', String(idx));
+          p.setAttribute('data-para-idx', String(idx));
+          p.title = 'Click to start audio reading from here';
+          p.textContent = pText;
+          fragment.appendChild(p);
+        });
+        chapterContent.appendChild(fragment);
+      }
+
+      // 6. Re-index Paragraph Nodes
+      paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p'));
+      paragraphNodes.forEach((node, idx) => {
+        node.setAttribute('data-para-idx', String(idx));
+        node.addEventListener('click', () => {
+          openAudioPlayer(idx);
+        });
+      });
+
+      // 7. Re-apply Bionic reading if active
+      if (typeof applyBionicReading === 'function' && isBionicActive) {
+        applyBionicReading(true);
+      }
+
+      // 8. Smoothly scroll back to top of new chapter
+      window.scrollTo({ top: 0, behavior: 'instant' });
+
+      // 9. Reset progress & record progress
+      if (progBar) progBar.style.width = '0%';
+      recordReadingProgress(0, false);
+      updateMediaSession();
+
+      // 10. Seamless Audio Continuity
+      const wasAudioActive = continueAudio || (audioState.isPlaying && !audioState.isPaused);
+      if (wasAudioActive) {
+        stopSpeech();
+        clearPrefetchedAudio();
+        audioState.currentIndex = 0;
+        // Start speaking new chapter gaplessly with exact same voice & parameters
+        setTimeout(() => {
+          speakParagraph(0, false);
+        }, 120);
+      }
+
+      // Background prefetch adjacent chapters
+      prefetchAdjacentChapters(data.chapter_number);
+
+    } catch (err) {
+      console.warn('Dynamic navigation note, falling back to standard page load:', err);
+      window.location.href = `/novel/${novelSlug}/chapter/${targetChapterNum}`;
+    } finally {
+      isChapterLoading = false;
+      if (progBar) progBar.style.width = '0%';
+    }
+  }
+
+  function attachChapterNavButtons() {
+    const topPrev = document.getElementById('prev-chapter-btn');
+    const topNext = document.getElementById('next-chapter-btn');
+    const btmPrev = document.getElementById('prev-chapter-btn-bottom');
+    const btmNext = document.getElementById('next-chapter-btn-bottom');
+
+    [topPrev, btmPrev].forEach(btn => {
+      if (!btn) return;
+      btn.addEventListener('click', (e) => {
+        const prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
+        if (prevNum > 0) {
+          e.preventDefault();
+          navigateToChapter(prevNum, audioState.isPlaying && !audioState.isPaused);
+        }
+      });
+    });
+
+    [topNext, btmNext].forEach(btn => {
+      if (!btn) return;
+      btn.addEventListener('click', (e) => {
+        const nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+        if (nextNum > 0) {
+          e.preventDefault();
+          navigateToChapter(nextNum, audioState.isPlaying && !audioState.isPaused);
+        }
+      });
+    });
+  }
+
+  attachChapterNavButtons();
+
+  // Handle browser Back / Forward buttons without full reload
+  window.addEventListener('popstate', (e) => {
+    const match = window.location.pathname.match(/\/chapter\/(\d+)/);
+    if (match) {
+      const ch = parseInt(match[1], 10);
+      if (ch !== currentChapterNum) {
+        navigateToChapter(ch, false);
+      }
+    }
+  });
+
+  // Chapter Dropdown Jump
+  if (chapterSelect) {
+    chapterSelect.addEventListener('change', (e) => {
+      const url = e.target.value;
+      const match = url.match(/\/chapter\/(\d+)/);
+      if (match) {
+        navigateToChapter(parseInt(match[1], 10), audioState.isPlaying && !audioState.isPaused);
+      } else {
+        window.location.href = url;
+      }
+    });
+  }
+
+  // Pre-fetch adjacent chapters for instant switching
+  setTimeout(() => {
+    prefetchAdjacentChapters(currentChapterNum);
+  }, 1000);
+
   // Pre-index all chapter paragraphs with deterministic data-para-idx
-  const paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p'));
+  let paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p'));
   paragraphNodes.forEach((node, idx) => {
     node.setAttribute('data-para-idx', String(idx));
   });
@@ -337,11 +590,11 @@ function initReader() {
   // 2.5 RESILIENT DUAL-TIER PROGRESS TRACKING & PARAGRAPH ANCHOR ENGINE
   // =========================================================================
   const novelSlug = document.body.getAttribute('data-novel-slug');
-  const currentChapterNum = parseInt(document.body.getAttribute('data-chapter-num') || '1', 10);
-  const nextChapterUrl = document.body.getAttribute('data-next-url');
-  const storageKey = `progress_${novelSlug}_ch${currentChapterNum}`;
-  const paraStorageKey = `progress_para_${novelSlug}_ch${currentChapterNum}`;
-  const pctStorageKey = `progress_pct_${novelSlug}_ch${currentChapterNum}`;
+  let currentChapterNum = parseInt(document.body.getAttribute('data-chapter-num') || '1', 10);
+  let nextChapterUrl = document.body.getAttribute('data-next-url');
+  let storageKey = `progress_${novelSlug}_ch${currentChapterNum}`;
+  let paraStorageKey = `progress_para_${novelSlug}_ch${currentChapterNum}`;
+  let pctStorageKey = `progress_pct_${novelSlug}_ch${currentChapterNum}`;
   const novelSummaryKey = `novel_progress_${novelSlug}`;
 
   // Dexie IndexedDB Initialization (Tier 2 Offline Cache)
@@ -703,6 +956,16 @@ function initReader() {
     }
 
     renderVoiceOptions();
+
+    // If there was a pending device voice, resolve and select it now
+    if (audioState.pendingVoiceURI) {
+      const found = allVoices.find(v => v.voiceURI === audioState.pendingVoiceURI);
+      if (found) {
+        audioState.selectedVoice = found;
+        audioState.pendingVoiceURI = null;
+        if (npVoiceSelect) npVoiceSelect.value = found.voiceURI;
+      }
+    }
   }
 
   function renderVoiceOptions() {
@@ -710,6 +973,7 @@ function initReader() {
 
     npVoiceSelect.innerHTML = '';
     let matched = null;
+    const currentSaved = localStorage.getItem('novel_reader_voice_uri') || (audioState.selectedVoice ? audioState.selectedVoice.voiceURI : '');
 
     // 1. Add High-Fidelity Neural Voices Group (HTML5 Audio + Dexie Caching)
     const neuralGroup = document.createElement('optgroup');
@@ -718,10 +982,7 @@ function initReader() {
       const opt = document.createElement('option');
       opt.value = nv.voiceURI;
       opt.textContent = `✨ [Neural] ${nv.name}`;
-      if (savedVoiceURI && savedVoiceURI === nv.voiceURI) {
-        matched = nv;
-        opt.selected = true;
-      } else if (!savedVoiceURI && !matched) {
+      if (currentSaved && currentSaved === nv.voiceURI) {
         matched = nv;
         opt.selected = true;
       }
@@ -755,7 +1016,7 @@ function initReader() {
         const offlineBadge = voice.localService ? '⚡ [Offline]' : '🌐';
         opt.textContent = `${offlineBadge} ${voice.name} (${voice.lang})`;
 
-        if (savedVoiceURI && voice.voiceURI === savedVoiceURI) {
+        if (currentSaved && voice.voiceURI === currentSaved) {
           matched = voice;
           opt.selected = true;
         }
@@ -764,10 +1025,22 @@ function initReader() {
       npVoiceSelect.appendChild(deviceGroup);
     }
 
-    if (!matched) {
-      matched = NEURAL_VOICES[0];
+    if (matched) {
+      audioState.selectedVoice = matched;
+      audioState.pendingVoiceURI = null;
+    } else if (currentSaved) {
+      const neuralMatch = NEURAL_VOICES.find(nv => nv.voiceURI === currentSaved);
+      if (neuralMatch) {
+        audioState.selectedVoice = neuralMatch;
+      } else {
+        audioState.pendingVoiceURI = currentSaved;
+        if (!audioState.selectedVoice) {
+          audioState.selectedVoice = NEURAL_VOICES[0];
+        }
+      }
+    } else if (!audioState.selectedVoice) {
+      audioState.selectedVoice = NEURAL_VOICES[0];
     }
-    audioState.selectedVoice = matched;
   }
 
   // Always render voice options immediately so Neural voices are populated instantly on page load
@@ -1626,11 +1899,15 @@ function initReader() {
         return;
       }
 
-      if (audioState.autoNext && nextChapterUrl) {
-        localStorage.setItem('novel_auto_play_tts', 'true');
-        setTimeout(() => {
+      if (audioState.autoNext) {
+        const nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+        if (nextNum > 0) {
+          // Gapless, zero-reload transition to next chapter
+          navigateToChapter(nextNum, true);
+        } else if (nextChapterUrl) {
+          localStorage.setItem('novel_auto_play_tts', 'true');
           window.location.href = nextChapterUrl;
-        }, 800);
+        }
       }
       return;
     }
@@ -1774,11 +2051,22 @@ function initReader() {
           }
         };
 
-        activeHtml5Audio.onerror = () => {
+        activeHtml5Audio.onerror = (audioErr) => {
+          console.warn("HTML5 audio playback error on chunk:", audioErr);
           stopHighlightTracker();
           clearCurrentWordHighlight();
           activeHtml5Audio = null;
-          speakParagraphWebSpeech(index, textToSpeak, targetNode);
+          // Only fall back to device Web Speech if explicitly device voice or truly offline
+          if (navigator.onLine === false || !currentVoice.isNeural) {
+            speakParagraphWebSpeech(index, textToSpeak, targetNode);
+          } else {
+            // Retry neural chunk once before falling back
+            setTimeout(() => {
+              if (audioState.isPlaying && !audioState.isPaused && audioState.currentIndex === index) {
+                speakParagraph(index, true);
+              }
+            }, 300);
+          }
         };
 
         try {
@@ -2053,15 +2341,21 @@ function initReader() {
 
     // Swipe Left -> Next Chapter
     if (deltaX < -SWIPE_THRESHOLD && deltaY < SWIPE_MAX_Y) {
-      if (nextBtn && !nextBtn.disabled && nextBtn.href) {
+      const nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+      if (nextNum > 0) {
         if (navigator.vibrate) navigator.vibrate([15]);
+        navigateToChapter(nextNum, audioState.isPlaying && !audioState.isPaused);
+      } else if (nextBtn && !nextBtn.disabled && nextBtn.href) {
         window.location.href = nextBtn.href;
       }
     }
     // Swipe Right -> Previous Chapter
     else if (deltaX > SWIPE_THRESHOLD && deltaY < SWIPE_MAX_Y) {
-      if (prevBtn && !prevBtn.disabled && prevBtn.href) {
+      const prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
+      if (prevNum > 0) {
         if (navigator.vibrate) navigator.vibrate([15]);
+        navigateToChapter(prevNum, audioState.isPlaying && !audioState.isPaused);
+      } else if (prevBtn && !prevBtn.disabled && prevBtn.href) {
         window.location.href = prevBtn.href;
       }
     }
@@ -2073,10 +2367,20 @@ function initReader() {
       return;
     }
 
-    if (e.key === 'ArrowLeft' && prevBtn && !prevBtn.disabled) {
-      prevBtn.click();
-    } else if (e.key === 'ArrowRight' && nextBtn && !nextBtn.disabled) {
-      nextBtn.click();
+    if (e.key === 'ArrowLeft') {
+      const prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
+      if (prevNum > 0) {
+        navigateToChapter(prevNum, audioState.isPlaying && !audioState.isPaused);
+      } else if (prevBtn && !prevBtn.disabled) {
+        prevBtn.click();
+      }
+    } else if (e.key === 'ArrowRight') {
+      const nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+      if (nextNum > 0) {
+        navigateToChapter(nextNum, audioState.isPlaying && !audioState.isPaused);
+      } else if (nextBtn && !nextBtn.disabled) {
+        nextBtn.click();
+      }
     } else if (e.key.toLowerCase() === 't' || e.key.toLowerCase() === 'o') {
       if (settingsToggle) settingsToggle.click();
     } else if (e.key.toLowerCase() === 'f') {

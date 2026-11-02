@@ -7,9 +7,9 @@
   <link rel="icon" type="image/png" href="/static/img/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=14">
+  <link rel="stylesheet" href="/static/css/style.css?v=15">
 </head>
-<body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}">
+<body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
   <!-- Real-time Reading Progress Bar at the absolute top -->
   <div class="reader-progress-bar" id="reader-progress-bar"></div>
@@ -189,11 +189,11 @@
   <!-- Bottom Navigation Bar -->
   <div class="chapter-nav-row" style="margin-bottom: 6rem;">
     {% if prev_chapter %}
-    <a href="/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}" class="nav-arrow-btn">
+    <a href="/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}" class="nav-arrow-btn btn-prev-bottom" id="prev-chapter-btn-bottom">
       ← Previous Chapter
     </a>
     {% else %}
-    <button class="nav-arrow-btn" disabled>← Previous Chapter</button>
+    <button class="nav-arrow-btn btn-prev-bottom" id="prev-chapter-btn-bottom" disabled>← Previous Chapter</button>
     {% endif %}
 
     <a href="/novel/{{ novel.slug }}" class="nav-arrow-btn">
@@ -201,11 +201,11 @@
     </a>
 
     {% if next_chapter %}
-    <a href="/novel/{{ novel.slug }}/chapter/{{ next_chapter }}" class="nav-arrow-btn">
+    <a href="/novel/{{ novel.slug }}/chapter/{{ next_chapter }}" class="nav-arrow-btn btn-next-bottom" id="next-chapter-btn-bottom">
       Next Chapter →
     </a>
     {% else %}
-    <button class="nav-arrow-btn" disabled>Next Chapter →</button>
+    <button class="nav-arrow-btn btn-next-bottom" id="next-chapter-btn-bottom" disabled>Next Chapter →</button>
     {% endif %}
   </div>
 
@@ -497,7 +497,7 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=14"></script>
-  <script src="/static/js/reader.js?v=14"></script>
+  <script src="/static/js/dexie.min.js?v=15"></script>
+  <script src="/static/js/reader.js?v=15"></script>
 </body>
 </html>
