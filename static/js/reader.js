@@ -1943,11 +1943,25 @@ function initReader() {
       console.warn("SpeechSynthesis error:", e.error);
       clearCurrentWordHighlight();
       window.__activeNovelUtterance = null;
+      // CRITICAL: NEVER skip to index + 1 on error!
+      // Blindly skipping on error caused the runaway cascade that skipped from 1/3 to 2/3 of chapter!
       if (audioState.isPlaying && !audioState.isPaused) {
         if (e.error !== 'interrupted' && e.error !== 'canceled') {
-          setTimeout(() => {
-            speakParagraph(index + 1, true);
-          }, 50);
+          if (!audioState._synthRetryCount) audioState._synthRetryCount = 0;
+          if (audioState._synthRetryCount < 2) {
+            audioState._synthRetryCount++;
+            setTimeout(() => {
+              if (audioState.isPlaying && !audioState.isPaused) {
+                speakParagraph(index, true);
+              }
+            }, 600);
+          } else {
+            console.warn("Web Speech encountered persistent errors. Pausing playback safely.");
+            audioState._synthRetryCount = 0;
+            audioState.isPlaying = false;
+            audioState.isPaused = true;
+            updatePlayStateUI(false);
+          }
         }
       }
     };
@@ -2211,11 +2225,40 @@ function initReader() {
         };
 
         try {
+          audioState._neuralRetryCount = 0;
+          audioState._synthRetryCount = 0;
           await activeHtml5Audio.play();
           startHighlightTracker(activeHtml5Audio, targetNode, boundaries);
           return;
         } catch (playErr) {
           console.warn("HTML5 audio playback error, falling back:", playErr);
+        }
+      } else {
+        // Audio chunk could not be retrieved: retry CURRENT paragraph with backoff
+        // NEVER cascade forward to index + 1 when a network blip occurs!
+        if (!audioState._neuralRetryCount) audioState._neuralRetryCount = 0;
+        if (audioState._neuralRetryCount < 3 && navigator.onLine !== false) {
+          audioState._neuralRetryCount++;
+          console.warn(`Retrying neural chunk for paragraph ${index} (attempt ${audioState._neuralRetryCount})...`);
+          setTimeout(() => {
+            if (audioState.isPlaying && !audioState.isPaused && audioState.currentIndex === index) {
+              speakParagraph(index, true);
+            }
+          }, 800);
+          return;
+        }
+        audioState._neuralRetryCount = 0;
+        // Only if device voice was selected or truly offline, fallback to Web Speech for this paragraph
+        if (navigator.onLine === false || !currentVoice.isNeural) {
+          speakParagraphWebSpeech(index, textToSpeak, targetNode);
+          return;
+        } else {
+          // Pause cleanly instead of cascading forward through the novel
+          console.warn("Network audio stream stalled. Pausing safely at current paragraph.");
+          audioState.isPlaying = false;
+          audioState.isPaused = true;
+          updatePlayStateUI(false);
+          return;
         }
       }
     }
@@ -2327,9 +2370,39 @@ function initReader() {
     }
   }
 
+  // Android Touch-Scroll Guard: Prevents scrolling thumbs from accidentally clicking paragraphs and jumping audio position!
+  let isTouchDragging = false;
+  let lastTouchScrollTime = 0;
+  let touchStartCoord = { x: 0, y: 0 };
+
+  window.addEventListener('scroll', () => {
+    lastTouchScrollTime = Date.now();
+  }, { passive: true });
+
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches[0]) {
+      touchStartCoord = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      isTouchDragging = false;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (e.touches && e.touches[0]) {
+      const dx = Math.abs(e.touches[0].clientX - touchStartCoord.x);
+      const dy = Math.abs(e.touches[0].clientY - touchStartCoord.y);
+      if (dx > 10 || dy > 10) {
+        isTouchDragging = true;
+      }
+    }
+  }, { passive: true });
+
   // Click any paragraph to start reading audio immediately from there!
   paragraphNodes.forEach((node, idx) => {
-    node.addEventListener('click', () => {
+    node.addEventListener('click', (e) => {
+      // Ignore clicks triggered accidentally during or right after scrolling/dragging on Android
+      if (isTouchDragging || (Date.now() - lastTouchScrollTime < 320)) {
+        return;
+      }
       openAudioPlayer(idx);
     });
   });
