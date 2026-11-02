@@ -6,6 +6,123 @@ import shutil
 import sqlite3
 from typing import List, Dict, Optional, Tuple
 
+def split_long_paragraph(text: str, max_chars: int = 480) -> List[str]:
+    """Intelligently splits monolithic paragraphs at natural sentence boundaries without breaking text."""
+    text = text.strip()
+    if not text:
+        return []
+    
+    # Check if this is a compact LitRPG system card / status box; keep intact if under 900 chars
+    system_triggers = ['New achievement!', 'Reward:', 'Congratulations!', 'Achievement Unlocked:', 'Quest Completed:', '+1 Stat point', 'Level Up!']
+    if any(k in text for k in system_triggers) and len(text) <= 900:
+        return [text]
+
+    if len(text) <= max_chars:
+        return [text]
+
+    # Sentence boundary regex (handles quotes, ellipses, question marks, exclamation points)
+    sentence_pattern = re.compile(r'([^.!?]+[.!?]+(?:["\'”’»]+)?(?:\s+|$))', re.UNICODE)
+    raw_sentences = sentence_pattern.findall(text)
+    
+    matched_len = sum(len(s) for s in raw_sentences)
+    if matched_len < len(text):
+        remaining = text[matched_len:].strip()
+        if remaining:
+            raw_sentences.append(remaining)
+
+    if not raw_sentences:
+        raw_sentences = [text]
+
+    chunks = []
+    current_chunk = []
+    current_len = 0
+
+    for sent in raw_sentences:
+        s = sent.strip()
+        if not s:
+            continue
+        
+        # Sub-split rare gigantic sentences with commas/semicolons
+        if len(s) > max_chars * 1.4:
+            if current_chunk:
+                chunks.append(" ".join(current_chunk))
+                current_chunk = []
+                current_len = 0
+            
+            clause_pattern = re.compile(r'([^,;:—]+[,;:—]+(?:\s+|$))', re.UNICODE)
+            clauses = clause_pattern.findall(s)
+            c_matched_len = sum(len(c) for c in clauses)
+            if c_matched_len < len(s):
+                c_rem = s[c_matched_len:].strip()
+                if c_rem:
+                    clauses.append(c_rem)
+            
+            sub_chunk = []
+            sub_len = 0
+            for c in (clauses if clauses else [s]):
+                c = c.strip()
+                if not c:
+                    continue
+                if sub_len + len(c) > max_chars and sub_chunk:
+                    chunks.append(" ".join(sub_chunk))
+                    sub_chunk = [c]
+                    sub_len = len(c)
+                else:
+                    sub_chunk.append(c)
+                    sub_len += len(c) + 1
+            if sub_chunk:
+                chunks.append(" ".join(sub_chunk))
+            continue
+
+        if current_len + len(s) > max_chars and current_chunk:
+            chunks.append(" ".join(current_chunk))
+            current_chunk = [s]
+            current_len = len(s)
+        else:
+            current_chunk.append(s)
+            current_len += len(s) + 1
+
+    if current_chunk:
+        chunks.append(" ".join(current_chunk))
+
+    return [c for c in chunks if c.strip()]
+
+def split_chapter_paragraphs(paragraphs: List[str], max_chars: int = 480) -> List[str]:
+    """Divides chapters into breathable, light-novel paragraphs with bounded text length."""
+    new_paragraphs = []
+    for p in paragraphs:
+        if not p or not str(p).strip():
+            continue
+        p_str = str(p).strip()
+        if len(p_str) <= max_chars:
+            new_paragraphs.append(p_str)
+        else:
+            new_paragraphs.extend(split_long_paragraph(p_str, max_chars=max_chars))
+    return new_paragraphs
+
+def migrate_divide_chapter_paragraphs(conn):
+    """Automatic background migration to divide all existing chapters in database."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, content_json FROM chapters")
+        rows = cursor.fetchall()
+        updates = []
+        for ch_id, c_json in rows:
+            try:
+                paras = json.loads(c_json)
+                if any(len(p) > 550 for p in paras):
+                    new_paras = split_chapter_paragraphs(paras, max_chars=480)
+                    new_word_count = sum(len(p.split()) for p in new_paras)
+                    updates.append((json.dumps(new_paras, ensure_ascii=False), new_word_count, ch_id))
+            except Exception:
+                pass
+        if updates:
+            cursor.executemany("UPDATE chapters SET content_json = ?, word_count = ? WHERE id = ?", updates)
+            print(f"[DB Migration] Successfully divided paragraphs for {len(updates)} chapters.")
+    except Exception as e:
+        print("[DB Migration note]:", e)
+
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Vercel serverless functions run on read-only filesystem except /tmp
@@ -120,8 +237,8 @@ def save_novel(title: str, author: str, synopsis: str, cover_path: str, chapters
                     novel_id,
                     ch["number"],
                     ch["title"],
-                    json.dumps(ch["content"], ensure_ascii=False),
-                    ch.get("word_count", 0)
+                    json.dumps(split_chapter_paragraphs(ch.get("content", []), max_chars=480), ensure_ascii=False),
+                    sum(len(p.split()) for p in split_chapter_paragraphs(ch.get("content", []), max_chars=480))
                 )
                 for ch in chapters
             ]
@@ -196,7 +313,7 @@ def get_chapter(slug: str, chapter_number: int) -> Optional[Tuple[Dict, Dict]]:
         if not ch_row:
             return None
         chapter = dict(ch_row)
-        chapter["paragraphs"] = json.loads(chapter["content_json"])
+        chapter["paragraphs"] = split_chapter_paragraphs(json.loads(chapter["content_json"]), max_chars=480)
         
         return novel, chapter
     finally:

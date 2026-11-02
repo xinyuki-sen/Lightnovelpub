@@ -727,7 +727,7 @@ function initReader() {
   let novelDb = null;
   if (typeof Dexie !== 'undefined') {
     try {
-      novelDb = new Dexie('LightnovelpubDB_v2');
+      novelDb = new Dexie('LightnovelpubDB_v3');
       novelDb.version(1).stores({
         chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
         progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
@@ -2299,10 +2299,8 @@ function initReader() {
             if (navigator.onLine === false || !currentVoice.isNeural) {
               speakParagraphWebSpeech(index, textToSpeak, targetNode, currentEpoch);
             } else {
-              console.warn("Audio stream interrupted by network drops. Pausing safely at current paragraph.");
-              audioState.isPlaying = false;
-              audioState.isPaused = true;
-              updatePlayStateUI(false);
+              console.warn(`Neural stream interrupted on paragraph ${index}. Falling back seamlessly to Web Speech API.`);
+              speakParagraphWebSpeech(index, textToSpeak, targetNode, currentEpoch);
             }
           }
         };
@@ -2348,11 +2346,8 @@ function initReader() {
           speakParagraphWebSpeech(index, textToSpeak, targetNode, currentEpoch);
           return;
         } else {
-          // Pause cleanly instead of cascading forward through the novel
-          console.warn("Network audio stream stalled. Pausing safely at current paragraph.");
-          audioState.isPlaying = false;
-          audioState.isPaused = true;
-          updatePlayStateUI(false);
+          console.warn(`Neural fetch failed on paragraph ${index}. Falling back seamlessly to Web Speech API.`);
+          speakParagraphWebSpeech(index, textToSpeak, targetNode, currentEpoch);
           return;
         }
       }

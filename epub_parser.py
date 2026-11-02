@@ -1,3 +1,4 @@
+from database import split_chapter_paragraphs
 import zipfile
 import io
 import re
@@ -183,11 +184,12 @@ def extract_epub_chapters(epub_path: str):
                 if len(ch_title) > 90:
                     ch_title = f"Chapter {ch_num}"
 
+                divided_content = split_chapter_paragraphs(parser.paragraphs, max_chars=480)
                 chapters.append({
                     "number": ch_num,
                     "title": ch_title,
-                    "content": parser.paragraphs,
-                    "word_count": total_words
+                    "content": divided_content,
+                    "word_count": sum(len(p.split()) for p in divided_content)
                 })
                 ch_num += 1
             except Exception as read_err:
