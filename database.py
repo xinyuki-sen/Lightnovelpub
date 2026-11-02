@@ -1,3 +1,4 @@
+import time
 import os
 import re
 import json
@@ -228,5 +229,92 @@ def delete_novel(slug: str) -> Optional[str]:
                 cursor.execute("DELETE FROM chapters WHERE novel_id = ?", (row["id"],))
                 cursor.execute("DELETE FROM novels WHERE id = ?", (row["id"],))
         return cover_image
+    finally:
+        conn.close()
+
+
+def export_library_data() -> dict:
+    """Exports all novels, chapters, and progress as a portable dictionary for backup."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM novels")
+        novels = [dict(row) for row in cursor.fetchall()]
+        
+        cursor.execute("SELECT * FROM chapters")
+        chapters = [dict(row) for row in cursor.fetchall()]
+        
+        return {
+            "version": 1,
+            "exported_at": time.time(),
+            "novels": novels,
+            "chapters": chapters
+        }
+    finally:
+        conn.close()
+
+def import_library_data(data: dict) -> int:
+    """Imports / merges backup data into SQLite library database."""
+    conn = get_connection()
+    novels = data.get("novels", [])
+    chapters = data.get("chapters", [])
+    imported_count = 0
+    try:
+        with conn:
+            cursor = conn.cursor()
+            for nov in novels:
+                cursor.execute("SELECT id FROM novels WHERE slug = ?", (nov["slug"],))
+                existing = cursor.fetchone()
+                if existing:
+                    novel_id = existing["id"]
+                    cursor.execute("""
+                        UPDATE novels SET 
+                            title = ?, author = ?, synopsis = ?, cover_image = ?,
+                            total_chapters = ?, last_read_chapter = ?, last_read_percent = ?, last_read_para = ?
+                        WHERE id = ?
+                    """, (
+                        nov["title"],
+                        nov.get("author", "Unknown Author"),
+                        nov.get("synopsis", ""),
+                        nov.get("cover_image", ""),
+                        nov.get("total_chapters", 0),
+                        nov.get("last_read_chapter", 1),
+                        nov.get("last_read_percent", 0.0),
+                        nov.get("last_read_para", 0),
+                        novel_id
+                    ))
+                else:
+                    cursor.execute("""
+                        INSERT INTO novels (title, slug, author, synopsis, cover_image, total_chapters, last_read_chapter, last_read_percent, last_read_para, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        nov["title"],
+                        nov["slug"],
+                        nov.get("author", "Unknown Author"),
+                        nov.get("synopsis", ""),
+                        nov.get("cover_image", ""),
+                        nov.get("total_chapters", 0),
+                        nov.get("last_read_chapter", 1),
+                        nov.get("last_read_percent", 0.0),
+                        nov.get("last_read_para", 0),
+                        nov.get("created_at", time.time())
+                    ))
+                    novel_id = cursor.lastrowid
+                    imported_count += 1
+                
+                # Insert chapters for this novel
+                novel_chapters = [ch for ch in chapters if ch.get("novel_id") == nov.get("id") or ch.get("novel_slug") == nov.get("slug")]
+                for ch in novel_chapters:
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO chapters (novel_id, chapter_number, title, content_json, word_count)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (
+                        novel_id,
+                        ch["chapter_number"],
+                        ch.get("title", f"Chapter {ch['chapter_number']}"),
+                        ch["content_json"],
+                        ch.get("word_count", 0)
+                    ))
+        return imported_count
     finally:
         conn.close()

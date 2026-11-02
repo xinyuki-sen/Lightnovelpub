@@ -257,6 +257,7 @@ function initReader() {
       applyWidth('860px');
       applyLineHeight('1.85');
       applyParaGap('1.6rem');
+      applyBionicReading(false);
 
       localStorage.removeItem('novel_reader_theme');
       localStorage.removeItem('novel_reader_font');
@@ -264,7 +265,59 @@ function initReader() {
       localStorage.removeItem('novel_reader_width');
       localStorage.removeItem('novel_reader_line_height');
       localStorage.removeItem('novel_reader_para_gap');
+      localStorage.removeItem('novel_reader_bionic');
     });
+  }
+
+  // =========================================================================
+  // BIONIC SKIM READING MODE
+  // =========================================================================
+  const btnToggleBionic = document.getElementById('btn-toggle-bionic');
+  let isBionicActive = localStorage.getItem('novel_reader_bionic') === 'true';
+
+  function applyBionicReading(enable) {
+    isBionicActive = enable;
+    localStorage.setItem('novel_reader_bionic', enable ? 'true' : 'false');
+    if (btnToggleBionic) {
+      btnToggleBionic.textContent = enable ? '⚡ On' : '⚡ Off';
+      btnToggleBionic.classList.toggle('active', enable);
+    }
+    const chapterContent = document.getElementById('chapter-content');
+    if (!chapterContent) return;
+    chapterContent.classList.toggle('bionic-reading-active', enable);
+
+    const paras = chapterContent.querySelectorAll('p');
+    paras.forEach(p => {
+      if (!p.getAttribute('data-tokenized')) {
+        tokenizeParagraphWords(p);
+      }
+      p.querySelectorAll('.np-word-token').forEach(span => {
+        let raw = span.getAttribute('data-raw-word');
+        if (!raw) {
+          raw = span.textContent;
+          span.setAttribute('data-raw-word', raw);
+        }
+        if (enable) {
+          if (raw.length <= 1) {
+            span.innerHTML = `<b>${raw}</b>`;
+          } else {
+            const splitIdx = Math.ceil(raw.length * 0.45);
+            span.innerHTML = `<b>${raw.slice(0, splitIdx)}</b>${raw.slice(splitIdx)}`;
+          }
+        } else {
+          span.textContent = raw;
+        }
+      });
+    });
+  }
+
+  if (btnToggleBionic) {
+    btnToggleBionic.addEventListener('click', () => {
+      applyBionicReading(!isBionicActive);
+    });
+    if (isBionicActive) {
+      applyBionicReading(true);
+    }
   }
 
   // Chapter Dropdown Jump
@@ -1194,9 +1247,19 @@ function initReader() {
       if (/\S/.test(t)) {
         const span = document.createElement('span');
         span.className = 'np-word-token';
-        span.textContent = t;
+        span.setAttribute('data-raw-word', t);
         span.setAttribute('data-start', charOffset);
         span.setAttribute('data-end', charOffset + t.length);
+        if (isBionicActive) {
+          if (t.length <= 1) {
+            span.innerHTML = `<b>${t}</b>`;
+          } else {
+            const splitIdx = Math.ceil(t.length * 0.45);
+            span.innerHTML = `<b>${t.slice(0, splitIdx)}</b>${t.slice(splitIdx)}`;
+          }
+        } else {
+          span.textContent = t;
+        }
         fragment.appendChild(span);
       } else {
         fragment.appendChild(document.createTextNode(t));
@@ -1556,6 +1619,13 @@ function initReader() {
       updateMediaSession();
       recordReadingProgress(paragraphNodes.length - 1, true);
 
+      if (audioState.stopAtChapterEnd) {
+        audioState.stopAtChapterEnd = false;
+        const sleepSelect = document.getElementById('np-sleep-timer-select');
+        if (sleepSelect) sleepSelect.value = '0';
+        return;
+      }
+
       if (audioState.autoNext && nextChapterUrl) {
         localStorage.setItem('novel_auto_play_tts', 'true');
         setTimeout(() => {
@@ -1856,6 +1926,66 @@ function initReader() {
   if (npBtnRewind10) npBtnRewind10.addEventListener('click', rewind10Seconds);
   if (npBtnForward10) npBtnForward10.addEventListener('click', forward10Seconds);
 
+
+  // =========================================================================
+  // SLEEP TIMER ENGINE (SMOOTH 3S VOLUME FADE-OUT)
+  // =========================================================================
+  let sleepTimerInterval = null;
+  let sleepTimerTargetMs = null;
+  const sleepTimerSelect = document.getElementById('np-sleep-timer-select');
+
+  function initSleepTimer() {
+    if (!sleepTimerSelect) return;
+    sleepTimerSelect.addEventListener('change', (e) => {
+      setSleepTimer(e.target.value);
+    });
+  }
+
+  function setSleepTimer(val) {
+    if (sleepTimerInterval) {
+      clearInterval(sleepTimerInterval);
+      sleepTimerInterval = null;
+    }
+    sleepTimerTargetMs = null;
+    audioState.stopAtChapterEnd = false;
+
+    if (val === '0' || !val) {
+      return;
+    }
+
+    if (val === 'ch_end') {
+      audioState.stopAtChapterEnd = true;
+      return;
+    }
+
+    const mins = parseInt(val, 10);
+    if (isNaN(mins) || mins <= 0) return;
+
+    sleepTimerTargetMs = Date.now() + (mins * 60 * 1000);
+
+    sleepTimerInterval = setInterval(() => {
+      const remainingMs = sleepTimerTargetMs - Date.now();
+      if (remainingMs <= 3000 && remainingMs > 0) {
+        // Smooth 3s volume fade out
+        if (activeHtml5Audio) {
+          const baseVol = audioState.volume !== undefined ? audioState.volume : 1.0;
+          activeHtml5Audio.volume = Math.max(0, baseVol * (remainingMs / 3000));
+        }
+      } else if (remainingMs <= 0) {
+        clearInterval(sleepTimerInterval);
+        sleepTimerInterval = null;
+        if (audioState.isPlaying && !audioState.isPaused) {
+          toggleAudioPlay();
+        }
+        if (activeHtml5Audio) {
+          activeHtml5Audio.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
+        }
+        if (sleepTimerSelect) sleepTimerSelect.value = '0';
+      }
+    }, 500);
+  }
+
+  initSleepTimer();
 
   // Keyboard Help Modal Controls
   const keyboardModal = document.getElementById('keyboard-help-modal');

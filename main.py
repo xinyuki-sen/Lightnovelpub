@@ -1,3 +1,5 @@
+import json
+import time
 import os
 import shutil
 import tempfile
@@ -248,6 +250,23 @@ async def delete_novel_api(slug: str, request: Request):
                 except Exception:
                     pass
     return {"status": "deleted"}
+
+@app.get("/api/backup")
+async def export_backup_api():
+    data = database.export_library_data()
+    return JSONResponse(content=data, headers={
+        "Content-Disposition": f"attachment; filename=lightnovelpub_backup_{int(time.time())}.json"
+    })
+
+@app.post("/api/restore")
+async def import_backup_api(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        data = json.loads(content.decode('utf-8'))
+        imported = database.import_library_data(data)
+        return {"status": "ok", "imported_count": imported}
+    except Exception as e:
+        return JSONResponse({"error": f"Failed to restore backup: {str(e)}"}, status_code=400)
 
 class TTSRequest(BaseModel):
     text: str

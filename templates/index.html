@@ -8,13 +8,83 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (typeof Dexie !== 'undefined') {
     try {
       const db = new Dexie('LightnovelpubDB');
-      db.version(1).stores({
+      db.version(2).stores({
         chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
         progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
-        audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
+        audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at',
+        covers: 'slug, dataUrl, updated_at'
       });
+      
+      // Auto-cache covers into Dexie and restore offline covers if serverless /tmp recycles
+      document.querySelectorAll('.novel-card').forEach(card => {
+        const slug = card.getAttribute('data-novel-slug');
+        const img = card.querySelector('.novel-cover-img');
+        if (slug && img) {
+          if (img.complete && img.naturalWidth > 0) {
+            cacheCoverOffline(slug, img);
+          } else {
+            img.addEventListener('load', () => cacheCoverOffline(slug, img), { once: true });
+            img.addEventListener('error', async () => {
+              const cached = await db.covers.get(slug);
+              if (cached && cached.dataUrl) img.src = cached.dataUrl;
+            }, { once: true });
+          }
+        }
+      });
+
+      async function cacheCoverOffline(slug, imgEl) {
+        try {
+          if (!imgEl.naturalWidth || imgEl.src.startsWith('data:')) return;
+          const canvas = document.createElement('canvas');
+          canvas.width = imgEl.naturalWidth;
+          canvas.height = imgEl.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(imgEl, 0, 0);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          await db.covers.put({ slug, dataUrl, updated_at: Date.now() });
+        } catch (e) {}
+      }
+
       const items = await db.progress.toArray();
       if (!items || items.length === 0) return;
+
+      // Sort items by recency to locate active reading session
+      items.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
+      const latestProgress = items[0];
+
+      if (latestProgress) {
+        const activeCard = document.querySelector(`.novel-card[data-novel-slug="${latestProgress.novelSlug}"]`);
+        if (activeCard) {
+          const novelTitle = activeCard.getAttribute('data-novel-title') || activeCard.querySelector('.novel-card-title')?.textContent?.trim() || latestProgress.novelSlug;
+          const coverImg = activeCard.querySelector('.novel-cover-img')?.getAttribute('src') || '';
+          const totalChs = parseInt(activeCard.getAttribute('data-total-chs') || '1', 10);
+          const compPct = Math.min(100, Math.max(0, Math.round((((latestProgress.chapterNumber - 1) + (latestProgress.percent / 100)) / totalChs) * 1000) / 10));
+
+          const transCard = document.getElementById('active-transmission-card');
+          if (transCard) {
+            document.getElementById('trans-title').textContent = novelTitle;
+            document.getElementById('trans-cover-img').src = coverImg;
+            document.getElementById('trans-pct').textContent = `${Math.round(latestProgress.percent)}%`;
+            document.getElementById('trans-chapter-title').textContent = `Chapter ${latestProgress.chapterNumber} (of ${totalChs})`;
+            document.getElementById('trans-progress-fill').style.width = `${compPct}%`;
+            document.getElementById('trans-continue-btn').href = `/novel/${latestProgress.novelSlug}/chapter/${latestProgress.chapterNumber}`;
+            document.getElementById('trans-listen-btn').href = `/novel/${latestProgress.novelSlug}/chapter/${latestProgress.chapterNumber}?autoplay=1`;
+            
+            if (latestProgress.updated_at) {
+              const timeDiff = Date.now() - latestProgress.updated_at;
+              const mins = Math.floor(timeDiff / 60000);
+              if (mins < 1) document.getElementById('trans-last-read-time').textContent = 'JUST NOW';
+              else if (mins < 60) document.getElementById('trans-last-read-time').textContent = `${mins}M AGO`;
+              else {
+                const hrs = Math.floor(mins / 60);
+                document.getElementById('trans-last-read-time').textContent = `${hrs}H AGO`;
+              }
+            }
+            transCard.style.display = 'block';
+          }
+        }
+      }
+
       items.forEach(p => {
         const card = document.querySelector(`.novel-card[data-novel-slug="${p.novelSlug}"]`);
         if (card) {
@@ -45,12 +115,74 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.warn('Dexie library hydration note:', err);
     }
   }
+
+  // Backup & Restore Handlers
+  const restoreTriggerBtn = document.getElementById('btn-trigger-restore');
+  const restoreFileInput = document.getElementById('restore-file-input');
+  if (restoreTriggerBtn && restoreFileInput) {
+    restoreTriggerBtn.addEventListener('click', () => restoreFileInput.click());
+    restoreFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      restoreTriggerBtn.textContent = '⏳ Restoring...';
+      restoreTriggerBtn.disabled = true;
+      try {
+        const res = await fetch('/api/restore', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (res.ok) {
+          alert(`Library restored successfully! Imported ${data.imported_count || 0} novel(s).`);
+          window.location.reload();
+        } else {
+          alert(`Restore failed: ${data.detail || 'Invalid backup file'}`);
+        }
+      } catch (err) {
+        alert(`Restore error: ${err.message}`);
+      } finally {
+        restoreTriggerBtn.textContent = '📥 Restore';
+        restoreTriggerBtn.disabled = false;
+        restoreFileInput.value = '';
+      }
+    });
+  }
 });
 </script>
 {% endblock %}
 
 {% block content %}
 <!-- Editorial Manga & Bento Hero Section (Inspired by Ruined King & Swarm Mentality) -->
+<!-- ACTIVE TRANSMISSION // CONTINUE READING BENTO CARD (Hydrated from Dexie) -->
+<div class="active-transmission-card" id="active-transmission-card" style="display: none;">
+  <div class="transmission-badge-row">
+    <span class="transmission-chip"><span>●</span> ACTIVE TRANSMISSION</span>
+    <span class="transmission-sync" id="trans-last-read-time">JUST NOW</span>
+  </div>
+  <div class="transmission-body">
+    <div class="transmission-cover-wrap">
+      <img src="" alt="" class="transmission-cover-img" id="trans-cover-img">
+    </div>
+    <div class="transmission-meta">
+      <div class="transmission-header-row">
+        <h3 class="transmission-title" id="trans-title">Loading...</h3>
+        <span class="transmission-pct-badge" id="trans-pct">0%</span>
+      </div>
+      <div class="transmission-chapter-name" id="trans-chapter-title">Chapter 1</div>
+      <div class="transmission-progress-track">
+        <div class="transmission-progress-fill" id="trans-progress-fill" style="width: 0%;"></div>
+      </div>
+      <div class="transmission-actions-row">
+        <a href="#" class="btn-trans-primary" id="trans-continue-btn">
+          <span>▶</span> Resume Reading
+        </a>
+        <a href="#" class="btn-trans-ghost" id="trans-listen-btn">
+          <span>🎧</span> Listen
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="library-hero-bento">
   <div class="reticle-corner reticle-tl">+</div>
   <div class="reticle-corner reticle-tr">+</div>
@@ -73,11 +205,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     <!-- Quick Action Bar -->
     <div class="hero-cta-row">
       <button class="btn-hero-primary open-upload-btn">
-        <span class="btn-icon">⚡</span> Upload Novel PDF
+        <span class="btn-icon">⚡</span> Upload Novel (PDF / EPUB)
       </button>
       <a href="#novel-collection" class="btn-hero-ghost">
         Explore Collection ↓
       </a>
+      <a href="/api/backup" class="btn-hero-ghost" title="Download portable JSON backup of novels and progress">
+        💾 Backup
+      </a>
+      <button type="button" class="btn-hero-ghost" id="btn-trigger-restore" title="Restore library from JSON backup">
+        📥 Restore
+      </button>
+      <input type="file" id="restore-file-input" accept=".json" style="display: none;">
     </div>
   </div>
 

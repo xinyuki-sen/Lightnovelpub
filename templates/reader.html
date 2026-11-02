@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/static/img/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=13">
+  <link rel="stylesheet" href="/static/css/style.css?v=14">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}">
 
@@ -127,6 +127,14 @@
         <option value="1.6rem" selected>Normal</option>
         <option value="2.2rem">Spacious</option>
       </select>
+    </div>
+
+    <!-- Bionic Skim Mode -->
+    <div class="setting-ctrl-item">
+      <span>Bionic Skim:</span>
+      <button type="button" class="reader-tool-btn" id="btn-toggle-bionic" style="padding: 0.35rem 0.8rem; font-size: 0.82rem;" title="Highlight word beginnings for high-speed skimming">
+        ⚡ Off
+      </button>
     </div>
 
     <!-- Reset Defaults -->
@@ -280,12 +288,28 @@
         </div>
       </div>
 
-      <!-- Row 3: Highlight Word vs Sentence -->
-      <div class="np-setting-field" style="margin-top: 1.1rem;">
-        <label class="np-field-label">HIGHLIGHT</label>
-        <div class="np-segmented-tabs">
-          <button type="button" class="np-seg-tab active" data-highlight="word" id="np-tab-highlight-word">Word</button>
-          <button type="button" class="np-seg-tab" data-highlight="sentence" id="np-tab-highlight-sentence">Sentence</button>
+      <!-- Row 3: Highlight Word vs Sentence & Sleep Timer -->
+      <div class="np-settings-grid-2" style="margin-top: 1.1rem;">
+        <div class="np-setting-field">
+          <label class="np-field-label">HIGHLIGHT</label>
+          <div class="np-segmented-tabs">
+            <button type="button" class="np-seg-tab active" data-highlight="word" id="np-tab-highlight-word">Word</button>
+            <button type="button" class="np-seg-tab" data-highlight="sentence" id="np-tab-highlight-sentence">Sentence</button>
+          </div>
+        </div>
+
+        <div class="np-setting-field">
+          <label class="np-field-label">SLEEP TIMER</label>
+          <div class="np-select-wrapper">
+            <select id="np-sleep-timer-select" class="np-select-ctrl">
+              <option value="0">Off</option>
+              <option value="15">15 Minutes</option>
+              <option value="30">30 Minutes</option>
+              <option value="45">45 Minutes</option>
+              <option value="60">60 Minutes</option>
+              <option value="ch_end">End of Chapter</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -473,7 +497,7 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=13"></script>
-  <script src="/static/js/reader.js?v=13"></script>
+  <script src="/static/js/dexie.min.js?v=14"></script>
+  <script src="/static/js/reader.js?v=14"></script>
 </body>
 </html>

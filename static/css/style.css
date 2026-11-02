@@ -993,8 +993,8 @@ a {
 }
 
 .btn-audio-listen.is-playing {
-  background: #f72585;
-  border-color: #f72585;
+  background: linear-gradient(135deg, #7c3aed, #a855f7) !important;
+  border-color: #a855f7 !important;
   box-shadow: 0 0 18px rgba(247, 37, 133, 0.6);
   animation: pulseAudio 1.5s infinite;
 }
@@ -3969,4 +3969,324 @@ a {
 
 .modal-close-icon-btn:hover {
   color: var(--text-primary);
+}
+
+
+/* =========================================================================
+   ACTIVE TRANSMISSION // CONTINUE READING BENTO CARD
+   ========================================================================= */
+.active-transmission-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(20, 20, 28, 0.95), rgba(12, 12, 18, 0.98));
+  border: 1px solid rgba(157, 78, 221, 0.35);
+  border-radius: 20px;
+  padding: 1.35rem 1.6rem;
+  margin-bottom: 2.2rem;
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.65), 0 0 25px rgba(157, 78, 221, 0.12);
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.transmission-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  gap: 0.75rem;
+}
+
+.transmission-chip {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 3px 9px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transmission-sync {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  font-family: 'Space Grotesk', monospace, sans-serif;
+}
+
+.transmission-body {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.transmission-cover-wrap {
+  width: 72px;
+  height: 98px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #181824;
+}
+
+.transmission-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.transmission-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.transmission-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.transmission-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.2px;
+}
+
+.transmission-pct-badge {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 2px 8px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.transmission-chapter-name {
+  font-size: 0.86rem;
+  color: #9d9db5;
+  margin-bottom: 0.65rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transmission-progress-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 0.95rem;
+}
+
+.transmission-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #9d4edd, #f72585);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.transmission-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.btn-trans-primary {
+  background: linear-gradient(135deg, #7c3aed, #9d4edd);
+  color: #ffffff !important;
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 0.45rem 1rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 15px rgba(124, 58, 237, 0.45);
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.btn-trans-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.65);
+}
+
+.btn-trans-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #d1d1e0 !important;
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 0.45rem 0.9rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.btn-trans-ghost:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff !important;
+}
+
+/* =========================================================================
+   TABLE OF CONTENTS & CHAPTER PILLS - MOBILE COLLISION RESILIENCE
+   ========================================================================= */
+.chapter-item-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.chapter-item-badge-wrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.chapter-pill-dot {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+/* Mobile Overrides (Prevent badge collision on narrow screens) */
+@media (max-width: 640px) {
+  .chapter-pill-item-bento {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.45rem !important;
+    padding: 0.75rem 0.95rem !important;
+  }
+
+  .chapter-item-main {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    gap: 0.5rem !important;
+  }
+
+  .chapter-item-left {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.6rem !important;
+    min-width: 0 !important;
+    flex: 1 !important;
+  }
+
+  .chapter-item-title {
+    font-size: 0.9rem !important;
+    max-width: 175px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .chapter-item-badge-wrap {
+    flex-shrink: 0 !important;
+  }
+
+  .chapter-item-right {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.45rem !important;
+    padding-left: 2.1rem !important;
+    font-size: 0.74rem !important;
+    color: var(--text-muted) !important;
+  }
+
+  .chapters-filter-group {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 0.6rem !important;
+  }
+
+  .reader-search-input-wrap {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+
+  .reader-tool-btn#sort-order-btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Upload button compact pill on mobile */
+  .upload-label-full {
+    display: none !important;
+  }
+  .upload-label-short {
+    display: inline !important;
+  }
+  .btn-upload-gradient {
+    padding: 0.42rem 0.82rem !important;
+    font-size: 0.82rem !important;
+    border-radius: 9999px !important;
+    white-space: nowrap !important;
+    max-width: 110px !important;
+    height: auto !important;
+  }
+
+  /* Transmission card mobile layout */
+  .transmission-body {
+    gap: 0.95rem;
+  }
+  .transmission-cover-wrap {
+    width: 58px;
+    height: 80px;
+  }
+  .transmission-title {
+    font-size: 1rem;
+  }
+}
+
+/* =========================================================================
+   BIONIC / SKIM READING MODE
+   ========================================================================= */
+.bionic-reading-active .np-word-token b {
+  font-weight: 800 !important;
+  color: var(--text-primary) !important;
+}
+
+/* =========================================================================
+   READER HEADPHONES BUTTON COLOR & ARTICLE BOTTOM SPACING
+   ========================================================================= */
+.btn-audio-listen.is-playing {
+  background: linear-gradient(135deg, #7c3aed, #a855f7) !important;
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 18px rgba(168, 85, 247, 0.6) !important;
+  animation: pulseAudioViolet 2s infinite ease-in-out;
+}
+
+@keyframes pulseAudioViolet {
+  0%, 100% { box-shadow: 0 0 14px rgba(124, 58, 237, 0.4); transform: scale(1); }
+  50% { box-shadow: 0 0 24px rgba(168, 85, 247, 0.75); transform: scale(1.04); }
+}
+
+@media (max-width: 640px) {
+  .reader-article-canvas {
+    margin-bottom: 11.5rem !important;
+  }
 }

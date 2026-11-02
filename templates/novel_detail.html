@@ -33,26 +33,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Update TOC badges
         document.querySelectorAll('.chapter-pill-item-bento').forEach(item => {
           const chNum = parseInt(item.getAttribute('data-chapter-num') || '0', 10);
-          const leftWrap = item.querySelector('.chapter-item-left');
-          const existingBadge = leftWrap ? leftWrap.querySelector('.ch-badge') : null;
+          const badgeWrap = item.querySelector('.chapter-item-badge-wrap') || item.querySelector('.chapter-item-left');
+          const existingBadge = item.querySelector('.ch-badge');
           if (existingBadge) existingBadge.remove();
           item.classList.remove('ch-finished', 'ch-reading');
 
           if (chNum < latest.chapterNumber) {
             item.classList.add('ch-finished');
-            if (leftWrap) {
+            if (badgeWrap) {
               const b = document.createElement('span');
               b.className = 'ch-badge ch-badge-done';
               b.textContent = '✓ Finished';
-              leftWrap.appendChild(b);
+              badgeWrap.appendChild(b);
             }
           } else if (chNum === latest.chapterNumber) {
             item.classList.add('ch-reading');
-            if (leftWrap) {
+            if (badgeWrap) {
               const b = document.createElement('span');
               b.className = 'ch-badge ch-badge-reading';
               b.textContent = `▶ Reading ${Math.round(latest.percent)}%`;
-              leftWrap.appendChild(b);
+              badgeWrap.appendChild(b);
             }
           }
         });
@@ -190,17 +190,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     {% set is_read = (ch.chapter_number < novel.last_read_chapter) %}
     {% set is_curr = (ch.chapter_number == novel.last_read_chapter and (novel.last_read_percent > 3.0 or novel.last_read_chapter > 1)) %}
     <a href="/novel/{{ novel.slug }}/chapter/{{ ch.chapter_number }}" class="chapter-pill-item-bento {% if is_read %}ch-finished{% elif is_curr %}ch-reading{% endif %}" data-chapter-num="{{ ch.chapter_number }}" data-chapter-title="{{ ch.title }}">
-      <div class="chapter-item-left">
-        <span class="chapter-item-number">#{{ ch.chapter_number }}</span>
-        <span class="chapter-item-title">{{ ch.title }}</span>
-        {% if is_read %}
-        <span class="ch-badge ch-badge-done">✓ Finished</span>
-        {% elif is_curr %}
-        <span class="ch-badge ch-badge-reading">▶ Reading {{ novel.last_read_percent|round|int }}%</span>
-        {% endif %}
+      <div class="chapter-item-main">
+        <div class="chapter-item-left">
+          <span class="chapter-item-number">#{{ ch.chapter_number }}</span>
+          <span class="chapter-item-title">{{ ch.title }}</span>
+        </div>
+        <div class="chapter-item-badge-wrap">
+          {% if is_read %}
+          <span class="ch-badge ch-badge-done">✓ Finished</span>
+          {% elif is_curr %}
+          <span class="ch-badge ch-badge-reading">▶ Reading {{ novel.last_read_percent|round|int }}%</span>
+          {% endif %}
+        </div>
       </div>
       <div class="chapter-item-right">
         <span class="chapter-pill-words">{{ ch.word_count }} words</span>
+        <span class="chapter-pill-dot">•</span>
         <span class="chapter-pill-time">~{{ ch_mins }}m read</span>
       </div>
     </a>
@@ -311,26 +316,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Update TOC badges
         document.querySelectorAll('.chapter-pill-item-bento').forEach(item => {
           const chNum = parseInt(item.getAttribute('data-chapter-num') || '0', 10);
-          const leftWrap = item.querySelector('.chapter-item-left');
-          const existingBadge = leftWrap ? leftWrap.querySelector('.ch-badge') : null;
+          const badgeWrap = item.querySelector('.chapter-item-badge-wrap') || item.querySelector('.chapter-item-left');
+          const existingBadge = item.querySelector('.ch-badge');
           if (existingBadge) existingBadge.remove();
           item.classList.remove('ch-finished', 'ch-reading');
 
           if (chNum < latest.chapterNumber) {
             item.classList.add('ch-finished');
-            if (leftWrap) {
+            if (badgeWrap) {
               const b = document.createElement('span');
               b.className = 'ch-badge ch-badge-done';
               b.textContent = '✓ Finished';
-              leftWrap.appendChild(b);
+              badgeWrap.appendChild(b);
             }
           } else if (chNum === latest.chapterNumber) {
             item.classList.add('ch-reading');
-            if (leftWrap) {
+            if (badgeWrap) {
               const b = document.createElement('span');
               b.className = 'ch-badge ch-badge-reading';
               b.textContent = `▶ Reading ${Math.round(latest.percent)}%`;
-              leftWrap.appendChild(b);
+              badgeWrap.appendChild(b);
             }
           }
         });
