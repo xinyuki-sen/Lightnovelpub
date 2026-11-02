@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/static/img/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=23">
+  <link rel="stylesheet" href="/static/css/style.css?v=24">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
@@ -16,24 +16,6 @@
 
   <!-- Sub-1 Nit Nocturnal Amber Dimmer Overlay (Protects eyes in dark rooms) -->
   <div id="sub-nit-night-overlay"></div>
-
-  <!-- Left Edge Gesture HUD: Screen Brightness -->
-  <div class="edge-gesture-hud edge-hud-left" id="edge-hud-brightness">
-    <span class="edge-hud-icon">☀️</span>
-    <div class="edge-hud-track">
-      <div class="edge-hud-fill brightness-fill" id="edge-fill-brightness" style="height: 100%;"></div>
-    </div>
-    <span class="edge-hud-val" id="edge-val-brightness">100%</span>
-  </div>
-
-  <!-- Right Edge Gesture HUD: Audio Volume -->
-  <div class="edge-gesture-hud edge-hud-right" id="edge-hud-volume">
-    <span class="edge-hud-icon">🔊</span>
-    <div class="edge-hud-track">
-      <div class="edge-hud-fill" id="edge-fill-volume" style="height: 100%;"></div>
-    </div>
-    <span class="edge-hud-val" id="edge-val-volume">100%</span>
-  </div>
 
   <!-- Sleek Sticky Reader Topbar -->
   <header class="reader-topbar">
@@ -577,7 +559,7 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=23"></script>
-  <script src="/static/js/reader.js?v=23"></script>
+  <script src="/static/js/dexie.min.js?v=24"></script>
+  <script src="/static/js/reader.js?v=24"></script>
 </body>
 </html>
