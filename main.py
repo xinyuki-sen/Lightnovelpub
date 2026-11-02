@@ -5,6 +5,7 @@ import shutil
 import tempfile
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response, RedirectResponse
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from typing import Optional
@@ -15,6 +16,7 @@ from pdf_parser import extract_pdf_chapters
 from epub_parser import extract_epub_chapters
 
 app = FastAPI(title="LightnovelPub Custom Novel Reader")
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
@@ -38,16 +40,20 @@ try:
 except Exception:
     pass
 
-# Dedicated cover image route supporting both Vercel /tmp/covers and static/covers
+# Dedicated cover image route supporting both Vercel /tmp/covers and static/covers (Hardened against traversal)
 @app.get("/static/covers/{filename}")
 async def serve_cover_image(filename: str):
+    safe_filename = os.path.basename(filename)
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid cover filename")
+
     # Check COVERS_DIR first
-    disk_cover = os.path.join(COVERS_DIR, filename)
+    disk_cover = os.path.join(COVERS_DIR, safe_filename)
     if os.path.exists(disk_cover):
         return FileResponse(disk_cover, media_type="image/jpeg")
     
     # Fallback to repo static/covers
-    static_cover = os.path.join(STATIC_DIR, "covers", filename)
+    static_cover = os.path.join(STATIC_DIR, "covers", safe_filename)
     if os.path.exists(static_cover):
         return FileResponse(static_cover, media_type="image/jpeg")
         
@@ -134,8 +140,8 @@ async def chapter_reader(request: Request, slug: str, chapter_number: int):
     )
 
 @app.get("/api/novel/{slug}/chapter/{chapter_number}")
-async def get_chapter_json(slug: str, chapter_number: int):
-    """High-speed JSON endpoint for instantaneous client-side chapter transitions (<50ms)."""
+async def get_chapter_json(request: Request, slug: str, chapter_number: int):
+    """High-speed JSON endpoint for instantaneous client-side chapter transitions (<50ms) with ETag caching."""
     data = database.get_chapter(slug, chapter_number)
     if not data:
         full_novel = database.get_novel_by_slug(slug)
@@ -162,19 +168,30 @@ async def get_chapter_json(slug: str, chapter_number: int):
 
     word_count = chapter.get("word_count", 0)
     mins = max(1, round(word_count / 220))
+    
+    etag = f'W/"ch-{slug}-{chapter["chapter_number"]}-{word_count}"'
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match and if_none_match == etag:
+        return Response(status_code=304)
 
-    return {
-        "slug": slug,
-        "novel_title": novel["title"],
-        "chapter_number": chapter["chapter_number"],
-        "title": chapter["title"],
-        "paragraphs": chapter.get("paragraphs", []),
-        "word_count": word_count,
-        "read_time_mins": mins,
-        "prev_chapter": prev_ch,
-        "next_chapter": next_ch,
-        "total_chapters": novel.get("total_chapters", len(all_chapters))
-    }
+    return JSONResponse(
+        content={
+            "slug": slug,
+            "novel_title": novel["title"],
+            "chapter_number": chapter["chapter_number"],
+            "title": chapter["title"],
+            "paragraphs": chapter.get("paragraphs", []),
+            "word_count": word_count,
+            "read_time_mins": mins,
+            "prev_chapter": prev_ch,
+            "next_chapter": next_ch,
+            "total_chapters": novel.get("total_chapters", len(all_chapters))
+        },
+        headers={
+            "ETag": etag,
+            "Cache-Control": "public, max-age=3600, must-revalidate"
+        }
+    )
 
 MAX_UPLOAD_SIZE = 45 * 1024 * 1024  # 45 MB Limit
 
@@ -341,7 +358,15 @@ async def generate_tts(req: TTSRequest):
         import base64
         import json
         import edge_tts
-        comm = edge_tts.Communicate(text=text, voice=req.voice, rate=rate_str, pitch=pitch_str, boundary="WordBoundary")
+        comm = edge_tts.Communicate(
+            text=text, 
+            voice=req.voice, 
+            rate=rate_str, 
+            pitch=pitch_str, 
+            boundary="WordBoundary",
+            connect_timeout=4,
+            receive_timeout=15
+        )
         chunks = []
         word_boundaries = []
         async for chunk in comm.stream():

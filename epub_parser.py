@@ -54,6 +54,11 @@ def extract_epub_chapters(epub_path: str):
     chapters format: [{"number": 1, "title": "...", "content": [p1, p2, ...], "word_count": N}]
     """
     with zipfile.ZipFile(epub_path, 'r') as zf:
+        # Zip bomb / Decompression expansion guard (120 MB max uncompressed limit)
+        total_uncompressed = sum(info.file_size for info in zf.infolist())
+        if total_uncompressed > 120 * 1024 * 1024:
+            raise ValueError("Uncompressed EPUB archive exceeds safe 120MB upper boundary.")
+
         namelist = zf.namelist()
         
         # 1. Find OPF package rootfile from META-INF/container.xml

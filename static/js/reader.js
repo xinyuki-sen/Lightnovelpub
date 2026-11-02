@@ -2160,9 +2160,13 @@ function initReader() {
           updateMediaSession();
           startHighlightTracker(activeHtml5Audio, targetNode, boundaries);
 
-          // CRITICAL: Immediately prefetch the next 2 paragraphs in background while current plays!
-          prefetchParagraphAudio(index + 1);
-          prefetchParagraphAudio(index + 2);
+          // CRITICAL: Adaptive 6-Paragraph Runway Burst Buffer (Immune to weak 2G/3G drops, saves cellular radio battery)
+          for (let offset = 1; offset <= 6; offset++) {
+            const nextIdx = index + offset;
+            if (nextIdx < paragraphNodes.length) {
+              prefetchParagraphAudio(nextIdx);
+            }
+          }
         };
 
         activeHtml5Audio.onpause = () => {
@@ -2350,6 +2354,38 @@ function initReader() {
   // Rewind & Forward 10s Seeking
   if (npBtnRewind10) npBtnRewind10.addEventListener('click', rewind10Seconds);
   if (npBtnForward10) npBtnForward10.addEventListener('click', forward10Seconds);
+
+  // 1-Click Preload Chapter Audio (Offline Runway Engine)
+  const btnPreloadAudio = document.getElementById('btn-preload-chapter-audio');
+  const lblPreloadStatus = document.getElementById('lbl-preload-status');
+  let isPreloadingChapter = false;
+
+  if (btnPreloadAudio && lblPreloadStatus) {
+    btnPreloadAudio.addEventListener('click', async () => {
+      if (isPreloadingChapter) return;
+      isPreloadingChapter = true;
+      btnPreloadAudio.disabled = true;
+      btnPreloadAudio.style.opacity = '0.7';
+
+      const total = paragraphNodes.length;
+      let completed = 0;
+      lblPreloadStatus.textContent = `Downloading 0/${total}...`;
+
+      for (let i = 0; i < total; i++) {
+        lblPreloadStatus.textContent = `Buffering ${i + 1}/${total} (${Math.round(((i + 1) / total) * 100)}%)...`;
+        await prefetchParagraphAudio(i);
+        completed++;
+      }
+
+      lblPreloadStatus.textContent = `✓ Offline Ready (${completed} chunks)`;
+      btnPreloadAudio.style.background = 'rgba(34, 197, 94, 0.2)';
+      btnPreloadAudio.style.borderColor = 'rgba(34, 197, 94, 0.5)';
+      btnPreloadAudio.style.color = '#86efac';
+      btnPreloadAudio.disabled = false;
+      btnPreloadAudio.style.opacity = '1';
+      isPreloadingChapter = false;
+    });
+  }
 
 
   // =========================================================================

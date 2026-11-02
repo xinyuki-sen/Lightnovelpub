@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/static/img/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=17">
+  <link rel="stylesheet" href="/static/css/style.css?v=18">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
@@ -382,6 +382,14 @@
           </div>
         </label>
       </div>
+
+      <!-- Offline Battery-Saver Audio Download -->
+      <div style="padding: 0.55rem 1rem 0.25rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255, 255, 255, 0.08); margin-top: 0.35rem;">
+        <span style="font-size: 0.76rem; font-weight: 700; color: #a1a1aa; letter-spacing: 0.04em;">OFFLINE RUNWAY</span>
+        <button type="button" id="btn-preload-chapter-audio" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); color: #d8b4fe; padding: 0.32rem 0.75rem; border-radius: 9999px; font-size: 0.76rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.35rem; transition: all 0.2s ease;">
+          <span>⚡</span> <span id="lbl-preload-status">Preload Chapter Audio</span>
+        </button>
+      </div>
     </div>
 
     <!-- Controls Row (Bottom Controls Bar) -->
@@ -548,7 +556,7 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=17"></script>
-  <script src="/static/js/reader.js?v=17"></script>
+  <script src="/static/js/dexie.min.js?v=18"></script>
+  <script src="/static/js/reader.js?v=18"></script>
 </body>
 </html>
