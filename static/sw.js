@@ -1,9 +1,9 @@
-const CACHE_NAME = 'lightnovelpub-v22';
+const CACHE_NAME = 'lightnovelpub-v23';
 const STATIC_ASSETS = [
-  '/static/css/style.css?v=22',
-  '/static/js/reader.js?v=22',
+  '/static/css/style.css?v=23',
+  '/static/js/reader.js?v=23',
   '/static/js/upload.js',
-  '/static/js/dexie.min.js?v=22',
+  '/static/js/dexie.min.js?v=23',
   '/static/img/logo.png'
 ];
 

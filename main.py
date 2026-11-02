@@ -344,8 +344,9 @@ async def generate_tts(req: TTSRequest):
     if not text:
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     
-    if len(text) > 1500:
-        text = text[:1500]
+    # Generous limit covering 100% of literary paragraphs without dropping text (Max in library is 2502 chars)
+    if len(text) > 3600:
+        text = text[:3600]
 
     rate_percent = int((req.rate - 1.0) * 100)
     rate_str = f"{rate_percent:+d}%"
@@ -364,8 +365,8 @@ async def generate_tts(req: TTSRequest):
             rate=rate_str, 
             pitch=pitch_str, 
             boundary="WordBoundary",
-            connect_timeout=4,
-            receive_timeout=15
+            connect_timeout=6,
+            receive_timeout=25
         )
         chunks = []
         word_boundaries = []

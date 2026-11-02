@@ -727,7 +727,7 @@ function initReader() {
   let novelDb = null;
   if (typeof Dexie !== 'undefined') {
     try {
-      novelDb = new Dexie('LightnovelpubDB');
+      novelDb = new Dexie('LightnovelpubDB_v2');
       novelDb.version(1).stores({
         chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
         progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
