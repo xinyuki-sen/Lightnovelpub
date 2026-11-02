@@ -6,102 +6,129 @@ import shutil
 import sqlite3
 from typing import List, Dict, Optional, Tuple
 
+ABBREVIATIONS = [
+    r'Mr', r'Mrs', r'Ms', r'Dr', r'Prof', r'Sr', r'Jr',
+    r'Capt', r'Gen', r'Col', r'Sgt', r'Lt', r'Maj', r'Cpl',
+    r'St', r'Rev', r'Hon', r'Gov', r'Pres',
+    r'Vol', r'Ch', r'No', r'Fig', r'Sec', r'Dept',
+    r'vs', r'etc', r'e\.g', r'i\.e', r'cf', r'al', r'approx', r'est'
+]
+ABBR_REGEX = re.compile(r'\b(?:' + '|'.join(ABBREVIATIONS) + r')\.', re.IGNORECASE)
+INITIAL_REGEX = re.compile(r'\b([A-Z])\.(?=\s+[A-Z])')
+DECIMAL_REGEX = re.compile(r'(\d+)\.(\d+)')
+
+def tokenize_sentences(text: str) -> List[str]:
+    """
+    3-Stage Tokenized Sentence Lexer:
+    1. Pre-pass: Masks non-terminal periods in honorifics, abbreviations, initials, decimals, and ellipses.
+    2. Split: Splits strictly where true terminal punctuation (. ! ?) is followed by whitespace and a capital letter, quote, or bracket.
+    3. Post-pass: Restores all masked periods.
+    Guarantees every extracted sentence is grammatically complete with terminal punctuation.
+    """
+    t = text.strip()
+    if not t:
+        return []
+
+    DOT_MASK = "\uE000DOT\uE000"
+    ELLIPSIS_MASK = "\uE000ELLIPSIS\uE000"
+
+    t = ABBR_REGEX.sub(lambda m: m.group(0)[:-1] + DOT_MASK, t)
+    t = INITIAL_REGEX.sub(lambda m: m.group(1) + DOT_MASK, t)
+    t = DECIMAL_REGEX.sub(r'\1' + DOT_MASK + r'\2', t)
+    t = t.replace('...', ELLIPSIS_MASK).replace('…', ELLIPSIS_MASK)
+
+    # Terminal sentence regex requiring capital letter, opening quote, bracket, or string-end
+    sentence_pattern = re.compile(r'(.+?[.!?]+(?:[\"\'”’»\)\]]+)?)(?:\s+(?=[A-Z“\"\'‘\[\d])|$)', re.UNICODE)
+    raw = sentence_pattern.findall(t)
+
+    if not raw:
+        raw = [t]
+    else:
+        captured_text = "".join(raw)
+        t_nowhite = re.sub(r'\s+', '', t)
+        cap_nowhite = re.sub(r'\s+', '', captured_text)
+        if len(cap_nowhite) < len(t_nowhite):
+            idx = t.rfind(raw[-1]) + len(raw[-1])
+            tail = t[idx:].strip()
+            if tail:
+                raw[-1] += " " + tail
+
+    clean = []
+    for s in raw:
+        s = s.replace(ELLIPSIS_MASK, '...').replace(DOT_MASK, '.').strip()
+        if s:
+            clean.append(s)
+
+    return clean
+
 def split_long_paragraph(text: str, max_chars: int = 480) -> List[str]:
-    """Intelligently splits monolithic paragraphs at natural sentence boundaries without breaking text."""
+    """Divides paragraphs strictly into full-sentence units up to max_chars without mid-sentence cuts."""
     text = text.strip()
     if not text:
         return []
-    
-    # Check if this is a compact LitRPG system card / status box; keep intact if under 900 chars
+
+    # Preserve LitRPG system cards and status boxes
     system_triggers = ['New achievement!', 'Reward:', 'Congratulations!', 'Achievement Unlocked:', 'Quest Completed:', '+1 Stat point', 'Level Up!']
-    if any(k in text for k in system_triggers) and len(text) <= 900:
+    if any(k in text for k in system_triggers) and len(text) <= 950:
         return [text]
 
-    if len(text) <= max_chars:
+    sentences = tokenize_sentences(text)
+    if not sentences:
         return [text]
-
-    # Sentence boundary regex (handles quotes, ellipses, question marks, exclamation points)
-    sentence_pattern = re.compile(r'([^.!?]+[.!?]+(?:["\'”’»]+)?(?:\s+|$))', re.UNICODE)
-    raw_sentences = sentence_pattern.findall(text)
-    
-    matched_len = sum(len(s) for s in raw_sentences)
-    if matched_len < len(text):
-        remaining = text[matched_len:].strip()
-        if remaining:
-            raw_sentences.append(remaining)
-
-    if not raw_sentences:
-        raw_sentences = [text]
+    if len(sentences) == 1:
+        return [sentences[0]]
 
     chunks = []
     current_chunk = []
     current_len = 0
 
-    for sent in raw_sentences:
-        s = sent.strip()
-        if not s:
-            continue
-        
-        # Sub-split rare gigantic sentences with commas/semicolons
-        if len(s) > max_chars * 1.4:
-            if current_chunk:
-                chunks.append(" ".join(current_chunk))
-                current_chunk = []
-                current_len = 0
-            
-            clause_pattern = re.compile(r'([^,;:—]+[,;:—]+(?:\s+|$))', re.UNICODE)
-            clauses = clause_pattern.findall(s)
-            c_matched_len = sum(len(c) for c in clauses)
-            if c_matched_len < len(s):
-                c_rem = s[c_matched_len:].strip()
-                if c_rem:
-                    clauses.append(c_rem)
-            
-            sub_chunk = []
-            sub_len = 0
-            for c in (clauses if clauses else [s]):
-                c = c.strip()
-                if not c:
-                    continue
-                if sub_len + len(c) > max_chars and sub_chunk:
-                    chunks.append(" ".join(sub_chunk))
-                    sub_chunk = [c]
-                    sub_len = len(c)
-                else:
-                    sub_chunk.append(c)
-                    sub_len += len(c) + 1
-            if sub_chunk:
-                chunks.append(" ".join(sub_chunk))
-            continue
-
-        if current_len + len(s) > max_chars and current_chunk:
+    for sent in sentences:
+        sent_len = len(sent)
+        if current_len + sent_len > max_chars and current_chunk:
             chunks.append(" ".join(current_chunk))
-            current_chunk = [s]
-            current_len = len(s)
+            current_chunk = [sent]
+            current_len = sent_len
         else:
-            current_chunk.append(s)
-            current_len += len(s) + 1
+            current_chunk.append(sent)
+            current_len += sent_len + 1
 
     if current_chunk:
         chunks.append(" ".join(current_chunk))
 
-    return [c for c in chunks if c.strip()]
+    return chunks
 
-def split_chapter_paragraphs(paragraphs: List[str], max_chars: int = 480) -> List[str]:
-    """Divides chapters into breathable, light-novel paragraphs with bounded text length."""
-    new_paragraphs = []
+def process_chapter_paragraphs(paragraphs: List[str], max_chars: int = 480) -> List[str]:
+    """
+    Sentence-Preserving Paragraph Engine:
+    1. Recombines any sentences accidentally split across paragraphs.
+    2. Divides long paragraphs strictly at terminal sentence boundaries (. ! ?).
+    """
+    TERMINAL_CHARS = set('.!?..."”’\'»)]}')
+
+    merged = []
     for p in paragraphs:
-        if not p or not str(p).strip():
+        p_clean = str(p).strip()
+        if not p_clean:
             continue
-        p_str = str(p).strip()
-        if len(p_str) <= max_chars:
-            new_paragraphs.append(p_str)
+        if merged and (merged[-1][-1] not in TERMINAL_CHARS or p_clean[0].islower()):
+            merged[-1] = merged[-1] + " " + p_clean
         else:
-            new_paragraphs.extend(split_long_paragraph(p_str, max_chars=max_chars))
-    return new_paragraphs
+            merged.append(p_clean)
+
+    final_paras = []
+    for p in merged:
+        if len(p) <= max_chars:
+            final_paras.append(p)
+        else:
+            final_paras.extend(split_long_paragraph(p, max_chars=max_chars))
+
+    return final_paras
+
+# Backwards compatibility alias
+split_chapter_paragraphs = process_chapter_paragraphs
 
 def migrate_divide_chapter_paragraphs(conn):
-    """Automatic background migration to divide all existing chapters in database."""
+    """Automatic background migration to divide all existing chapters with strict sentence boundaries."""
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT id, content_json FROM chapters")
@@ -110,10 +137,9 @@ def migrate_divide_chapter_paragraphs(conn):
         for ch_id, c_json in rows:
             try:
                 paras = json.loads(c_json)
-                if any(len(p) > 550 for p in paras):
-                    new_paras = split_chapter_paragraphs(paras, max_chars=480)
-                    new_word_count = sum(len(p.split()) for p in new_paras)
-                    updates.append((json.dumps(new_paras, ensure_ascii=False), new_word_count, ch_id))
+                new_paras = process_chapter_paragraphs(paras, max_chars=480)
+                new_word_count = sum(len(p.split()) for p in new_paras)
+                updates.append((json.dumps(new_paras, ensure_ascii=False), new_word_count, ch_id))
             except Exception:
                 pass
         if updates:

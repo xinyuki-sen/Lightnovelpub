@@ -169,7 +169,7 @@ async def get_chapter_json(request: Request, slug: str, chapter_number: int):
     word_count = chapter.get("word_count", 0)
     mins = max(1, round(word_count / 220))
     
-    etag = f'W/"ch-{slug}-{chapter["chapter_number"]}-{word_count}"'
+    etag = f'W/"ch-{slug}-{chapter["chapter_number"]}-{len(chapter.get("paragraphs", []))}-{word_count}"'
     if_none_match = request.headers.get("if-none-match")
     if if_none_match and if_none_match == etag:
         return Response(status_code=304)

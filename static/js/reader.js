@@ -727,11 +727,16 @@ function initReader() {
   let novelDb = null;
   if (typeof Dexie !== 'undefined') {
     try {
-      novelDb = new Dexie('LightnovelpubDB_v3');
+      novelDb = new Dexie('LightnovelpubDB_v4');
       novelDb.version(1).stores({
         chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
         progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
         audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
+      });
+
+      // Triple-Lock Purge: Evict obsolete IndexedDB versions to reclaim disk space & purge stale blobs
+      ['LightnovelpubDB', 'LightnovelpubDB_v1', 'LightnovelpubDB_v2', 'LightnovelpubDB_v3'].forEach(oldDbName => {
+        try { indexedDB.deleteDatabase(oldDbName); } catch (e) {}
       });
 
       // Automatically cache current chapter into IndexedDB for 100% offline access

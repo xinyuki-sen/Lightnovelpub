@@ -14,3 +14,6 @@ reparse_*.py
 .pytest_cache/
 benchmark_results*.json
 *.log
+novels.db
+temp_*
+*.tmp
