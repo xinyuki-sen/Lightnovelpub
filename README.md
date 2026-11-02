@@ -6,7 +6,7 @@
 [![Vercel](https://img.shields.io/badge/Vercel-Deployed-000000?style=flat-square&logo=vercel)](https://lightnovelpub.vercel.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald?style=flat-square)](LICENSE)
 
-> A modern web novel and light novel reading platform with **Bento & Manga Editorial typography**, **5 curated screen-reading fonts**, a **resilient paragraph-anchor progress engine**, **dual-tier Edge-TTS neural audio**, and **automated PDF chapter extraction**.
+> A high-performance web novel and light novel reading platform featuring **Manga Telemetry Editorial typography**, **5 curated screen-reading fonts**, a **resilient paragraph-anchor progress engine**, **dual-tier Edge-TTS neural audio with 60FPS exact word boundary tracking**, and **automated EPUB & PDF chapter extraction**.
 
 🌐 **Live Production Deployment**: [https://lightnovelpub.vercel.app](https://lightnovelpub.vercel.app)
 
@@ -14,13 +14,27 @@
 
 ## 🌟 Key Features
 
-### 🎨 1. Bento & Manga Editorial UI System
-* **Reticle Framing**: Tech-editorial crosshair marks (`+`) and telemetry micro-chips (`ARCHIVE // VOL. 01`, `5 CURATED FONTS`, `NEURAL TTS`, `OFFLINE DEXIE`).
+### 🎧 1. Neural Edge-TTS with 60FPS Word Boundary Tracking
+* **Tier 1 (High-Fidelity Neural Edge-TTS)**: Human-like voice synthesis streaming crisp MP3 narration with lookahead buffer and client-side IndexedDB caching.
+* **Exact WordBoundary Synchronization**: Backend extracts sub-millisecond word offsets from Edge-TTS (`X-Word-Boundaries`), mapping audio playback time directly to individual text tokens.
+* **60FPS Frame Tracker (`requestAnimationFrame`)**: Replaces coarse 250ms `ontimeupdate` events with 60FPS/120FPS display-synced frame tracking, eliminating visual lag on mobile Android Chrome.
+* **Reflow-Free Highlighting**: Uses `display: inline` and `box-decoration-break: clone` to ensure zero line jumping, zero layout shifts, and zero text stuttering during narration.
+* **Zero Lingering Trails**: Strictly illuminates only the single active word being spoken per user mandate; automatically clears during speech pauses.
+* **Tier 2 (Web Speech API Fallback)**: Instant, zero-bandwidth device speech engine running 100% offline.
+* **Lock-Screen Controls (`MediaSession`)**: Playback control directly from Android notification shade, lock-screen, and smartwatches with a silent audio loop keep-alive.
+
+### 📱 2. Android Mobile First & Gesture Navigation
+* **Horizontal Swipe Navigation**: Fluid touch swipe gestures (left to advance to Next Chapter, right for Previous Chapter) with haptic feedback pulses (`navigator.vibrate(25)`).
+* **2-Column Bookstore Grid**: High-density cover layout optimized for mobile screens ($\le 640\text{px}$) with safe-area insets.
+* **AMOLED Battery Saver**: Pitch Black mode (`#09090b` / true `#000000`) for near-zero battery drain on OLED devices.
+
+### 🎨 3. Bento & Manga Telemetry Design System
+* **Reticle Framing**: Technical crosshair accents (`+`) and telemetry micro-chips (`ARCHIVE // VOL. 01`, `5 CURATED FONTS`, `60FPS TTS`, `OFFLINE DEXIE`).
 * **Bento Stats Grid**: Dynamic library telemetry displaying indexed novels, chapter counts, and active reader metrics.
 * **Cinematic Book Covers**: 3D perspective depth with hover elevation and quick-action overlay pills.
 * **Blurred Glass Backdrop**: Ambient frosted glass backdrop mirroring the novel's cover palette on detail views.
 
-### 🖋️ 2. Curated 5-Font Typography Engine
+### 🖋️ 4. Curated 5-Font Typography Engine
 Tested across desktop screens and Android high-DPI displays to eliminate eye fatigue:
 1. **Times New Roman**: Classic literary serif with authoritative readability.
 2. **Merriweather**: Generous x-height and sturdy serifs calibrated specifically for screen reading.
@@ -30,47 +44,35 @@ Tested across desktop screens and Android high-DPI displays to eliminate eye fat
 
 > Switchable on the fly via the **Settings Drawer**, **1-Touch Visual Pills**, or the floating **Reader HUD Quick Cycler (`Aa`)**.
 
-### 🎭 3. Six Reading Themes
+### 🎭 5. Seven Reading Themes
 * **Pitch Black (OLED)**: `#09090b` canvas for 0% battery draw on AMOLED displays.
 * **Ruined King (Emerald Mist)**: Deep dark teal `#081313` with luminous emerald accents (`#10b981`).
+* **Manga Ink (Halftone)**: High-contrast manga editorial style with subtle paper texture.
 * **Deep Midnight**: Sleek `#0d1117` GitHub dark mode aesthetic.
 * **Forest Night**: Botanical `#0b1411` deep night tone.
 * **Parchment Sepia**: `#fbf0d9` warm contrast tone for daytime reading.
 * **Day Light**: Clean paper-white high-contrast mode.
 
-### 📈 4. Resilient Dual-Tier Reading Progress Engine
+### 📈 6. Resilient Dual-Tier Reading Progress Engine
 * **Continuous Composite Novel Progress**:
   $$\text{Composite Progress} = \min\left(100.0, \max\left(0.0, \frac{(\text{Chapter} - 1) + (\text{Chapter \%} / 100)}{\text{Total Chapters}} \times 100\%\right)\right)$$
-  Replaces coarse integer steps with a smooth, continuous percentage across the entire novel.
-* **Paragraph-Anchor Tracking**: Tags every paragraph with `data-para-idx`. Anchors to the active paragraph in view rather than volatile pixel scroll offsets, achieving **0.0% reading drift** when switching fonts, font sizes, or rotating Android screens between portrait and landscape.
-* **Client-Side Authoritative Hydration**: Powered by [Dexie.js](https://dexie.org/) (IndexedDB). Hydrates reading progress and Table of Contents status badges (`✓ Finished`, `▶ Reading X%`) even across serverless cold-start restarts.
+* **Paragraph-Anchor Tracking**: Tags every paragraph with `data-para-idx`. Anchors to the active paragraph in view rather than volatile pixel scroll offsets, achieving **0.0% reading drift** across font resizing or orientation flips.
+* **Client-Side Authoritative Hydration**: Powered by [Dexie.js](https://dexie.org/) (IndexedDB). Persists reading progress and TOC status badges (`✓ Finished`, `▶ Reading X%`) even across serverless cold starts.
 
-### 🎧 5. Dual-Tier Audio TTS Engine (Novel Phoenix Replica)
-* **Tier 1 (High-Fidelity Neural Edge-TTS)**: Human-like voice synthesis streaming crisp MP3 narration with client-side IndexedDB audio caching.
-* **Tier 2 (Web Speech API Fallback)**: Instant, zero-bandwidth device speech engine running 100% offline.
-* **Amber Word Follower**: Glowing word highlight (`.np-spoken-word`) synchronized to spoken words in real time.
-* **Precision $\pm 10\text{s}$ Seeking**: Instant rewind and fast-forward with paragraph boundary wrapping.
-* **Lock-Screen Controls**: Integrated with the `MediaSession` API, allowing playback control from the Android notification shade, lock-screen, and smartwatches.
-* **Silent Audio Pipeline**: Loop keep-alive prevents mobile browsers from terminating speech when the screen turns off.
+### 🛡️ 7. Security Hardening
+* **Magic-Byte Inspection**: Validates binary headers (`%PDF-` for PDFs, `PK\x03\x04` for EPUBs) to reject disguised payloads before parsing.
+* **Chunked Upper Bound**: 45MB upper limit on uploads to protect against memory exhaustion and DoS attacks.
+* **Admin Deletion Token**: Optional `ADMIN_TOKEN` / `X-Admin-Token` authentication guard on destructive novel deletion routes.
+* **Strict Security Headers Middleware**: Automatic enforcement of `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, and `Referrer-Policy: strict-origin-when-cross-origin`.
 
-### 📚 6. Library Management & Android Mobile Optimization
-* **Integrated Search**: Real-time title and author search synchronized between the top navbar and collection toolbar.
-* **4-Way Status Filtering**: 1-click filter pills for *All*, *In Progress*, *Unread*, and *Completed*.
-* **Instant Client-Side Sorting**: Sort by *Recently Read*, *Title (A-Z)*, *Highest Progress*, or *Most Chapters*.
-* **2-Column Bookstore Grid**: High-density 2-column cover grid on mobile viewports ($\le 640\text{px}$) with safe-area insets.
-* **Direct Library Deletion (`🗑️`)**: Card-level delete button with confirmation dialog and automatic purge of SQLite, Dexie IndexedDB, and LocalStorage keys.
-
-### 📄 7. Automated PDF Chapter Ingestion
-Drop any novel PDF into the uploader:
-* Automatically extracts novel title, author, and embedded cover art.
-* Scans PDF bookmarks and outline tables to extract segmented chapters.
-* Cleans soft hyphens (`tele-\nphone` $\to$ `telephone`) and merges ragged linebreaks into semantic paragraphs.
+### 📄 8. Automated EPUB & PDF Chapter Ingestion
+Drop any novel EPUB or PDF into the uploader:
+* **EPUB Parser (`epub_parser.py`)**: Reads Open Container Format (OCF), extracts `content.opf`, parses NCX/Nav tables of contents, and extracts embedded cover art.
+* **PDF Parser (`pdf_parser.py`)**: Multi-engine PDF slicer with bookmark/outline extraction, soft-hyphen repair (`tele-\nphone` $\to$ `telephone`), and semantic paragraph reassembly.
 
 ---
 
 ## 📂 File Architecture
-
-The repository is organized following clean separation of concerns:
 
 ```
 Lightnovelpub/
@@ -89,21 +91,21 @@ Lightnovelpub/
 │   ├── js/
 │   │   ├── dexie.min.js    # IndexedDB persistence layer
 │   │   ├── reader.js       # Core reader engine (Audio, Progress, Fonts, HUD)
-│   │   └── upload.js       # PDF drag & drop conversion handler
+│   │   └── upload.js       # EPUB & PDF drag & drop conversion handler
 │   ├── manifest.json       # PWA web app manifest
-│   └── sw.js               # Service Worker cache engine (v11)
+│   └── sw.js               # Service Worker cache engine (v13)
 ├── templates/
 │   ├── base.html           # Master shell layout & upload modal
 │   ├── index.html          # Library collection, search, and bento hero
 │   ├── novel_detail.html   # Novel TOC, reading chips, and chapter index
 │   └── reader.html         # Immersive chapter reading canvas & audio dock
 ├── database.py             # SQLite data access, indexing, & migrations
+├── epub_parser.py          # Pure Python standard-library EPUB chapter extractor
 ├── main.py                 # FastAPI application, REST endpoints, & static routing
 ├── pdf_parser.py           # Multi-engine PDF chapter slicer (pypdfium2 / pypdf)
 ├── requirements.txt        # Python dependency manifest
 ├── vercel.json             # Vercel serverless deployment configuration
 ├── run.bat                 # One-click Windows development launcher
-├── .gitignore              # Git ignore rules
 └── README.md               # Project documentation
 ```
 
@@ -141,25 +143,27 @@ Open **`http://localhost:8000`** in your browser.
 
 ---
 
-## ⌨️ Reader Keyboard Shortcuts
+## ⌨️ Reader Keyboard Shortcuts & Gestures
 
-| Shortcut | Action |
+| Shortcut / Gesture | Action |
 | :--- | :--- |
-| `←` (Left Arrow) | Navigate to Previous Chapter |
-| `→` (Right Arrow) | Navigate to Next Chapter |
+| `←` (Left Arrow) or Swipe Right | Navigate to Previous Chapter |
+| `→` (Right Arrow) or Swipe Left | Navigate to Next Chapter |
 | `Space` | Toggle Audio Play / Pause |
 | `J` | Rewind Audio by 10 Seconds |
 | `L` | Fast-Forward Audio by 10 Seconds |
-| `A` | Toggle Audio Mode on / off |
-| `T` or `O` | Toggle Typography Optimize Drawer |
+| `A` | Toggle Floating Audio Player |
+| `T` or `O` | Toggle Typography Drawer |
 | `F` | Toggle Distraction-Free Fullscreen |
+| `/` | Focus Library Search |
+| `?` or `Shift + /` | Open Keyboard Shortcuts Cheat Sheet |
 
 ---
 
 ## ☁️ Deployment
 
 ### Deploying to Vercel
-This repository is configured for 1-click deployment on [Vercel](https://vercel.com):
+This repository is configured for zero-config deployment on [Vercel](https://vercel.com):
 1. Import the repository into your Vercel Dashboard.
 2. The framework preset is automatically detected via `vercel.json` and `api/index.py`.
 3. Set your deployment — no extra environment variables are required!
