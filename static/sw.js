@@ -1,9 +1,9 @@
-const CACHE_NAME = 'lightnovelpub-v16';
+const CACHE_NAME = 'lightnovelpub-v22';
 const STATIC_ASSETS = [
-  '/static/css/style.css',
-  '/static/js/reader.js',
+  '/static/css/style.css?v=22',
+  '/static/js/reader.js?v=22',
   '/static/js/upload.js',
-  '/static/js/dexie.min.js',
+  '/static/js/dexie.min.js?v=22',
   '/static/img/logo.png'
 ];
 
@@ -29,7 +29,7 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
-// Cache static assets only; always pass HTML and API requests to network first
+// Resilient Network-First caching engine: Ensures user always receives latest code with zero stale caching
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
@@ -49,22 +49,18 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Cache-first / stale-while-revalidate for static assets (CSS, JS, images, fonts)
+  // Network-First for static assets: always fetch fresh version from server; fallback to cache only when offline
   if (url.pathname.startsWith('/static/') || url.origin.includes('fonts.googleapis.com') || url.origin.includes('fonts.gstatic.com')) {
     e.respondWith(
-      caches.match(e.request).then((cachedResponse) => {
-        const fetchPromise = fetch(e.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(e.request, responseClone);
-            });
-          }
-          return networkResponse;
-        }).catch(() => cachedResponse);
-
-        return cachedResponse || fetchPromise;
-      })
+      fetch(e.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(e.request, responseClone);
+          });
+        }
+        return networkResponse;
+      }).catch(() => caches.match(e.request))
     );
   }
 });

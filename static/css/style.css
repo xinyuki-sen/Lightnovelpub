@@ -3456,8 +3456,9 @@ a {
   left: 50%;
   transform: translateX(-50%) translateY(-15px);
   background: rgba(18, 22, 28, 0.94);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  will-change: transform, opacity;
   border: 1px solid var(--border-hover);
   border-radius: 30px;
   padding: 0.5rem 1.25rem;
@@ -3984,8 +3985,9 @@ a {
   margin-bottom: 2.2rem;
   box-shadow: 0 16px 45px rgba(0, 0, 0, 0.65), 0 0 25px rgba(157, 78, 221, 0.12);
   overflow: hidden;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  will-change: transform, opacity;
 }
 
 .transmission-badge-row {
@@ -4457,6 +4459,8 @@ body.system-hud-disabled .reader-system-card .system-card-header {
 .reader-article-canvas p,
 .reader-system-card {
   contain: content;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 75px;
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
 }
@@ -4479,8 +4483,9 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   transform: translateY(-50%) scale(0.9);
   z-index: 99999;
   background: rgba(13, 14, 18, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  will-change: transform, opacity;
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), inset 0 0 12px rgba(255, 255, 255, 0.04);
   border-radius: 9999px;

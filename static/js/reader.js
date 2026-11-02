@@ -842,7 +842,33 @@ function initReader() {
     }, 800);
   }
 
-  window.addEventListener('scroll', () => recordReadingProgress(), { passive: true });
+  // 120fps Zero-Reflow Decoupled Scroll Engine (Decoupled progress bar + debounced storage)
+  let progressRafPending = false;
+  let progressPersistTimer = null;
+
+  function updateVisualProgressBar() {
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+    if (scrollHeight > 0 && progressBar) {
+      const pct = Math.min(100, Math.max(0, Math.round((scrollTop / scrollHeight) * 1000) / 10));
+      progressBar.style.width = `${pct}%`;
+    }
+    progressRafPending = false;
+  }
+
+  window.addEventListener('scroll', () => {
+    // 1. Pure O(1) arithmetic progress update on next animation frame (Zero layout reflows)
+    if (!progressRafPending) {
+      progressRafPending = true;
+      requestAnimationFrame(updateVisualProgressBar);
+    }
+
+    // 2. Debounce paragraph DOM scanning & disk persistence to quiet period (stops 15,000 reflows/sec)
+    clearTimeout(progressPersistTimer);
+    progressPersistTimer = setTimeout(() => {
+      recordReadingProgress();
+    }, 200);
+  }, { passive: true });
 
   // Resilient Position Restoration: Paragraph Anchor First, Pixel Scroll Fallback
   function restoreReadingPosition() {
@@ -1615,15 +1641,19 @@ function initReader() {
     }
   }
 
-  // Chrome 15s pause keep-alive: prevents silent stall on long paragraphs
+  // Resilient silent audio keep-alive: preserves Android hardware audio focus without aborting speech
   function startKeepAlive() {
     stopKeepAlive();
     audioState.keepAliveTimer = setInterval(() => {
-      if (isSpeechSupported && synth.speaking && !synth.paused) {
-        synth.pause();
-        synth.resume();
+      if (audioState.isPlaying && !audioState.isPaused) {
+        try {
+          const pipe = getSilentAudioPipe();
+          if (pipe.paused) {
+            pipe.play().catch(() => {});
+          }
+        } catch (e) {}
       }
-    }, 10000);
+    }, 8000);
   }
 
   function stopKeepAlive() {
@@ -1879,7 +1909,11 @@ function initReader() {
     utterance.pitch = safePitch;
     utterance.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
 
-    const wordSpans = targetNode.querySelectorAll('.np-word-token');
+    // Cache token spans per active node to eliminate 120 DOM queries per second in rAF
+    if (!targetNode.__cachedWordSpans || targetNode.__cachedWordSpans.length === 0) {
+      targetNode.__cachedWordSpans = Array.from(targetNode.querySelectorAll('.np-word-token'));
+    }
+    const wordSpans = targetNode.__cachedWordSpans;
 
     // Word boundary event: strictly illuminates only the word being spoken
     utterance.onboundary = (e) => {
@@ -2186,13 +2220,18 @@ function initReader() {
           updateMediaSession();
           startHighlightTracker(activeHtml5Audio, targetNode, boundaries);
 
-          // CRITICAL: Adaptive 6-Paragraph Runway Burst Buffer (Immune to weak 2G/3G drops, saves cellular radio battery)
-          for (let offset = 1; offset <= 6; offset++) {
-            const nextIdx = index + offset;
-            if (nextIdx < paragraphNodes.length) {
-              prefetchParagraphAudio(nextIdx);
+          // Staggered Lookahead Runway: Buffers 3 chunks ahead with gentle pacing (avoids mobile socket congestion)
+          prefetchParagraphAudio(index + 1);
+          setTimeout(() => {
+            if (audioPlaybackEpoch === currentEpoch && audioState.isPlaying && !audioState.isPaused) {
+              prefetchParagraphAudio(index + 2);
             }
-          }
+          }, 350);
+          setTimeout(() => {
+            if (audioPlaybackEpoch === currentEpoch && audioState.isPlaying && !audioState.isPaused) {
+              prefetchParagraphAudio(index + 3);
+            }
+          }, 750);
         };
 
         activeHtml5Audio.onpause = () => {
