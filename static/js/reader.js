@@ -1129,6 +1129,8 @@ function initReader() {
   }
 
   function restoreParagraphDOM() {
+    stopHighlightTracker();
+    clearCurrentWordHighlight();
     paragraphNodes.forEach(p => {
       p.classList.remove('listen-active-paragraph');
       p.querySelectorAll('.np-word-token').forEach(span => {
@@ -1139,6 +1141,8 @@ function initReader() {
 
   function stopSpeech() {
     audioPlaybackEpoch++;
+    stopHighlightTracker();
+    clearCurrentWordHighlight();
     if (activeHtml5Audio) {
       activeHtml5Audio.pause();
       activeHtml5Audio.ontimeupdate = null;
@@ -1207,6 +1211,93 @@ function initReader() {
 
   // Web Speech API fallback engine (Instant, 0MB overhead, device offline)
   // =========================================================================
+  // =========================================================================
+  // HIGH-PRECISION 60FPS WORD SYNCHRONIZER & FRAME TRACKER
+  // =========================================================================
+  let activeSpokenWordSpan = null;
+  let activeParagraphBoundaries = null;
+  let highlightRafId = null;
+
+  function clearCurrentWordHighlight() {
+    if (activeSpokenWordSpan) {
+      activeSpokenWordSpan.classList.remove('np-spoken-word');
+      activeSpokenWordSpan = null;
+    }
+  }
+
+  function startHighlightTracker(audio, targetNode, boundaries) {
+    stopHighlightTracker();
+    function tick() {
+      if (!audio || audio.paused || audio.ended) return;
+      syncHtml5AudioHighlight(audio, targetNode, boundaries);
+      highlightRafId = requestAnimationFrame(tick);
+    }
+    highlightRafId = requestAnimationFrame(tick);
+  }
+
+  function stopHighlightTracker() {
+    if (highlightRafId) {
+      cancelAnimationFrame(highlightRafId);
+      highlightRafId = null;
+    }
+  }
+
+  function parseWordBoundaries(headerVal) {
+    if (!headerVal) return null;
+    try {
+      const raw = atob(headerVal);
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed) || parsed.length === 0) return null;
+      return parsed.map(item => ({
+        start: (item[0] || 0) / 1000,
+        end: ((item[0] || 0) + (item[1] || 0)) / 1000,
+        text: item[2] || ''
+      }));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function estimateActiveWordIdx(currentTime, duration, wordSpans) {
+    if (!wordSpans || wordSpans.length === 0) return -1;
+    if (duration <= 0) return 0;
+
+    const parent = wordSpans[0].parentElement;
+    let weights = parent ? parent.__wordWeights : null;
+    let totalWeight = parent ? parent.__totalWordWeight : 0;
+
+    if (!weights || weights.length !== wordSpans.length) {
+      weights = new Float32Array(wordSpans.length);
+      totalWeight = 0;
+      for (let i = 0; i < wordSpans.length; i++) {
+        const text = wordSpans[i].textContent || '';
+        let w = Math.max(1, text.replace(/[^a-zA-Z0-9]/g, '').length);
+        if (/[.!?]["']?$/.test(text)) {
+          w += 8;
+        } else if (/[,;:—–]["']?$/.test(text)) {
+          w += 4;
+        }
+        weights[i] = w;
+        totalWeight += w;
+      }
+      if (parent) {
+        parent.__wordWeights = weights;
+        parent.__totalWordWeight = totalWeight;
+      }
+    }
+
+    const targetWeight = (currentTime / duration) * totalWeight;
+    let accumulated = 0;
+    for (let i = 0; i < weights.length; i++) {
+      accumulated += weights[i];
+      if (accumulated >= targetWeight) {
+        return i;
+      }
+    }
+    return wordSpans.length - 1;
+  }
+
+  // =========================================================================
   // DUAL-BUFFER GAPLESS AUDIO QUEUE & LOOKAHEAD PREFETCHER (ANDROID HARDENED)
   // =========================================================================
   const prefetchedAudioMap = new Map();
@@ -1228,9 +1319,13 @@ function initReader() {
     if (novelDb) {
       try {
         const cached = await novelDb.audioCache.get([novelSlug, currentChapterNum, idx]);
-        if (cached && cached.audioBlob) {
-          prefetchedAudioMap.set(idx, cached.audioBlob);
-          return cached.audioBlob;
+        if (cached && (cached.audioBlob || cached.blob)) {
+          const entry = {
+            blob: cached.audioBlob || cached.blob,
+            boundaries: cached.boundaries || null
+          };
+          prefetchedAudioMap.set(idx, entry);
+          return entry;
         }
       } catch (e) {}
     }
@@ -1256,8 +1351,11 @@ function initReader() {
       });
 
       if (res.ok) {
+        const b64Wb = res.headers.get('x-word-boundaries');
+        const boundaries = parseWordBoundaries(b64Wb);
         const blob = await res.blob();
-        prefetchedAudioMap.set(idx, blob);
+        const entry = { blob, boundaries };
+        prefetchedAudioMap.set(idx, entry);
 
         // Persist into Dexie for offline library reading
         if (novelDb) {
@@ -1266,10 +1364,11 @@ function initReader() {
             chapterNumber: currentChapterNum,
             paraIndex: idx,
             audioBlob: blob,
+            boundaries: boundaries,
             created_at: Date.now()
           }).catch(() => {});
         }
-        return blob;
+        return entry;
       }
     } catch (prefetchErr) {
       // Non-blocking prefetch failure
@@ -1314,7 +1413,7 @@ function initReader() {
 
     const wordSpans = targetNode.querySelectorAll('.np-word-token');
 
-    // Word boundary event (smooth, non-destructive)
+    // Word boundary event: strictly illuminates only the word being spoken
     utterance.onboundary = (e) => {
       if (!audioState.isPlaying || audioState.isPaused) return;
 
@@ -1334,24 +1433,16 @@ function initReader() {
           matchedSpan = wordSpans.find(s => parseInt(s.getAttribute('data-start') || '0', 10) >= charIdx) || wordSpans[0];
         }
 
-        if (matchedSpan) {
-          let hasPassed = false;
-          wordSpans.forEach(s => {
-            if (s === matchedSpan) {
-              s.classList.add('np-spoken-word');
-              s.classList.remove('np-spoken-word-done');
-              hasPassed = true;
-            } else if (!hasPassed) {
-              s.classList.add('np-spoken-word-done');
-              s.classList.remove('np-spoken-word');
-            } else {
-              s.classList.remove('np-spoken-word', 'np-spoken-word-done');
-            }
-          });
+        if (matchedSpan && activeSpokenWordSpan !== matchedSpan) {
+          if (activeSpokenWordSpan) {
+            activeSpokenWordSpan.classList.remove('np-spoken-word');
+          }
+          matchedSpan.classList.add('np-spoken-word');
+          activeSpokenWordSpan = matchedSpan;
 
           if (audioState.autoScroll) {
             const rect = matchedSpan.getBoundingClientRect();
-            if (rect.top < 80 || rect.bottom > window.innerHeight - 150) {
+            if (rect.top < 90 || rect.bottom > window.innerHeight - 140) {
               matchedSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
           }
@@ -1367,6 +1458,7 @@ function initReader() {
     };
 
     utterance.onend = () => {
+      clearCurrentWordHighlight();
       window.__activeNovelUtterance = null;
       if (audioState.isPlaying && !audioState.isPaused) {
         // 35ms safety delay on Android to avoid dropping IPC audio track
@@ -1378,6 +1470,7 @@ function initReader() {
 
     utterance.onerror = (e) => {
       console.warn("SpeechSynthesis error:", e.error);
+      clearCurrentWordHighlight();
       window.__activeNovelUtterance = null;
       if (audioState.isPlaying && !audioState.isPaused) {
         if (e.error !== 'interrupted' && e.error !== 'canceled') {
@@ -1396,32 +1489,57 @@ function initReader() {
   }
 
   // Synchronize glowing amber word highlight and smooth autoscroll for HTML5 Audio
-  function syncHtml5AudioHighlight(audio, targetNode) {
+  // High-precision frame level tracking: strictly illuminates ONLY the word being spoken
+  function syncHtml5AudioHighlight(audio, targetNode, boundaries) {
     if (!audio || !targetNode) return;
-    const wordSpans = targetNode.querySelectorAll('.np-word-token');
-    if (wordSpans.length === 0) return;
-    const duration = audio.duration || 1;
-    const current = audio.currentTime || 0;
-    const progress = Math.min(1, Math.max(0, current / duration));
-    const targetIdx = Math.min(wordSpans.length - 1, Math.floor(progress * wordSpans.length));
-
-    for (let w = 0; w < wordSpans.length; w++) {
-      if (w < targetIdx) {
-        wordSpans[w].classList.add('np-spoken-word-done');
-        wordSpans[w].classList.remove('np-spoken-word');
-      } else if (w === targetIdx) {
-        wordSpans[w].classList.add('np-spoken-word');
-        wordSpans[w].classList.remove('np-spoken-word-done');
-      } else {
-        wordSpans[w].classList.remove('np-spoken-word', 'np-spoken-word-done');
-      }
+    if (audioState.highlightMode !== 'word') {
+      clearCurrentWordHighlight();
+      return;
     }
 
-    if (audioState.autoScroll && wordSpans[targetIdx]) {
-      const rect = wordSpans[targetIdx].getBoundingClientRect();
-      if (rect.top < 80 || rect.bottom > window.innerHeight - 150) {
-        wordSpans[targetIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const wordSpans = targetNode.querySelectorAll('.np-word-token');
+    if (wordSpans.length === 0) return;
+
+    const currentTime = audio.currentTime || 0;
+    const activeBoundaries = boundaries || activeParagraphBoundaries;
+    let targetSpan = null;
+
+    if (activeBoundaries && activeBoundaries.length > 0) {
+      let activeIdx = -1;
+      for (let i = 0; i < activeBoundaries.length; i++) {
+        const b = activeBoundaries[i];
+        if (currentTime >= b.start - 0.03 && currentTime < b.end + 0.05) {
+          activeIdx = i;
+          break;
+        }
       }
+
+      if (activeIdx >= 0) {
+        targetSpan = wordSpans[Math.min(activeIdx, wordSpans.length - 1)];
+      } else {
+        // In speech pause (between sentences / commas): clear highlight per user mandate
+        targetSpan = null;
+      }
+    } else {
+      // High-precision weighted syllable & punctuation fallback
+      const activeIdx = estimateActiveWordIdx(currentTime, audio.duration || 1, wordSpans);
+      targetSpan = activeIdx >= 0 && activeIdx < wordSpans.length ? wordSpans[activeIdx] : null;
+    }
+
+    if (activeSpokenWordSpan !== targetSpan) {
+      if (activeSpokenWordSpan) {
+        activeSpokenWordSpan.classList.remove('np-spoken-word');
+      }
+      if (targetSpan) {
+        targetSpan.classList.add('np-spoken-word');
+        if (audioState.autoScroll) {
+          const rect = targetSpan.getBoundingClientRect();
+          if (rect.top < 90 || rect.bottom > window.innerHeight - 140) {
+            targetSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      }
+      activeSpokenWordSpan = targetSpan;
     }
   }
 
@@ -1484,21 +1602,24 @@ function initReader() {
 
     // TIER 1: Neural Edge-TTS with Gapless Pre-buffer (Standard HTML5 Audio with Android lock-screen)
     if (currentVoice && currentVoice.isNeural) {
-      let audioBlob = prefetchedAudioMap.get(index) || null;
+      let audioEntry = prefetchedAudioMap.get(index) || null;
 
       // 1. Check Dexie if not in memory map
-      if (!audioBlob && novelDb) {
+      if (!audioEntry && novelDb) {
         try {
           const cached = await novelDb.audioCache.get([novelSlug, currentChapterNum, index]);
-          if (cached && cached.audioBlob) {
-            audioBlob = cached.audioBlob;
-            prefetchedAudioMap.set(index, audioBlob);
+          if (cached && (cached.audioBlob || cached.blob)) {
+            audioEntry = {
+              blob: cached.audioBlob || cached.blob,
+              boundaries: cached.boundaries || null
+            };
+            prefetchedAudioMap.set(index, audioEntry);
           }
         } catch (e) {}
       }
 
       // 2. Fetch directly if not yet prefetched
-      if (!audioBlob && navigator.onLine !== false) {
+      if (!audioEntry && navigator.onLine !== false) {
         try {
           const res = await fetch('/api/tts', {
             method: 'POST',
@@ -1512,14 +1633,18 @@ function initReader() {
           });
           if (currentEpoch !== audioPlaybackEpoch) return; // Stale request cancelled
           if (res.ok) {
-            audioBlob = await res.blob();
-            prefetchedAudioMap.set(index, audioBlob);
+            const b64Wb = res.headers.get('x-word-boundaries');
+            const boundaries = parseWordBoundaries(b64Wb);
+            const blob = await res.blob();
+            audioEntry = { blob, boundaries };
+            prefetchedAudioMap.set(index, audioEntry);
             if (novelDb) {
               novelDb.audioCache.put({
                 novelSlug: novelSlug,
                 chapterNumber: currentChapterNum,
                 paraIndex: index,
-                audioBlob: audioBlob,
+                audioBlob: blob,
+                boundaries: boundaries,
                 created_at: Date.now()
               }).catch(() => {});
             }
@@ -1531,6 +1656,10 @@ function initReader() {
 
       if (currentEpoch !== audioPlaybackEpoch) return;
 
+      const audioBlob = audioEntry instanceof Blob ? audioEntry : audioEntry?.blob;
+      const boundaries = audioEntry?.boundaries || null;
+      activeParagraphBoundaries = boundaries;
+
       if (audioBlob) {
         if (activeAudioUrl) {
           URL.revokeObjectURL(activeAudioUrl);
@@ -1540,23 +1669,30 @@ function initReader() {
         activeHtml5Audio.playbackRate = audioState.rate || 1.0;
         activeHtml5Audio.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
 
-        activeHtml5Audio.ontimeupdate = () => {
-          if (!activeHtml5Audio || activeHtml5Audio.paused) return;
-          syncHtml5AudioHighlight(activeHtml5Audio, targetNode);
-        };
-
         activeHtml5Audio.onplay = () => {
           audioState.isPlaying = true;
           audioState.isPaused = false;
           updatePlayStateUI(true);
           updateMediaSession();
+          startHighlightTracker(activeHtml5Audio, targetNode, boundaries);
 
           // CRITICAL: Immediately prefetch the next 2 paragraphs in background while current plays!
           prefetchParagraphAudio(index + 1);
           prefetchParagraphAudio(index + 2);
         };
 
+        activeHtml5Audio.onpause = () => {
+          stopHighlightTracker();
+        };
+
+        activeHtml5Audio.ontimeupdate = () => {
+          if (!activeHtml5Audio || activeHtml5Audio.paused) return;
+          syncHtml5AudioHighlight(activeHtml5Audio, targetNode, boundaries);
+        };
+
         activeHtml5Audio.onended = () => {
+          stopHighlightTracker();
+          clearCurrentWordHighlight();
           if (activeAudioUrl) {
             URL.revokeObjectURL(activeAudioUrl);
             activeAudioUrl = null;
@@ -1569,12 +1705,15 @@ function initReader() {
         };
 
         activeHtml5Audio.onerror = () => {
+          stopHighlightTracker();
+          clearCurrentWordHighlight();
           activeHtml5Audio = null;
           speakParagraphWebSpeech(index, textToSpeak, targetNode);
         };
 
         try {
           await activeHtml5Audio.play();
+          startHighlightTracker(activeHtml5Audio, targetNode, boundaries);
           return;
         } catch (playErr) {
           console.warn("HTML5 audio playback error, falling back:", playErr);
@@ -1585,6 +1724,7 @@ function initReader() {
     // TIER 2: Native Web Speech API fallback (never mutates audioState.selectedVoice)
     speakParagraphWebSpeech(index, textToSpeak, targetNode);
   }
+
   // Toggle Play / Pause
   function toggleAudioPlay() {
     if (!audioState.isOpen) {
@@ -1595,6 +1735,7 @@ function initReader() {
     if (audioState.isPlaying && !audioState.isPaused) {
       if (activeHtml5Audio) {
         activeHtml5Audio.pause();
+        stopHighlightTracker();
       }
       if (isSpeechSupported && synth.speaking) {
         synth.pause();
@@ -1607,6 +1748,7 @@ function initReader() {
       startAudioPipeline();
       if (activeHtml5Audio) {
         activeHtml5Audio.play().catch(() => {});
+        startHighlightTracker(activeHtml5Audio, paragraphNodes[audioState.currentIndex], activeParagraphBoundaries);
       } else if (isSpeechSupported && synth.paused) {
         synth.resume();
       } else {
@@ -1632,12 +1774,12 @@ function initReader() {
     if (activeHtml5Audio && activeHtml5Audio.duration) {
       if (activeHtml5Audio.currentTime > 10) {
         activeHtml5Audio.currentTime -= 10;
-        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex]);
+        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex], activeParagraphBoundaries);
       } else if (audioState.currentIndex > 0) {
         playPrevParagraph();
       } else {
         activeHtml5Audio.currentTime = 0;
-        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex]);
+        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex], activeParagraphBoundaries);
       }
     } else {
       playPrevParagraph();
@@ -1648,12 +1790,12 @@ function initReader() {
     if (activeHtml5Audio && activeHtml5Audio.duration) {
       if (activeHtml5Audio.currentTime + 10 < activeHtml5Audio.duration) {
         activeHtml5Audio.currentTime += 10;
-        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex]);
+        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex], activeParagraphBoundaries);
       } else if (audioState.currentIndex < paragraphNodes.length - 1) {
         playNextParagraph();
       } else {
         activeHtml5Audio.currentTime = Math.max(0, activeHtml5Audio.duration - 0.2);
-        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex]);
+        syncHtml5AudioHighlight(activeHtml5Audio, paragraphNodes[audioState.currentIndex], activeParagraphBoundaries);
       }
     } else {
       playNextParagraph();

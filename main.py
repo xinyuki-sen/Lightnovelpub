@@ -272,17 +272,31 @@ async def generate_tts(req: TTSRequest):
     pitch_str = f"{pitch_hz:+d}Hz"
 
     try:
+        import base64
+        import json
         import edge_tts
-        comm = edge_tts.Communicate(text=text, voice=req.voice, rate=rate_str, pitch=pitch_str)
+        comm = edge_tts.Communicate(text=text, voice=req.voice, rate=rate_str, pitch=pitch_str, boundary="WordBoundary")
         chunks = []
+        word_boundaries = []
         async for chunk in comm.stream():
             if chunk["type"] == "audio":
                 chunks.append(chunk["data"])
+            elif chunk["type"] == "WordBoundary":
+                # offset and duration in 100ns units -> convert to milliseconds
+                start_ms = int(chunk["offset"] / 10000)
+                dur_ms = int(chunk["duration"] / 10000)
+                word_boundaries.append([start_ms, dur_ms, chunk["text"]])
         
         audio_data = b"".join(chunks)
-        return Response(content=audio_data, media_type="audio/mpeg", headers={
-            "Cache-Control": "public, max-age=86400, immutable"
-        })
+        headers = {
+            "Cache-Control": "public, max-age=86400, immutable",
+            "Access-Control-Expose-Headers": "X-Word-Boundaries"
+        }
+        if word_boundaries:
+            b64_wb = base64.b64encode(json.dumps(word_boundaries, separators=(',', ':')).encode('utf-8')).decode('ascii')
+            headers["X-Word-Boundaries"] = b64_wb
+
+        return Response(content=audio_data, media_type="audio/mpeg", headers=headers)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
