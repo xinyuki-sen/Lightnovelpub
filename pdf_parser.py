@@ -57,7 +57,45 @@ def clean_lines_into_paragraphs(lines: List[str]) -> List[str]:
         if len(para_text) > 0:
             paragraphs.append(para_text)
 
-    return paragraphs
+    return format_novel_paragraphs(paragraphs)
+
+def format_novel_paragraphs(paragraphs: List[str]) -> List[str]:
+    """
+    Intelligently splits monolithic paragraphs into well-spaced dialogue,
+    MC narrative, and System HUD blocks with clean spacing.
+    """
+    structured_paras = []
+
+    for p in paragraphs:
+        t = p.strip()
+        if not t:
+            continue
+
+        # Split before known system triggers
+        t = re.sub(r'(\bNew\s+achievement!\s*)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bReward:\s*)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bCrawler\s*#\d+)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bLevel\s+\d+\.\s*(?:Race:|Class:|Small,|Engineers\.|\b))', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bGoblin\s+Murder\s+Dozer)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bGoblin\s+Engineer\.\s+Level)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bGoblin\.\s+Level)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bYou\s+have\s+been\s+designated\s+Crawler)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bPlease\s+pay\s+careful\s+attention\b)', r'\n\n\1', t, flags=re.IGNORECASE)
+        t = re.sub(r'(\bDungeon\s+Floor\s+\d+\.\s*Time\s+to\s+Level\s+Collapse:[^\.]+\.)', r'\n\n\1\n\n', t, flags=re.IGNORECASE)
+
+        # Split dialogue
+        t = re.sub(r'([.!?])\s*([“"][A-Z])', r'\1\n\n\2', t)
+        t = re.sub(r'([”"][.!?]?)\s+([A-Z][a-z]+(?:\s+[a-z]+){0,3}\s+[a-z]+)', r'\1\n\n\2', t)
+
+        for chunk in t.split('\n\n'):
+            chunk = chunk.strip()
+            if chunk:
+                if re.match(r'^Reward:\s*', chunk, re.IGNORECASE) and structured_paras:
+                    structured_paras[-1] += "\n" + chunk
+                else:
+                    structured_paras.append(chunk)
+
+    return structured_paras
 
 def check_heading(line: str) -> Tuple[Optional[str], str]:
     """

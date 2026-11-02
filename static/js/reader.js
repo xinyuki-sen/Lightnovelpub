@@ -321,6 +321,102 @@ function initReader() {
   }
 
   // =========================================================================
+  // SYSTEM VS MC DISTINGUISHER & HOLOGRAPHIC HUD CONTROLLER
+  // =========================================================================
+  const btnToggleSystemHud = document.getElementById('btn-toggle-system-hud');
+  let systemHudEnabled = localStorage.getItem('novel_reader_system_hud') !== 'false';
+
+  function setSystemHud(enabled) {
+    systemHudEnabled = enabled;
+    localStorage.setItem('novel_reader_system_hud', enabled ? 'true' : 'false');
+    document.body.classList.toggle('system-hud-disabled', !enabled);
+    if (btnToggleSystemHud) {
+      btnToggleSystemHud.textContent = enabled ? '⚡ HUD On' : '⚡ HUD Off';
+      btnToggleSystemHud.classList.toggle('active', enabled);
+    }
+  }
+
+  if (btnToggleSystemHud) {
+    btnToggleSystemHud.addEventListener('click', () => {
+      setSystemHud(!systemHudEnabled);
+    });
+    setSystemHud(systemHudEnabled);
+  }
+
+  function buildParagraphElement(pText, idx) {
+    const text = (pText || '').trim();
+    if (text.includes('New achievement!') || text.startsWith('Reward:')) {
+      const card = document.createElement('div');
+      card.className = 'reader-system-card system-card-achievement';
+      card.setAttribute('data-para-idx', String(idx));
+      card.setAttribute('data-system-type', 'achievement');
+      card.title = 'Click to start audio reading from here';
+      card.innerHTML = `
+        <div class="system-card-header">
+          <span class="system-badge">✦ ACHIEVEMENT UNLOCKED</span>
+        </div>
+        <div class="system-card-body">${text}</div>
+      `;
+      return card;
+    } else if (text.includes('Crawler #') || text.includes('Race: Cat') || text.includes('Class:')) {
+      const card = document.createElement('div');
+      card.className = 'reader-system-card system-card-stats';
+      card.setAttribute('data-para-idx', String(idx));
+      card.setAttribute('data-system-type', 'stats');
+      card.title = 'Click to start audio reading from here';
+      card.innerHTML = `
+        <div class="system-card-header">
+          <span class="system-badge">📊 CRAWLER TELEMETRY // STATS</span>
+        </div>
+        <div class="system-card-body">${text}</div>
+      `;
+      return card;
+    } else if (text.includes('Goblin Murder Dozer') || text.includes('Goblin. Level') || text.includes('Goblin Engineer') || text.includes('A tooltip popped up')) {
+      const card = document.createElement('div');
+      card.className = 'reader-system-card system-card-tooltip';
+      card.setAttribute('data-para-idx', String(idx));
+      card.setAttribute('data-system-type', 'tooltip');
+      card.title = 'Click to start audio reading from here';
+      card.innerHTML = `
+        <div class="system-card-header">
+          <span class="system-badge">⚡ ENTITY SCAN // TOOLTIP</span>
+        </div>
+        <div class="system-card-body">${text}</div>
+      `;
+      return card;
+    } else if (text.includes('Please pay careful attention') || text.includes('You have been designated Crawler') || text.includes('Time to Level Collapse:')) {
+      const card = document.createElement('div');
+      card.className = 'reader-system-card system-card-broadcast';
+      card.setAttribute('data-para-idx', String(idx));
+      card.setAttribute('data-system-type', 'broadcast');
+      card.title = 'Click to start audio reading from here';
+      card.innerHTML = `
+        <div class="system-card-header">
+          <span class="system-badge">📢 DUNGEON DIRECTIVE</span>
+        </div>
+        <div class="system-card-body">${text}</div>
+      `;
+      return card;
+    } else if (text.startsWith('"') || text.startsWith('“')) {
+      const p = document.createElement('p');
+      p.className = 'reader-dialogue';
+      p.setAttribute('data-para-index', String(idx));
+      p.setAttribute('data-para-idx', String(idx));
+      p.title = 'Click to start audio reading from here';
+      p.textContent = text;
+      return p;
+    } else {
+      const p = document.createElement('p');
+      p.className = 'reader-narrative';
+      p.setAttribute('data-para-index', String(idx));
+      p.setAttribute('data-para-idx', String(idx));
+      p.title = 'Click to start audio reading from here';
+      p.textContent = text;
+      return p;
+    }
+  }
+
+  // =========================================================================
   // SEAMLESS INSTANT SPA CHAPTER NAVIGATION ENGINE (<100MS ZERO-LAG TRANSITION)
   // =========================================================================
   const chapterCache = new Map();
@@ -458,24 +554,19 @@ function initReader() {
         chapterSelect.value = `/novel/${novelSlug}/chapter/${data.chapter_number}`;
       }
 
-      // 5. Swap Chapter Content in-place
+      // 5. Swap Chapter Content in-place with Structured System HUD Cards
       const chapterContent = document.getElementById('chapter-content');
       if (chapterContent) {
         chapterContent.innerHTML = '';
         const fragment = document.createDocumentFragment();
         data.paragraphs.forEach((pText, idx) => {
-          const p = document.createElement('p');
-          p.setAttribute('data-para-index', String(idx));
-          p.setAttribute('data-para-idx', String(idx));
-          p.title = 'Click to start audio reading from here';
-          p.textContent = pText;
-          fragment.appendChild(p);
+          fragment.appendChild(buildParagraphElement(pText, idx));
         });
         chapterContent.appendChild(fragment);
       }
 
-      // 6. Re-index Paragraph Nodes
-      paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p'));
+      // 6. Re-index Paragraph Nodes (both narrative paragraphs and system cards)
+      paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p, #chapter-content .reader-system-card'));
       paragraphNodes.forEach((node, idx) => {
         node.setAttribute('data-para-idx', String(idx));
         node.addEventListener('click', () => {
@@ -580,10 +671,13 @@ function initReader() {
     prefetchAdjacentChapters(currentChapterNum);
   }, 1000);
 
-  // Pre-index all chapter paragraphs with deterministic data-para-idx
-  let paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p'));
+  // Pre-index all chapter paragraphs with deterministic data-para-idx (including System HUD Cards)
+  let paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p, #chapter-content .reader-system-card'));
   paragraphNodes.forEach((node, idx) => {
     node.setAttribute('data-para-idx', String(idx));
+    node.addEventListener('click', () => {
+      openAudioPlayer(idx);
+    });
   });
 
   // =========================================================================
@@ -1507,10 +1601,11 @@ function initReader() {
     }
   }
 
-  // Non-destructive word tokenization on the active paragraph
+  // Non-destructive word tokenization on the active paragraph (respects System HUD Cards)
   function tokenizeParagraphWords(node) {
     if (node.getAttribute('data-tokenized') === 'true') return;
-    const text = node.textContent;
+    const targetContainer = node.querySelector('.system-card-body') || node;
+    const text = targetContainer.textContent;
     // Split into words while keeping delimiters
     const tokens = text.split(/(\s+)/);
     const fragment = document.createDocumentFragment();
@@ -1540,8 +1635,8 @@ function initReader() {
       charOffset += t.length;
     });
 
-    node.innerHTML = '';
-    node.appendChild(fragment);
+    targetContainer.innerHTML = '';
+    targetContainer.appendChild(fragment);
     node.setAttribute('data-tokenized', 'true');
   }
 
@@ -1917,7 +2012,9 @@ function initReader() {
     audioState.currentIndex = index;
     recordReadingProgress(index, true);
     const targetNode = paragraphNodes[index];
-    const textToSpeak = targetNode.textContent.trim();
+    const textContainer = targetNode.querySelector('.system-card-body') || targetNode;
+    const textToSpeak = textContainer.textContent.trim();
+    const isSystemCard = targetNode.classList.contains('reader-system-card') || targetNode.hasAttribute('data-system-type');
 
     if (!textToSpeak) {
       speakParagraph(index + 1, true);
@@ -1974,8 +2071,8 @@ function initReader() {
             body: JSON.stringify({
               text: textToSpeak,
               voice: currentVoice.edgeVoice || 'en-US-ChristopherNeural',
-              rate: audioState.rate || 1.0,
-              pitch: audioState.pitch || 1.0
+              rate: isSystemCard ? (audioState.rate || 1.0) * 1.04 : (audioState.rate || 1.0),
+              pitch: isSystemCard ? Math.min(1.4, (audioState.pitch || 1.0) * 1.15) : (audioState.pitch || 1.0)
             })
           });
           if (currentEpoch !== audioPlaybackEpoch) return; // Stale request cancelled

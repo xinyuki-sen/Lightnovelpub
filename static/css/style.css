@@ -4290,3 +4290,149 @@ a {
     margin-bottom: 11.5rem !important;
   }
 }
+
+/* =========================================================================
+   SYSTEM VS MC DISTINGUISHER // HOLOGRAPHIC DUNGEON HUD CARDS
+   ========================================================================= */
+.reader-system-card {
+  position: relative;
+  margin: 1.85rem 0 !important;
+  padding: 1.25rem 1.5rem !important;
+  border-radius: 16px !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-family: 'Space Grotesk', -apple-system, sans-serif !important;
+  text-align: left !important;
+  word-break: break-word;
+  user-select: text;
+}
+
+.reader-system-card .system-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.45rem;
+}
+
+.reader-system-card .system-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  padding: 4px 11px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Space Grotesk', monospace, sans-serif;
+  text-transform: uppercase;
+}
+
+.reader-system-card .system-card-body {
+  font-size: 0.96em;
+  line-height: 1.75;
+  font-weight: 500;
+}
+
+/* 1. Golden Achievement Unlocked */
+.system-card-achievement {
+  background: linear-gradient(135deg, rgba(32, 22, 6, 0.94), rgba(18, 12, 3, 0.97)) !important;
+  border: 1px solid rgba(245, 158, 11, 0.55) !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 24px rgba(245, 158, 11, 0.18) !important;
+}
+.system-card-achievement .system-badge {
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #fbbf24 !important;
+}
+.system-card-achievement .system-card-body {
+  color: #fef3c7;
+}
+.system-card-achievement .system-reward-row {
+  margin-top: 0.85rem;
+  padding: 0.6rem 0.95rem;
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 3px solid #fbbf24;
+  border-radius: 8px;
+  font-size: 0.92em;
+  color: #fde68a;
+  font-weight: 600;
+}
+
+/* 2. Tooltip & Monster Scan (Neon Emerald) */
+.system-card-tooltip {
+  background: linear-gradient(135deg, rgba(6, 28, 18, 0.94), rgba(3, 16, 10, 0.97)) !important;
+  border: 1px solid rgba(16, 185, 129, 0.5) !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 24px rgba(16, 185, 129, 0.15) !important;
+}
+.system-card-tooltip .system-badge {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  color: #34d399 !important;
+}
+.system-card-tooltip .system-card-body {
+  color: #d1fae5;
+}
+
+/* 3. Crawler Status & Stats (Cyber Cyan) */
+.system-card-stats {
+  background: linear-gradient(135deg, rgba(6, 24, 34, 0.94), rgba(3, 14, 20, 0.97)) !important;
+  border: 1px solid rgba(6, 182, 212, 0.55) !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 24px rgba(6, 182, 212, 0.15) !important;
+}
+.system-card-stats .system-badge {
+  background: rgba(6, 182, 212, 0.2);
+  border: 1px solid rgba(6, 182, 212, 0.5);
+  color: #38bdf8 !important;
+}
+.system-card-stats .system-card-body {
+  color: #e0f2fe;
+}
+
+/* 4. Dungeon Directive / Broadcast (Crimson Violet) */
+.system-card-broadcast {
+  background: linear-gradient(135deg, rgba(32, 8, 14, 0.94), rgba(18, 4, 8, 0.97)) !important;
+  border: 1px solid rgba(239, 68, 68, 0.55) !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 24px rgba(239, 68, 68, 0.15) !important;
+}
+.system-card-broadcast .system-badge {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #f87171 !important;
+}
+.system-card-broadcast .system-card-body {
+  color: #fee2e2;
+}
+
+/* Spoken Dialogue Distinction (Distinguishes MC/character speech) */
+.reader-article-canvas p.reader-dialogue {
+  border-left: 3px solid rgba(157, 78, 221, 0.6) !important;
+  background: rgba(157, 78, 221, 0.05) !important;
+  padding-left: 1.15rem !important;
+  margin-top: 0.65rem;
+  margin-bottom: 0.65rem;
+}
+
+/* System Card Active Speech Glow */
+.reader-system-card.listen-active-paragraph {
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 28px rgba(168, 85, 247, 0.6) !important;
+  transform: scale(1.01);
+}
+
+/* Fallback: when user disables HUD cards */
+body.system-hud-disabled .reader-system-card {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0.45rem 0.8rem !important;
+  margin: 0.75rem 0 !important;
+  font-family: inherit !important;
+  font-style: italic;
+}
+body.system-hud-disabled .reader-system-card .system-card-header {
+  display: none !important;
+}

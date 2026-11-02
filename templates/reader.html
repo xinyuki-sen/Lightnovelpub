@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/static/img/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=15">
+  <link rel="stylesheet" href="/static/css/style.css?v=16">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
@@ -137,6 +137,14 @@
       </button>
     </div>
 
+    <!-- System HUD Telemetry Cards Toggle -->
+    <div class="setting-ctrl-item">
+      <span>System HUD:</span>
+      <button type="button" class="reader-tool-btn active" id="btn-toggle-system-hud" style="padding: 0.35rem 0.8rem; font-size: 0.82rem;" title="Distinguish System Notifications, Tooltips & Achievements with Hologram HUD Cards">
+        ⚡ HUD On
+      </button>
+    </div>
+
     <!-- Reset Defaults -->
     <div class="setting-ctrl-item">
       <button class="reader-tool-btn" id="btn-reset-settings" style="padding: 0.35rem 0.8rem; font-size: 0.82rem;" title="Reset typography & theme to defaults">
@@ -181,7 +189,48 @@
 
     <div id="chapter-content">
       {% for para in chapter.paragraphs %}
-      <p data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para }}</p>
+        {% set p_text = para.strip() %}
+        {% if 'New achievement!' in p_text or p_text.startswith('Reward:') %}
+          <div class="reader-system-card system-card-achievement" data-para-idx="{{ loop.index0 }}" data-system-type="achievement" title="Click to start audio reading from here">
+            <div class="system-card-header">
+              <span class="system-badge">✦ ACHIEVEMENT UNLOCKED</span>
+            </div>
+            <div class="system-card-body">
+              {{ p_text }}
+            </div>
+          </div>
+        {% elif 'Crawler #' in p_text or 'Race: Cat' in p_text or 'Class:' in p_text %}
+          <div class="reader-system-card system-card-stats" data-para-idx="{{ loop.index0 }}" data-system-type="stats" title="Click to start audio reading from here">
+            <div class="system-card-header">
+              <span class="system-badge">📊 CRAWLER TELEMETRY // STATS</span>
+            </div>
+            <div class="system-card-body">
+              {{ p_text }}
+            </div>
+          </div>
+        {% elif 'Goblin Murder Dozer' in p_text or 'Goblin. Level' in p_text or 'Goblin Engineer' in p_text or 'A tooltip popped up' in p_text %}
+          <div class="reader-system-card system-card-tooltip" data-para-idx="{{ loop.index0 }}" data-system-type="tooltip" title="Click to start audio reading from here">
+            <div class="system-card-header">
+              <span class="system-badge">⚡ ENTITY SCAN // TOOLTIP</span>
+            </div>
+            <div class="system-card-body">
+              {{ p_text }}
+            </div>
+          </div>
+        {% elif 'Please pay careful attention' in p_text or 'You have been designated Crawler' in p_text or 'Time to Level Collapse:' in p_text %}
+          <div class="reader-system-card system-card-broadcast" data-para-idx="{{ loop.index0 }}" data-system-type="broadcast" title="Click to start audio reading from here">
+            <div class="system-card-header">
+              <span class="system-badge">📢 DUNGEON DIRECTIVE</span>
+            </div>
+            <div class="system-card-body">
+              {{ p_text }}
+            </div>
+          </div>
+        {% elif p_text.startswith('"') or p_text.startswith('“') %}
+          <p class="reader-dialogue" data-para-idx="{{ loop.index0 }}" data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para }}</p>
+        {% else %}
+          <p class="reader-narrative" data-para-idx="{{ loop.index0 }}" data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para }}</p>
+        {% endif %}
       {% endfor %}
     </div>
   </article>
@@ -497,7 +546,7 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=15"></script>
-  <script src="/static/js/reader.js?v=15"></script>
+  <script src="/static/js/dexie.min.js?v=16"></script>
+  <script src="/static/js/reader.js?v=16"></script>
 </body>
 </html>
