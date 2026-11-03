@@ -4,16 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#09090b">
-  <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v=30">
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png?v=30">
-  <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png?v=30">
-  <link rel="icon" type="image/png" sizes="192x192" href="/static/img/icon-192.png?v=30">
-  <link rel="icon" type="image/png" sizes="512x512" href="/static/img/icon-512.png?v=30">
-  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v=30">
-  <link rel="apple-touch-icon" href="/static/img/logo.png?v=30">
-  <link rel="manifest" href="/static/manifest.json?v=30">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v=31">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png?v=31">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png?v=31">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/img/icon-192.png?v=31">
+  <link rel="icon" type="image/png" sizes="512x512" href="/static/img/icon-512.png?v=31">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v=31">
+  <link rel="apple-touch-icon" href="/static/img/logo.png?v=31">
+  <link rel="manifest" href="/static/manifest.json?v=31">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=30">
+  <link rel="stylesheet" href="/static/css/style.css?v=31">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
@@ -406,7 +406,10 @@
 
       <!-- Offline Battery-Saver Audio Download -->
       <div style="padding: 0.55rem 1rem 0.25rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255, 255, 255, 0.08); margin-top: 0.35rem;">
-        <span style="font-size: 0.76rem; font-weight: 700; color: #a1a1aa; letter-spacing: 0.04em;">OFFLINE RUNWAY</span>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 0.76rem; font-weight: 700; color: #a1a1aa; letter-spacing: 0.04em;">OFFLINE RUNWAY</span>
+          <span id="lbl-runway-battery-badge" class="runway-battery-badge" style="display:none;" title="Modem sleeping in ultra-low power idle">⚡ Runway: 10 Paras</span>
+        </div>
         <button type="button" id="btn-preload-chapter-audio" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); color: #d8b4fe; padding: 0.32rem 0.75rem; border-radius: 9999px; font-size: 0.76rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.35rem; transition: all 0.2s ease;">
           <span>⚡</span> <span id="lbl-preload-status">Preload Chapter Audio</span>
         </button>
@@ -577,7 +580,7 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=30"></script>
-  <script src="/static/js/reader.js?v=30"></script>
+  <script src="/static/js/dexie.min.js?v=31"></script>
+  <script src="/static/js/reader.js?v=31"></script>
 </body>
 </html>

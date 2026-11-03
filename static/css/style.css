@@ -74,12 +74,20 @@ body[data-reader-theme="emerald"] {
 }
 
 body[data-reader-theme="black"] {
-  --bg-base: #08080a;
-  --bg-surface: #101014;
-  --bg-surface-elevated: #181820;
-  --bg-card: #13131a;
+  --bg-base: #000000;
+  --bg-surface: #050507;
+  --bg-surface-elevated: #09090d;
+  --bg-card: #050508;
   --text-primary: #f0f0f5;
   --text-secondary: #9ea0b4;
+}
+
+/* True-OLED Pure Black 0.00 mA Diode Shutdown */
+body[data-reader-theme="black"],
+body[data-reader-theme="black"] .reader-body,
+body[data-reader-theme="black"] .reader-article-canvas,
+body[data-reader-theme="black"] .main-content {
+  background-color: #000000 !important;
 }
 
 body[data-reader-theme="midnight"] {
@@ -4570,4 +4578,26 @@ body.system-hud-disabled .reader-system-card .system-card-header {
 .sleep-toast-btn:hover {
   background: rgba(168, 85, 247, 0.45);
   transform: scale(1.05);
+}
+
+/* Offline Modem Runway Battery Badge */
+.runway-battery-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: all 0.25s ease;
+}
+
+.runway-battery-badge.sleeping {
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.12);
 }
