@@ -103,6 +103,7 @@ python -c "import database; print('Lexer verified across library:', database.ini
 ---
 
 ## 📜 Version History
+* **v28**: Custom Arcane Wheel Brand Crest across favicon, navbar logo, PWA manifest, and fixed raw HTML `<title>` tab leak.
 * **v27**: Cloud Database Adapter (Turso / LibSQL over HTTP with automatic local SQLite fallback), frontend ID de-duplication, and dead code cleanup.
 * **v26**: Sentence-Preserving Paragraph Engine (3-Stage Tokenized Lexer, Zero Mid-Sentence Cut, Triple-Lock Cache Purge, and Auto Web Speech Fallback).
 * **v24**: Removal of edge bezel gestures for 100% natural, uninterrupted mobile touch scrolling.
