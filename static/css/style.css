@@ -4478,3 +4478,96 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   mix-blend-mode: multiply;
   transition: background-color 0.25s ease;
 }
+
+/* ========================================================================= */
+/* CIRCADIAN EXPONENTIAL SLEEP ENGINE & LITRPG STAT-BOX AUDIO HUD BYPASS      */
+/* ========================================================================= */
+
+.np-sleep-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  color: #d8b4fe;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+}
+
+.np-sleep-badge:hover {
+  background: rgba(168, 85, 247, 0.22);
+  border-color: rgba(168, 85, 247, 0.6);
+  transform: scale(1.05);
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.4);
+}
+
+.np-sleep-badge.decaying {
+  border-color: #f59e0b;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.16);
+  animation: sleepPulse 1.5s infinite ease-in-out;
+}
+
+@keyframes sleepPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(245, 158, 11, 0.65);
+    transform: scale(1.04);
+  }
+}
+
+.sleep-toast {
+  position: fixed;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(15, 15, 22, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #f4f4f5;
+  padding: 0.75rem 1.4rem;
+  border-radius: 9999px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 20px rgba(168, 85, 247, 0.25);
+  z-index: 100000;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sleep-toast.active {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.sleep-toast-btn {
+  background: rgba(168, 85, 247, 0.25);
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  color: #e9d5ff;
+  border-radius: 9999px;
+  padding: 2px 9px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 0.4rem;
+  transition: all 0.2s ease;
+}
+
+.sleep-toast-btn:hover {
+  background: rgba(168, 85, 247, 0.45);
+  transform: scale(1.05);
+}

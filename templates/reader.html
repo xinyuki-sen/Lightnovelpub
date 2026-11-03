@@ -4,12 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#09090b">
-  <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v=28">
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/logo.png?v=28">
-  <link rel="apple-touch-icon" href="/static/img/logo.png?v=28">
-  <link rel="manifest" href="/static/manifest.json?v=28">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v=30">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png?v=30">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png?v=30">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/img/icon-192.png?v=30">
+  <link rel="icon" type="image/png" sizes="512x512" href="/static/img/icon-512.png?v=30">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v=30">
+  <link rel="apple-touch-icon" href="/static/img/logo.png?v=30">
+  <link rel="manifest" href="/static/manifest.json?v=30">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=28">
+  <link rel="stylesheet" href="/static/css/style.css?v=30">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
@@ -280,6 +284,11 @@
       </div>
 
       <div class="np-audio-header-actions">
+        <!-- Sleep Engine Countdown Moon Badge -->
+        <button type="button" class="np-sleep-badge" id="np-sleep-badge" style="display: none;" title="Circadian Sleep Engine Active — Click to add 15m or cancel">
+          <span class="sleep-moon-icon">🌙</span> <span id="np-sleep-badge-time">15:00</span>
+        </button>
+
         <!-- Speed Stepper Pill (- 1x +) -->
         <div class="np-speed-stepper">
           <button type="button" class="np-stepper-btn" id="np-speed-minus" title="Slow Down">−</button>
@@ -381,6 +390,15 @@
           <span class="np-switch-label">Auto-scroll to spoken text</span>
           <div class="np-switch-container">
             <input type="checkbox" id="np-toggle-autoscroll" checked>
+            <span class="np-switch-slider"></span>
+          </div>
+        </label>
+
+        <!-- LitRPG Stat-Box Audio HUD Bypass -->
+        <label class="np-switch-row" title="Bypasses repetitive numerical tables in narration while keeping full glowing cards visible">
+          <span class="np-switch-label">LitRPG Stat-Box Audio Bypass <span style="display:block; font-size:0.71rem; color:#a1a1aa; font-weight:400; margin-top:0.1rem;">Skip drone of numbers; recite narrative summary</span></span>
+          <div class="np-switch-container">
+            <input type="checkbox" id="np-toggle-bypass-stats" checked>
             <span class="np-switch-slider"></span>
           </div>
         </label>
@@ -559,7 +577,7 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=29"></script>
-  <script src="/static/js/reader.js?v=29"></script>
+  <script src="/static/js/dexie.min.js?v=30"></script>
+  <script src="/static/js/reader.js?v=30"></script>
 </body>
 </html>

@@ -103,6 +103,10 @@ python -c "import database; print('Lexer verified across library:', database.ini
 ---
 
 ## 📜 Version History
+* **v30**: 
+  - **The Circadian Exponential Sleep Engine**: Night-time audio sleep timer (15m, 30m, 45m, 60m, and End of Chapter) featuring a smooth 60-second quadratic volume decay curve ($V(t) = V_{\text{base}} \times (t/60)^2$) to prevent abrupt silence jolting sleepers awake; client-authoritative Dexie v4 reading position freeze; hardware screen wake-lock release; live glowing moon countdown badge (`🌙 MM:SS`); and gentle toast notifications.
+  - **LitRPG Stat-Box Audio HUD Bypass**: Intelligent text-to-speech filter that detects dense numerical tables, attribute lists, level-ups, and status windows, speaking natural concise summaries (e.g., *"Status screen for Carl. Attributes updated."*) while preserving 100% of the glowing visual system cards and tables on screen.
+  - **High-Fidelity Arcane Crest Suite**: Multi-resolution hand-drawn arcane wheel brand crest across Browser Tab Favicon (`favicon.ico`, `favicon-32x32.png`, `favicon-16x16.png`), Glassmorphic Top Navbar Logo (`logo.png`), Apple Touch Icon (`apple-touch-icon.png`), and Edge/Chrome PWA Sidebar Manifest (`icon-192.png`, `icon-512.png`).
 * **v29**: Native Chromium PDFium Slicing Engine (10x faster 2s parsing), Drop-Cap Heading Stitcher, Dual-Engine Client-Authoritative Persistence (`LightnovelpubDB_v4` Custom Novels store), Live XHR Upload Progress Bar, and Serverless Cold-Start Fallback Hydration.
 * **v28**: Custom Arcane Wheel Brand Crest across favicon, navbar logo, PWA manifest, and fixed raw HTML `<title>` tab leak.
 * **v27**: Cloud Database Adapter (Turso / LibSQL over HTTP with automatic local SQLite fallback), frontend ID de-duplication, and dead code cleanup.

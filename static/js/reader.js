@@ -1490,7 +1490,7 @@ function initReader() {
             if (localCh.title) {
               const headTitle = document.querySelector('.chapter-headline-title');
               if (headTitle) headTitle.textContent = localCh.title;
-              document.title = ${localCh.title} — LightnovelPub;
+              document.title = `${localCh.title} — LightnovelPub`;
             }
             if (typeof restoreReadingPosition === 'function') {
               restoreReadingPosition();
@@ -3699,7 +3699,7 @@ function initReader() {
 
     if (!targetNode) return null;
 
-    const textToPrefetch = targetNode.textContent.trim();
+    const textToPrefetch = sanitizeSpeechText(targetNode.textContent.trim(), targetNode);
 
     if (!textToPrefetch) return null;
 
@@ -4205,6 +4205,20 @@ function initReader() {
 
         if (sleepSelect) sleepSelect.value = '0';
 
+        const sBadge = document.getElementById('np-sleep-badge');
+
+        if (sBadge) {
+
+          sBadge.style.display = 'none';
+
+          sBadge.classList.remove('decaying');
+
+        }
+
+        releaseWakeLock();
+
+        showSleepToast('🌙 End of Chapter reached. Reading progress locked. Sweet dreams.');
+
         return;
 
       }
@@ -4249,7 +4263,7 @@ function initReader() {
 
     const textContainer = targetNode.querySelector('.system-card-body') || targetNode;
 
-    const textToSpeak = textContainer.textContent.trim();
+    const textToSpeak = sanitizeSpeechText(textContainer.textContent.trim(), targetNode);
 
     const isSystemCard = targetNode.classList.contains('reader-system-card') || targetNode.hasAttribute('data-system-type');
 
@@ -5174,125 +5188,262 @@ function initReader() {
 
 
   // =========================================================================
-
-  // SLEEP TIMER ENGINE (SMOOTH 3S VOLUME FADE-OUT)
-
+  // LITRPG STAT-BOX AUDIO HUD BYPASS
+  // Intelligently bypasses repetitive 30-line attribute tables in narration
+  // while keeping the glowing HTML system cards 100% visible on screen.
   // =========================================================================
+  function sanitizeSpeechText(rawText, targetNode) {
+    if (!rawText) return '';
+    const bypassToggle = document.getElementById('np-toggle-bypass-stats');
+    const isBypassEnabled = bypassToggle ? bypassToggle.checked : true;
+    if (!isBypassEnabled) return rawText;
 
-  let sleepTimerInterval = null;
+    const isSystemNode = targetNode && (
+      targetNode.classList.contains('reader-system-card') ||
+      targetNode.classList.contains('system-card-stats') ||
+      targetNode.classList.contains('system-card-achievement') ||
+      targetNode.classList.contains('system-card-tooltip') ||
+      targetNode.hasAttribute('data-system-type')
+    );
 
-  let sleepTimerTargetMs = null;
+    // Look for characteristic LitRPG stat patterns:
+    // e.g. "Strength: 45", "Agility: 32", "Health: 120/120", "Mana: 60/60", "[Level: 14]"
+    const statKeyRegex = /\b(Health|Mana|Stamina|Strength|Agility|Vitality|Dexterity|Endurance|Intelligence|Wisdom|Perception|Charisma|Luck|Willpower|Defense|Attack|Speed|HP|MP|SP|Rank|Level|Class|Title)\s*[:：]\s*(\d+|\d+\s*\/\s*\d+|[A-Za-z0-9+-]+)/gi;
+    const matches = rawText.match(statKeyRegex);
 
-  const sleepTimerSelect = document.getElementById('np-sleep-timer-select');
-
-
-
-  function initSleepTimer() {
-
-    if (!sleepTimerSelect) return;
-
-    sleepTimerSelect.addEventListener('change', (e) => {
-
-      setSleepTimer(e.target.value);
-
-    });
-
-  }
-
-
-
-  function setSleepTimer(val) {
-
-    if (sleepTimerInterval) {
-
-      clearInterval(sleepTimerInterval);
-
-      sleepTimerInterval = null;
-
-    }
-
-    sleepTimerTargetMs = null;
-
-    audioState.stopAtChapterEnd = false;
-
-
-
-    if (val === '0' || !val) {
-
-      return;
-
-    }
-
-
-
-    if (val === 'ch_end') {
-
-      audioState.stopAtChapterEnd = true;
-
-      return;
-
-    }
-
-
-
-    const mins = parseInt(val, 10);
-
-    if (isNaN(mins) || mins <= 0) return;
-
-
-
-    sleepTimerTargetMs = Date.now() + (mins * 60 * 1000);
-
-
-
-    sleepTimerInterval = setInterval(() => {
-
-      const remainingMs = sleepTimerTargetMs - Date.now();
-
-      if (remainingMs <= 3000 && remainingMs > 0) {
-
-        // Smooth 3s volume fade out
-
-        if (activeHtml5Audio) {
-
-          const baseVol = audioState.volume !== undefined ? audioState.volume : 1.0;
-
-          activeHtml5Audio.volume = Math.max(0, baseVol * (remainingMs / 3000));
-
-        }
-
-      } else if (remainingMs <= 0) {
-
-        clearInterval(sleepTimerInterval);
-
-        sleepTimerInterval = null;
-
-        if (audioState.isPlaying && !audioState.isPaused) {
-
-          toggleAudioPlay();
-
-        }
-
-        if (activeHtml5Audio) {
-
-          activeHtml5Audio.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
-
-        }
-
-        if (sleepTimerSelect) sleepTimerSelect.value = '0';
-
+    // Check if paragraph is primarily a numerical stat box (3 or more stat attributes, or system card with stats)
+    if ((matches && matches.length >= 3) || (isSystemNode && matches && matches.length >= 2)) {
+      // 1. Check for Achievement or Title Unlock
+      const achievementMatch = rawText.match(/(?:achievement\s*(?:unlocked)?|title\s*(?:acquired|gained)?)\s*[:：\-—]?\s*\[?([A-Za-z0-9\s\'’\-]+)\]?/i);
+      if (achievementMatch && achievementMatch[1]) {
+        const titleName = achievementMatch[1].trim();
+        return `System notification: Achievement unlocked. ${titleName}.`;
       }
 
-    }, 500);
+      // 2. Check for Level Up
+      const levelMatch = rawText.match(/level\s*(?:up)?\s*[:：\-—]?\s*(\d+)/i);
+      if (/level\s*up/i.test(rawText) || (levelMatch && /congratulations|congrats/i.test(rawText))) {
+        const lvlStr = levelMatch ? ` to level ${levelMatch[1]}` : '';
+        return `System notification: Level up achieved${lvlStr}. Character attributes updated.`;
+      }
 
+      // 3. Check for Character Name / Class in Status Window
+      const nameMatch = rawText.match(/name\s*[:：]\s*([A-Za-z0-9\s\'’\-]+)/i);
+      const classMatch = rawText.match(/class\s*[:：]\s*([A-Za-z0-9\s\'’\-]+)/i);
+      if (nameMatch || classMatch || /status\s*(?:window|menu|sheet)?/i.test(rawText)) {
+        let summary = 'Status screen updated.';
+        if (nameMatch && classMatch) {
+          summary = `Status screen for ${nameMatch[1].trim()}, class ${classMatch[1].trim()}. Attributes updated.`;
+        } else if (nameMatch) {
+          summary = `Status screen for ${nameMatch[1].trim()}. Attributes updated.`;
+        } else if (levelMatch) {
+          summary = `Status screen, level ${levelMatch[1]}. Attributes updated.`;
+        }
+        return summary;
+      }
+
+      // 4. If there is a narrative intro sentence before the dense stat block, speak that intro
+      const lines = rawText.split(/[\r\n]+/);
+      const narrativeLines = lines.filter(l => {
+        const trimmed = l.trim();
+        if (!trimmed) return false;
+        if (statKeyRegex.test(trimmed) && trimmed.length < 50) return false;
+        if (/^\[?[0-9\s\+\-\/\:\|\.\,\%\(\)]+\]?$/.test(trimmed)) return false;
+        return true;
+      });
+
+      if (narrativeLines.length > 0) {
+        const narrativeText = narrativeLines.join(' ').trim();
+        if (narrativeText.length >= 10) {
+          return narrativeText;
+        }
+      }
+
+      return 'System notification: Status window updated.';
+    }
+
+    return rawText;
   }
 
+  // =========================================================================
+  // CIRCADIAN EXPONENTIAL SLEEP ENGINE (Rank 1 Superpower)
+  // Bedside timer with 60-second logarithmic decay: V(t) = V_base * (t / 60000)^2
+  // Authoritative Dexie position freeze, wake lock release & sleep toast
+  // =========================================================================
+  let sleepTimerInterval = null;
+  let sleepTimerTargetMs = null;
+  let sleepTimerBaseVolume = 1.0;
+  const sleepTimerSelect = document.getElementById('np-sleep-timer-select');
+  const sleepBadge = document.getElementById('np-sleep-badge');
+  const sleepBadgeTime = document.getElementById('np-sleep-badge-time');
 
+  function showSleepToast(message, actionLabel, actionCallback) {
+    let toast = document.getElementById('np-sleep-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'np-sleep-toast';
+      toast.className = 'sleep-toast';
+      document.body.appendChild(toast);
+    }
+    toast.innerHTML = `<span>${message}</span>`;
+    if (actionLabel && actionCallback) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sleep-toast-btn';
+      btn.textContent = actionLabel;
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        actionCallback();
+        toast.classList.remove('active');
+      };
+      toast.appendChild(btn);
+    }
+    toast.classList.add('active');
+    setTimeout(() => {
+      if (toast) toast.classList.remove('active');
+    }, 6000);
+  }
+
+  function formatSleepCountdown(ms) {
+    if (ms <= 0) return '00:00';
+    const totalSecs = Math.ceil(ms / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  }
+
+  function initSleepTimer() {
+    if (sleepTimerSelect) {
+      sleepTimerSelect.addEventListener('change', (e) => {
+        setSleepTimer(e.target.value);
+      });
+    }
+
+    if (sleepBadge) {
+      sleepBadge.addEventListener('click', () => {
+        if (!sleepTimerTargetMs && !audioState.stopAtChapterEnd) return;
+        if (audioState.stopAtChapterEnd) {
+          showSleepToast('🌙 Stopping at Chapter End.', 'Cancel Timer', () => {
+            setSleepTimer('0');
+          });
+          return;
+        }
+        const remainingMs = Math.max(0, sleepTimerTargetMs - Date.now());
+        const remainingMins = Math.ceil(remainingMs / 60000);
+        showSleepToast(`🌙 Sleep timer: ${remainingMins}m remaining.`, '+15m Extend', () => {
+          extendSleepTimer(15);
+        });
+      });
+    }
+  }
+
+  function extendSleepTimer(extraMinutes) {
+    if (!sleepTimerTargetMs) {
+      setSleepTimer(String(extraMinutes));
+      return;
+    }
+    sleepTimerTargetMs += (extraMinutes * 60 * 1000);
+    showSleepToast(`🌙 Timer extended by +${extraMinutes}m.`);
+  }
+
+  function setSleepTimer(val) {
+    if (sleepTimerInterval) {
+      clearInterval(sleepTimerInterval);
+      sleepTimerInterval = null;
+    }
+    sleepTimerTargetMs = null;
+    audioState.stopAtChapterEnd = false;
+
+    // Restore volume if previous timer was decaying
+    if (activeHtml5Audio) {
+      activeHtml5Audio.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
+    }
+    if (sleepBadge) {
+      sleepBadge.classList.remove('decaying');
+    }
+
+    if (val === '0' || !val) {
+      if (sleepBadge) sleepBadge.style.display = 'none';
+      if (sleepTimerSelect) sleepTimerSelect.value = '0';
+      return;
+    }
+
+    if (val === 'ch_end') {
+      audioState.stopAtChapterEnd = true;
+      if (sleepBadge && sleepBadgeTime) {
+        sleepBadgeTime.textContent = 'End of Ch.';
+        sleepBadge.style.display = 'inline-flex';
+      }
+      showSleepToast('🌙 Sleep timer active: narration stops at chapter end.');
+      return;
+    }
+
+    const mins = parseInt(val, 10);
+    if (isNaN(mins) || mins <= 0) return;
+
+    sleepTimerBaseVolume = audioState.volume !== undefined ? audioState.volume : 1.0;
+    sleepTimerTargetMs = Date.now() + (mins * 60 * 1000);
+
+    if (sleepBadge && sleepBadgeTime) {
+      sleepBadgeTime.textContent = `${mins}:00`;
+      sleepBadge.style.display = 'inline-flex';
+    }
+
+    showSleepToast(`🌙 Sleep timer set for ${mins} minutes. Rest peacefully.`);
+
+    sleepTimerInterval = setInterval(() => {
+      const remainingMs = sleepTimerTargetMs - Date.now();
+
+      // Update Live Countdown Badge
+      if (sleepBadge && sleepBadgeTime) {
+        sleepBadgeTime.textContent = formatSleepCountdown(remainingMs);
+      }
+
+      // Smooth 60-Second Logarithmic Volume Decay: V(t) = V_base * (t / 60000)^2
+      if (remainingMs <= 60000 && remainingMs > 0) {
+        if (sleepBadge) sleepBadge.classList.add('decaying');
+        if (activeHtml5Audio) {
+          const decayRatio = Math.max(0, remainingMs / 60000);
+          const expDecay = Math.pow(decayRatio, 2);
+          activeHtml5Audio.volume = Math.max(0, sleepTimerBaseVolume * expDecay);
+        }
+      } else if (remainingMs <= 0) {
+        // Sleep Timer Expired!
+        clearInterval(sleepTimerInterval);
+        sleepTimerInterval = null;
+
+        // 1. Freeze audio playback immediately
+        if (audioState.isPlaying && !audioState.isPaused) {
+          toggleAudioPlay();
+        }
+
+        // 2. Restore volume for the next session
+        if (activeHtml5Audio) {
+          activeHtml5Audio.volume = sleepTimerBaseVolume;
+        }
+
+        // 3. Authoritative Dexie reading progress freeze
+        recordReadingProgress(audioState.currentIndex, true);
+
+        // 4. Release screen wake lock to allow mobile screen to sleep
+        releaseWakeLock();
+
+        // 5. Reset UI controls
+        if (sleepBadge) {
+          sleepBadge.classList.remove('decaying');
+          sleepBadge.style.display = 'none';
+        }
+        if (sleepTimerSelect) sleepTimerSelect.value = '0';
+
+        // 6. Calming sleep toast
+        showSleepToast(`🌙 Sleep timer complete. Position saved at paragraph ${audioState.currentIndex + 1}. Sweet dreams.`);
+      }
+    }, 500);
+  }
 
   initSleepTimer();
 
-
-
+  
   // Keyboard Help Modal Controls
 
   const keyboardModal = document.getElementById('keyboard-help-modal');
