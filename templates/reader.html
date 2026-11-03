@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/static/img/logo.png">
   <link rel="manifest" href="/static/manifest.json">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=26">
+  <link rel="stylesheet" href="/static/css/style.css?v=27">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
@@ -242,25 +242,23 @@
 
   <!-- Bottom Navigation Bar -->
   <div class="chapter-nav-row" style="margin-bottom: 6rem;">
-    {% if prev_chapter %}
-    <a href="/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}" class="nav-arrow-btn btn-prev-bottom" id="prev-chapter-btn-bottom">
+    <a href="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% else %}#{% endif %}" 
+       class="nav-arrow-btn btn-prev-bottom{% if not prev_chapter %} disabled{% endif %}" 
+       id="prev-chapter-btn-bottom"
+       {% if not prev_chapter %}aria-disabled="true"{% endif %}>
       ← Previous Chapter
     </a>
-    {% else %}
-    <button class="nav-arrow-btn btn-prev-bottom" id="prev-chapter-btn-bottom" disabled>← Previous Chapter</button>
-    {% endif %}
 
     <a href="/novel/{{ novel.slug }}" class="nav-arrow-btn">
       Table of Contents
     </a>
 
-    {% if next_chapter %}
-    <a href="/novel/{{ novel.slug }}/chapter/{{ next_chapter }}" class="nav-arrow-btn btn-next-bottom" id="next-chapter-btn-bottom">
+    <a href="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% else %}#{% endif %}" 
+       class="nav-arrow-btn btn-next-bottom{% if not next_chapter %} disabled{% endif %}" 
+       id="next-chapter-btn-bottom"
+       {% if not next_chapter %}aria-disabled="true"{% endif %}>
       Next Chapter →
     </a>
-    {% else %}
-    <button class="nav-arrow-btn btn-next-bottom" id="next-chapter-btn-bottom" disabled>Next Chapter →</button>
-    {% endif %}
   </div>
 
   <!-- Novel Phoenix Floating Audio Player Widget (Exact Replica) -->
@@ -559,7 +557,7 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=26"></script>
-  <script src="/static/js/reader.js?v=26"></script>
+  <script src="/static/js/dexie.min.js?v=27"></script>
+  <script src="/static/js/reader.js?v=27"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@ import re
 import json
 import shutil
 import sqlite3
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 
 ABBREVIATIONS = [
     r'Mr', r'Mrs', r'Ms', r'Dr', r'Prof', r'Sr', r'Jr',
@@ -165,7 +165,158 @@ if os.environ.get("VERCEL"):
 else:
     DB_PATH = os.path.join(BASE_DIR, "data", "library.db")
 
+
+# =========================================================================
+# TURSO CLOUD DATABASE (LIBSQL) ADAPTER & LOCAL SQLITE FALLBACK
+# =========================================================================
+TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL", "").strip()
+TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "").strip()
+
+class TursoRow(dict):
+    """Dictionary that also supports positional index access like sqlite3.Row."""
+    def __init__(self, data: Dict[str, Any], col_order: List[str]):
+        super().__init__(data)
+        self._col_order = col_order
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            col_name = self._col_order[key]
+            return super().__getitem__(col_name)
+        return super().__getitem__(key)
+
+class TursoCursor:
+    def __init__(self, connection: "TursoConnection"):
+        self.conn = connection
+        self._rows: List[TursoRow] = []
+        self._row_idx = 0
+        self.lastrowid = None
+        self.rowcount = 0
+
+    def execute(self, sql: str, params: Optional[Tuple] = None):
+        self._rows, self.lastrowid, self.rowcount = self.conn.execute_stmt(sql, params)
+        self._row_idx = 0
+        return self
+
+    def executemany(self, sql: str, params_list: List[Tuple]):
+        for p in params_list:
+            self.execute(sql, p)
+        return self
+
+    def fetchone(self) -> Optional[TursoRow]:
+        if self._row_idx < len(self._rows):
+            r = self._rows[self._row_idx]
+            self._row_idx += 1
+            return r
+        return None
+
+    def fetchall(self) -> List[TursoRow]:
+        if self._row_idx == 0:
+            self._row_idx = len(self._rows)
+            return self._rows
+        res = self._rows[self._row_idx:]
+        self._row_idx = len(self._rows)
+        return res
+
+class TursoConnection:
+    def __init__(self, db_url: str, auth_token: str):
+        if db_url.startswith("libsql://"):
+            db_url = "https://" + db_url[9:]
+        self.endpoint = db_url.rstrip("/") + "/v2/pipeline"
+        self.auth_token = auth_token
+
+    def cursor(self) -> TursoCursor:
+        return TursoCursor(self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    def close(self):
+        pass
+
+    def _convert_arg(self, val):
+        if val is None:
+            return {"type": "null"}
+        elif isinstance(val, bool):
+            return {"type": "integer", "value": "1" if val else "0"}
+        elif isinstance(val, int):
+            return {"type": "integer", "value": str(val)}
+        elif isinstance(val, float):
+            return {"type": "float", "value": val}
+        elif isinstance(val, (bytes, bytearray)):
+            import base64
+            return {"type": "blob", "base64": base64.b64encode(val).decode("ascii")}
+        else:
+            return {"type": "text", "value": str(val)}
+
+    def execute_stmt(self, sql: str, params: Optional[Tuple] = None) -> Tuple[List[TursoRow], Optional[int], int]:
+        args = [self._convert_arg(p) for p in (params or ())]
+        payload = {
+            "requests": [
+                {
+                    "type": "execute",
+                    "stmt": {
+                        "sql": sql,
+                        "args": args
+                    }
+                },
+                {"type": "close"}
+            ]
+        }
+        import urllib.request
+        body_bytes = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            self.endpoint,
+            data=body_bytes,
+            headers={
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=12.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            results = data.get("results", [])
+            if results and results[0].get("type") == "ok":
+                exec_res = results[0]["response"]["result"]
+                cols = [c["name"] for c in exec_res.get("cols", [])]
+                out_rows = []
+                for row_vals in exec_res.get("rows", []):
+                    row_data = {}
+                    for col_name, cell in zip(cols, row_vals):
+                        val_type = cell.get("type")
+                        if val_type == "null":
+                            row_data[col_name] = None
+                        elif val_type == "integer":
+                            row_data[col_name] = int(cell.get("value", 0))
+                        elif val_type == "float":
+                            row_data[col_name] = float(cell.get("value", 0.0))
+                        elif val_type == "blob":
+                            import base64
+                            row_data[col_name] = base64.b64decode(cell.get("base64", ""))
+                        else:
+                            row_data[col_name] = cell.get("value")
+                    out_rows.append(TursoRow(row_data, cols))
+                
+                last_rowid = exec_res.get("last_insert_rowid")
+                affected = exec_res.get("affected_row_count", 0)
+                return out_rows, int(last_rowid) if last_rowid else None, affected
+            elif results and results[0].get("type") == "error":
+                raise RuntimeError(results[0]["error"].get("message", "Turso execution error"))
+            return [], None, 0
+
+
 def get_connection():
+    # If Turso Cloud Database credentials are provided, route queries through Turso (LibSQL)
+    if TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
+        try:
+            return TursoConnection(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
+        except Exception as e:
+            print("[Turso Client Warning] Falling back to local SQLite:", e)
+
+    # Standard Local SQLite with WAL mode & row_factory
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     conn.execute("PRAGMA foreign_keys = ON;")

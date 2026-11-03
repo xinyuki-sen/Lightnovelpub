@@ -2634,11 +2634,6 @@ function initReader() {
   const keyboardModal = document.getElementById('keyboard-help-modal');
   const closeKeyboardBtn = document.getElementById('close-keyboard-modal');
 
-  function toggleKeyboardModal() {
-    if (!keyboardModal) return;
-    keyboardModal.classList.toggle('active');
-  }
-
   function closeKeyboardModal() {
     if (!keyboardModal) return;
     keyboardModal.classList.remove('active');

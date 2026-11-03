@@ -1086,15 +1086,18 @@ a {
   gap: 0.4rem;
 }
 
-.nav-arrow-btn:hover:not(:disabled) {
+.nav-arrow-btn:hover:not(:disabled):not(.disabled):not([aria-disabled="true"]) {
   border-color: var(--accent);
   background: var(--bg-card-hover);
   transform: translateY(-1px);
 }
 
-.nav-arrow-btn:disabled {
+.nav-arrow-btn:disabled,
+.nav-arrow-btn.disabled,
+.nav-arrow-btn[aria-disabled="true"] {
   opacity: 0.35;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .chapter-dropdown-select {

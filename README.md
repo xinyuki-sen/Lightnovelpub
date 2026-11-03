@@ -35,6 +35,12 @@
   3. Dynamic HTTP ETag validation invalidates stale browser copies immediately upon chapter layout updates.
 * **Automated EPUB & PDF Chapter Parser**: Zero-dependency pure-Python extraction engine parsing table-of-contents bookmarks, drop caps, and watermarks.
 
+
+### 🗄️ 4. Hybrid Cloud Database & Zero-Latency Offline Cache (v27)
+* **Turso (LibSQL) Cloud DB Support**: Seamless zero-dependency HTTP v2 pipeline adapter. Connects to Turso edge databases when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are configured, permanently eliminating the ephemeral serverless storage limitation.
+* **Local SQLite Fallback**: Automatic, graceful fallback to local WAL-mode SQLite (`data/library.db`) for offline development or network partition resilience.
+* **Client-Side Dexie Flight-Deck**: Browser IndexedDB (`LightnovelpubDB_v4`) caches chapters and neural audio blobs locally, guaranteeing uninterrupted reading even during complete internet dropouts.
+* **Frontend DOM De-duplication**: Eliminated duplicate button IDs in chapter navigation and purged dead keyboard modal handler code.
 ---
 
 ## 📁 Repository Structure
@@ -97,6 +103,7 @@ python -c "import database; print('Lexer verified across library:', database.ini
 ---
 
 ## 📜 Version History
+* **v27**: Cloud Database Adapter (Turso / LibSQL over HTTP with automatic local SQLite fallback), frontend ID de-duplication, and dead code cleanup.
 * **v26**: Sentence-Preserving Paragraph Engine (3-Stage Tokenized Lexer, Zero Mid-Sentence Cut, Triple-Lock Cache Purge, and Auto Web Speech Fallback).
 * **v24**: Removal of edge bezel gestures for 100% natural, uninterrupted mobile touch scrolling.
 * **v23**: Expansion of TTS character limits to 3,600 chars and sub-1 nit nocturnal dimmer.
