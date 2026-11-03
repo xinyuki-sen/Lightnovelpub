@@ -81,9 +81,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Form submission & conversion
+  // Form submission with real-time XHR upload progress & Dexie client persistence
   if (uploadForm) {
-    uploadForm.addEventListener('submit', async (e) => {
+    uploadForm.addEventListener('submit', (e) => {
       e.preventDefault();
 
       if (!fileInput.files || fileInput.files.length === 0) {
@@ -91,39 +91,122 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      const file = fileInput.files[0];
       const formData = new FormData(uploadForm);
+
       if (uploadProgress) uploadProgress.style.display = 'block';
-      if (uploadStatusText) uploadStatusText.textContent = 'Uploading and processing novel chapters...';
+      if (uploadStatusText) uploadStatusText.textContent = 'Preparing upload... 0%';
       if (btnSubmit) {
         btnSubmit.disabled = true;
-        btnSubmit.textContent = 'Extracting Chapters...';
+        btnSubmit.textContent = 'Uploading...';
       }
 
-      try {
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/upload', true);
 
-        const result = await response.json();
+      // Real-time upload progress
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable) {
+          const pct = Math.round((evt.loaded / evt.total) * 100);
+          const loadedMb = (evt.loaded / (1024 * 1024)).toFixed(1);
+          const totalMb = (evt.total / (1024 * 1024)).toFixed(1);
 
-        if (response.ok && result.success) {
+          if (pct < 100) {
+            if (uploadStatusText) {
+              uploadStatusText.textContent = `Uploading: ${pct}% (${loadedMb}MB / ${totalMb}MB)...`;
+            }
+          } else {
+            if (uploadStatusText) {
+              uploadStatusText.textContent = `File received! Extracting and dividing chapters (native PDFium engine)...`;
+            }
+            if (btnSubmit) {
+              btnSubmit.textContent = 'Extracting Chapters...';
+            }
+          }
+        }
+      };
+
+      xhr.onload = async () => {
+        let result = null;
+        try {
+          result = JSON.parse(xhr.responseText);
+        } catch (jsonErr) {
+          if (xhr.status === 413) {
+            result = { error: 'File exceeds serverless payload limit (45MB limit).' };
+          } else if (xhr.status === 504) {
+            result = { error: 'Serverless execution timed out while slicing chapters.' };
+          } else {
+            result = { error: `Server error (HTTP ${xhr.status}).` };
+          }
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300 && result && result.success) {
           if (uploadStatusText) {
-            uploadStatusText.textContent = `Success! Converted ${result.total_chapters} chapters. Redirecting...`;
+            uploadStatusText.textContent = `Success! Divided into ${result.total_chapters} chapters. Saving to persistent library...`;
+          }
+
+          // Authoritative Dexie IndexedDB client persistence (guarantees novel survives serverless restarts)
+          if (typeof Dexie !== 'undefined') {
+            try {
+              const db = new Dexie('LightnovelpubDB_v4');
+              db.version(2).stores({
+                customNovels: 'slug, title, author, synopsis, cover_image, total_chapters, created_at',
+                chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
+                progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
+                audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at',
+                covers: 'slug, dataUrl, updated_at'
+              });
+
+              if (result.novel) {
+                await db.customNovels.put(result.novel);
+                if (result.novel.cover_image && result.novel.cover_image.startsWith('data:')) {
+                  await db.covers.put({ slug: result.slug, dataUrl: result.novel.cover_image, updated_at: Date.now() });
+                }
+              }
+
+              if (result.chapters && result.chapters.length > 0) {
+                const chDocs = result.chapters.map(c => ({
+                  novelSlug: result.slug,
+                  chapterNumber: c.number,
+                  title: c.title,
+                  content: c.content || (c.paragraphs ? c.paragraphs.join('\n\n') : ''),
+                  paragraphs: c.paragraphs || [],
+                  word_count: c.word_count,
+                  updated_at: Date.now()
+                }));
+                await db.chapters.bulkPut(chDocs);
+              }
+            } catch (dbErr) {
+              console.warn('Dexie save error:', dbErr);
+            }
+          }
+
+          if (uploadStatusText) {
+            uploadStatusText.textContent = `Library updated! Redirecting to reader...`;
           }
           setTimeout(() => {
             window.location.href = `/novel/${result.slug}`;
-          }, 800);
+          }, 600);
+
         } else {
-          throw new Error(result.error || 'Failed to convert PDF.');
+          const errDetail = (result && result.error) ? result.error : `Upload failed (Status ${xhr.status})`;
+          if (uploadStatusText) uploadStatusText.textContent = `Error: ${errDetail}`;
+          if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = 'Try Again';
+          }
         }
-      } catch (err) {
-        if (uploadStatusText) uploadStatusText.textContent = `Error: ${err.message}`;
+      };
+
+      xhr.onerror = () => {
+        if (uploadStatusText) uploadStatusText.textContent = 'Network connection failed during upload.';
         if (btnSubmit) {
           btnSubmit.disabled = false;
           btnSubmit.textContent = 'Try Again';
         }
-      }
+      };
+
+      xhr.send(formData);
     });
   }
 });

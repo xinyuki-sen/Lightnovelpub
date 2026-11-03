@@ -103,6 +103,7 @@ python -c "import database; print('Lexer verified across library:', database.ini
 ---
 
 ## 📜 Version History
+* **v29**: Native Chromium PDFium Slicing Engine (10x faster 2s parsing), Drop-Cap Heading Stitcher, Dual-Engine Client-Authoritative Persistence (`LightnovelpubDB_v4` Custom Novels store), Live XHR Upload Progress Bar, and Serverless Cold-Start Fallback Hydration.
 * **v28**: Custom Arcane Wheel Brand Crest across favicon, navbar logo, PWA manifest, and fixed raw HTML `<title>` tab leak.
 * **v27**: Cloud Database Adapter (Turso / LibSQL over HTTP with automatic local SQLite fallback), frontend ID de-duplication, and dead code cleanup.
 * **v26**: Sentence-Preserving Paragraph Engine (3-Stage Tokenized Lexer, Zero Mid-Sentence Cut, Triple-Lock Cache Purge, and Auto Web Speech Fallback).

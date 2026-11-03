@@ -286,23 +286,94 @@ document.addEventListener('DOMContentLoaded', async () => {
 {% endblock %}
 
 {% block scripts %}
-<!-- Dexie.js Client-Side Authoritative Hydration (Resilient Offline Detail Progress) -->
-<script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+<!-- Dexie.js Client-Side Authoritative Hydration (Resilient Offline Detail Progress & Custom Novel Chapter Loader) -->
+<script src="/static/js/dexie.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
   if (typeof Dexie !== 'undefined') {
     try {
-      const db = new Dexie('LightnovelpubDB');
-      db.version(1).stores({
+      const db = new Dexie('LightnovelpubDB_v4');
+      db.version(2).stores({
+        customNovels: 'slug, title, author, synopsis, cover_image, total_chapters, created_at',
         chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
         progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
-        audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
+        audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at',
+        covers: 'slug, dataUrl, updated_at'
       });
       const novelSlug = "{{ novel.slug }}";
+
+      // 1. If novel is client-stored (or serverless cold start), hydrate novel metadata and chapters from Dexie
+      const custom = await db.customNovels.get(novelSlug);
+      const isClientHydration = {{ 'true' if is_client_hydration else 'false' }};
+      
+      if (custom) {
+        if (custom.title) {
+          const titleEl = document.querySelector('.detail-bento-title');
+          if (titleEl) titleEl.textContent = custom.title;
+          document.title = `${custom.title} — LightnovelPub`;
+        }
+        if (custom.author) {
+          const authorEl = document.querySelector('.author-name');
+          if (authorEl) authorEl.textContent = custom.author;
+        }
+        if (custom.synopsis) {
+          const synEl = document.querySelector('.synopsis-text');
+          if (synEl) synEl.textContent = custom.synopsis;
+        }
+        if (custom.cover_image) {
+          const coverImg = document.querySelector('.detail-cover-bento-img');
+          if (coverImg) coverImg.src = custom.cover_image;
+          const backdrop = document.querySelector('.glass-backdrop');
+          if (backdrop) backdrop.style.backgroundImage = `url('${custom.cover_image}')`;
+        }
+      }
+
+      // Check if TOC is empty in DOM (need to populate from Dexie)
+      let chaptersGrid = document.getElementById('chapters-grid-container');
+      const existingPills = document.querySelectorAll('.chapter-pill-item-bento');
+      if (existingPills.length === 0 && chaptersGrid) {
+        const localChapters = await db.chapters.where('novelSlug').equals(novelSlug).toArray();
+        if (localChapters && localChapters.length > 0) {
+          localChapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
+          
+          const badge = document.getElementById('total-chapters-badge');
+          if (badge) badge.textContent = `${localChapters.length} Chapters`;
+
+          const metaVals = document.querySelectorAll('.meta-chip-val');
+          if (metaVals.length > 0) metaVals[0].textContent = String(localChapters.length);
+
+          chaptersGrid.innerHTML = '';
+          localChapters.forEach(ch => {
+            const words = ch.word_count || (ch.content ? ch.content.split(/\s+/).length : 0);
+            const mins = Math.max(1, Math.round(words / 220));
+            const pill = document.createElement('a');
+            pill.href = `/novel/${novelSlug}/chapter/${ch.chapterNumber}`;
+            pill.className = 'chapter-pill-item-bento';
+            pill.setAttribute('data-chapter-num', String(ch.chapterNumber));
+            pill.setAttribute('data-chapter-title', ch.title);
+            pill.innerHTML = `
+              <div class="chapter-item-main">
+                <div class="chapter-item-left">
+                  <span class="chapter-item-number">#${ch.chapterNumber}</span>
+                  <span class="chapter-item-title">${ch.title}</span>
+                </div>
+                <div class="chapter-item-badge-wrap"></div>
+              </div>
+              <div class="chapter-item-right">
+                <span class="chapter-pill-words">${words} words</span>
+                <span class="chapter-pill-dot">•</span>
+                <span class="chapter-pill-time">~${mins}m read</span>
+              </div>
+            `;
+            chaptersGrid.appendChild(pill);
+          });
+        }
+      }
+
+      // 2. Hydrate reading progress badges
       const progressList = await db.progress.where('novelSlug').equals(novelSlug).toArray();
       if (!progressList || progressList.length === 0) return;
       
-      // Find latest progress
       progressList.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
       const latest = progressList[0];
       if (latest && latest.chapterNumber) {
@@ -315,7 +386,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           ctaBtn.innerHTML = `<span>▶</span> Continue Chapter ${latest.chapterNumber}`;
         }
 
-        // Update TOC badges
         document.querySelectorAll('.chapter-pill-item-bento').forEach(item => {
           const chNum = parseInt(item.getAttribute('data-chapter-num') || '0', 10);
           const badgeWrap = item.querySelector('.chapter-item-badge-wrap') || item.querySelector('.chapter-item-left');

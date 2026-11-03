@@ -94,11 +94,28 @@ async def library_home(request: Request, sort: Optional[str] = "recent"):
 async def novel_detail(request: Request, slug: str):
     novel = database.get_novel_by_slug(slug)
     if not novel:
-        raise HTTPException(status_code=404, detail="Novel not found")
+        clean_title = slug.replace("-", " ").title()
+        fallback_novel = {
+            "id": 0,
+            "slug": slug,
+            "title": clean_title,
+            "author": "Local Archive",
+            "synopsis": "Loading novel details from local storage...",
+            "cover_image": "",
+            "total_chapters": 1,
+            "last_read_chapter": 1,
+            "last_read_percent": 0.0,
+            "chapters": []
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="novel_detail.html",
+            context={"novel": fallback_novel, "is_client_hydration": True}
+        )
     return templates.TemplateResponse(
         request=request,
         name="novel_detail.html",
-        context={"novel": novel}
+        context={"novel": novel, "is_client_hydration": False}
     )
 
 @app.get("/novel/{slug}/chapter/{chapter_number}", response_class=HTMLResponse)
@@ -109,7 +126,35 @@ async def chapter_reader(request: Request, slug: str, chapter_number: int):
         if full_novel and full_novel.get("chapters"):
             first_ch = full_novel["chapters"][0]["chapter_number"]
             return RedirectResponse(url=f"/novel/{slug}/chapter/{first_ch}", status_code=302)
-        raise HTTPException(status_code=404, detail="Chapter not found")
+        
+        clean_title = slug.replace("-", " ").title()
+        fallback_novel = {
+            "id": 0,
+            "slug": slug,
+            "title": clean_title,
+            "author": "Local Archive",
+            "total_chapters": 1,
+            "chapters": []
+        }
+        fallback_chapter = {
+            "id": 0,
+            "chapter_number": chapter_number,
+            "title": f"Chapter {chapter_number}",
+            "paragraphs": [],
+            "word_count": 0
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="reader.html",
+            context={
+                "novel": fallback_novel,
+                "chapter": fallback_chapter,
+                "all_chapters": [],
+                "prev_chapter": chapter_number - 1 if chapter_number > 1 else None,
+                "next_chapter": chapter_number + 1,
+                "is_client_hydration": True
+            }
+        )
     novel, chapter = data
     
     all_chapters = novel.get("chapters", [])
@@ -234,10 +279,19 @@ async def upload_novel(
                 tmp.write(chunk)
             tmp_path = tmp.name
 
+        cover_data_url = ""
         if is_epub:
-            detected_title, chapters, cover_bytes = extract_epub_chapters(tmp_path)
+            res = extract_epub_chapters(tmp_path)
+            if len(res) == 4:
+                detected_title, chapters, cover_bytes, cover_data_url = res
+            else:
+                detected_title, chapters, cover_bytes = res[:3]
         else:
-            detected_title, chapters, cover_bytes = extract_pdf_chapters(tmp_path)
+            res = extract_pdf_chapters(tmp_path)
+            if len(res) == 4:
+                detected_title, chapters, cover_bytes, cover_data_url = res
+            else:
+                detected_title, chapters, cover_bytes = res[:3]
         
         if not chapters:
             return JSONResponse({"error": "Could not extract any readable chapters from the file."}, status_code=400)
@@ -259,20 +313,46 @@ async def upload_novel(
             except Exception as cov_err:
                 print("Cover save note:", cov_err)
             
+        final_cover_path = cover_data_url if cover_data_url else cover_url
         saved_slug = database.save_novel(
             title=final_title,
             author=author.strip() if author and author.strip() else "Unknown Author",
             synopsis=synopsis.strip() if synopsis and synopsis.strip() else f"Imported from {file.filename}.",
-            cover_path=cover_url,
+            cover_path=final_cover_path,
             chapters=chapters,
             precomputed_slug=slug
         )
         
+        novel_payload = {
+            "slug": saved_slug,
+            "title": final_title,
+            "author": author.strip() if author and author.strip() else "Unknown Author",
+            "synopsis": synopsis.strip() if synopsis and synopsis.strip() else f"Imported from {file.filename}.",
+            "cover_image": final_cover_path,
+            "total_chapters": len(chapters),
+            "last_read_chapter": 1,
+            "last_read_percent": 0.0,
+            "created_at": time.time()
+        }
+
+        chapters_payload = [
+            {
+                "number": ch.get("number", idx + 1),
+                "title": ch["title"],
+                "content": "\n\n".join(ch.get("content", [])) if isinstance(ch.get("content"), list) else str(ch.get("content", "")),
+                "paragraphs": ch.get("content", []) if isinstance(ch.get("content"), list) else [str(ch.get("content", ""))],
+                "word_count": ch.get("word_count", 0)
+            }
+            for idx, ch in enumerate(chapters)
+        ]
+
         return {
             "success": True,
             "slug": saved_slug,
             "title": final_title,
-            "total_chapters": len(chapters)
+            "total_chapters": len(chapters),
+            "novel": novel_payload,
+            "chapters": chapters_payload
         }
     except Exception as e:
         return JSONResponse({"error": f"Failed to parse file: {str(e)}"}, status_code=500)

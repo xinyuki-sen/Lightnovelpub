@@ -406,7 +406,9 @@ def save_novel(title: str, author: str, synopsis: str, cover_path: str, chapters
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (slug, title, author or "Unknown Author", synopsis or "No synopsis available.", cover_path, len(chapters)))
             
-            novel_id = cursor.lastrowid
+            cursor.execute("SELECT id FROM novels WHERE slug = ?", (slug,))
+            n_row = cursor.fetchone()
+            novel_id = (n_row["id"] if isinstance(n_row, dict) or hasattr(n_row, "keys") else n_row[0]) if n_row else cursor.lastrowid
             
             # Batch chapter insertion using executemany for peak performance
             batch_data = [
@@ -593,7 +595,9 @@ def import_library_data(data: dict) -> int:
                         nov.get("last_read_para", 0),
                         nov.get("created_at", time.time())
                     ))
-                    novel_id = cursor.lastrowid
+                    cursor.execute("SELECT id FROM novels WHERE slug = ?", (nov["slug"],))
+                    n_row = cursor.fetchone()
+                    novel_id = (n_row["id"] if isinstance(n_row, dict) or hasattr(n_row, "keys") else n_row[0]) if n_row else cursor.lastrowid
                     imported_count += 1
                 
                 # Insert chapters for this novel
