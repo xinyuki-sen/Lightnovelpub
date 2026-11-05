@@ -863,134 +863,76 @@ function initReader() {
 
 
     async function fetchChapterData(chNum) {
+      const num = parseInt(chNum, 10);
+      if (isNaN(num) || num <= 0) throw new Error(`Invalid chapter number: ${chNum}`);
 
-      if (chapterCache.has(chNum)) {
-
-        return chapterCache.get(chNum);
-
+      if (chapterCache.has(num)) {
+        return chapterCache.get(num);
       }
 
-      // Check Dexie IndexedDB (Case-Insensitive Resilient Query)
+      // 1. Check Dexie IndexedDB first (Fastest, resilient to type variations & offline)
       if (novelDb) {
         try {
-          let cached = await novelDb.chapters.get([novelSlug, chNum]);
+          let cached = await novelDb.chapters.get([novelSlug, num]).catch(() => null);
           if (!cached) {
-            cached = await novelDb.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase() && c.chapterNumber === chNum).first();
+            cached = await novelDb.chapters.get([novelSlug, String(num)]).catch(() => null);
           }
-          if (cached && cached.paragraphs && cached.paragraphs.length > 0) {
-            chapterCache.set(chNum, cached);
-            return cached;
-          }
-        } catch (e) { }
-      }
-
-      // Fetch JSON from high-speed backend API
-
-      try {
-
-        const res = await fetch(`/api/novel/${novelSlug}/chapter/${chNum}`);
-
-        if (res.ok) {
-
-          const data = await res.json();
-
-          chapterCache.set(chNum, data);
-
-          if (novelDb) {
-
-            novelDb.chapters.put({
-
-              novelSlug: novelSlug,
-
-              chapterNumber: chNum,
-
-              title: data.title,
-
-              content: (data.paragraphs || []).join('\n\n'),
-
-              paragraphs: data.paragraphs,
-
-              word_count: data.word_count,
-
-              read_time_mins: data.read_time_mins,
-
-              prev_chapter: data.prev_chapter,
-
-              next_chapter: data.next_chapter,
-
-              updated_at: Date.now()
-
-            }).catch(() => { });
-
+          if (!cached) {
+            cached = await novelDb.chapters.filter(c => 
+              c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase() && 
+              Number(c.chapterNumber) === num
+            ).first();
           }
 
-          return data;
-
-        }
-
-      } catch (netErr) {
-
-        console.warn("Backend fetch failed, attempting IndexedDB fallback:", netErr);
-
-      }
-
-
-
-      // Dexie IndexedDB Fallback (handles Vercel ephemeral container restart or offline)
-
-      if (novelDb) {
-
-        try {
-
-          let local = await novelDb.chapters.get([novelSlug, chNum]);
-          if (!local) {
-            local = await novelDb.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase() && c.chapterNumber === chNum).first();
-          }
-
-          if (local) {
-
-            const paras = local.paragraphs || (local.content ? local.content.split('\n\n') : []);
-
+          if (cached) {
+            const paras = cached.paragraphs || (cached.content ? cached.content.split('\n\n') : []);
             const formatted = {
-
               slug: novelSlug,
-
               novel_title: document.body.getAttribute('data-novel-title') || novelSlug,
-
-              chapter_number: chNum,
-
-              title: local.title || `Chapter ${chNum}`,
-
+              chapter_number: num,
+              title: cached.title || `Chapter ${num}`,
               paragraphs: paras,
-
-              word_count: local.word_count || paras.reduce((acc, p) => acc + p.split(/\s+/).length, 0),
-
-              read_time_mins: local.read_time_mins || Math.max(1, Math.round((local.word_count || 1000) / 220)),
-
-              prev_chapter: local.prev_chapter,
-
-              next_chapter: local.next_chapter,
-
+              word_count: cached.word_count || paras.reduce((acc, p) => acc + p.split(/\s+/).length, 0),
+              read_time_mins: cached.read_time_mins || Math.max(1, Math.round((cached.word_count || 1000) / 220)),
+              prev_chapter: cached.prev_chapter,
+              next_chapter: cached.next_chapter,
               total_chapters: 0
-
             };
-
-            chapterCache.set(chNum, formatted);
-
+            chapterCache.set(num, formatted);
             return formatted;
-
           }
-
         } catch (dbErr) {
-
-          console.warn("Dexie fallback error:", dbErr);
-
+          console.warn("Dexie chapter lookup error:", dbErr);
         }
-
       }
 
-      throw new Error(`Failed to load Chapter ${chNum}`);
+      // 2. Fetch JSON from high-speed backend API
+      try {
+        const res = await fetch(`/api/novel/${novelSlug}/chapter/${num}`);
+        if (res.ok) {
+          const data = await res.json();
+          chapterCache.set(num, data);
+          if (novelDb) {
+            novelDb.chapters.put({
+              novelSlug: novelSlug,
+              chapterNumber: num,
+              title: data.title,
+              content: (data.paragraphs || []).join('\n\n'),
+              paragraphs: data.paragraphs,
+              word_count: data.word_count,
+              read_time_mins: data.read_time_mins,
+              prev_chapter: data.prev_chapter,
+              next_chapter: data.next_chapter,
+              updated_at: Date.now()
+            }).catch(() => { });
+          }
+          return data;
+        }
+      } catch (netErr) {
+        console.warn("Backend fetch failed, attempting IndexedDB fallback:", netErr);
+      }
 
+      throw new Error(`Failed to load Chapter ${num}`);
     }
 
 
@@ -1213,7 +1155,7 @@ function initReader() {
 
       [topPrev, btmPrev].forEach(btn => {
         if (!btn) return;
-        btn.addEventListener('click', (e) => {
+        btn.onclick = (e) => {
           let prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
           if (!prevNum || isNaN(prevNum) || prevNum <= 0) {
             prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
@@ -1222,12 +1164,12 @@ function initReader() {
             e.preventDefault();
             navigateToChapter(prevNum, audioState && audioState.isPlaying && !audioState.isPaused);
           }
-        });
+        };
       });
 
       [topNext, btmNext].forEach(btn => {
         if (!btn) return;
-        btn.addEventListener('click', (e) => {
+        btn.onclick = (e) => {
           let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
           if (!nextNum || isNaN(nextNum) || nextNum <= 0) {
             nextNum = currentChapterNum + 1;
@@ -1236,7 +1178,7 @@ function initReader() {
             e.preventDefault();
             navigateToChapter(nextNum, audioState && audioState.isPlaying && !audioState.isPaused);
           }
-        });
+        };
       });
     }
 
@@ -1361,7 +1303,7 @@ function initReader() {
         if (novelDb && novelSlug) {
           novelDb.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase()).toArray().then(allLocalChs => {
             if (allLocalChs && allLocalChs.length > 0) {
-              allLocalChs.sort((a, b) => a.chapterNumber - b.chapterNumber);
+              allLocalChs.sort((a, b) => Number(a.chapterNumber) - Number(b.chapterNumber));
 
               // 1. Populate Table of Contents dropdown selector
               const chDropdown = document.getElementById('chapter-select-dropdown');
@@ -1369,20 +1311,26 @@ function initReader() {
                 chDropdown.innerHTML = '';
                 allLocalChs.forEach(c => {
                   const opt = document.createElement('option');
-                  opt.value = `/novel/${novelSlug}/chapter/${c.chapterNumber}`;
-                  opt.textContent = c.title || `Chapter ${c.chapterNumber}`;
-                  if (c.chapterNumber === currentChapterNum) opt.selected = true;
+                  const cNum = Number(c.chapterNumber);
+                  opt.value = `/novel/${novelSlug}/chapter/${cNum}`;
+                  opt.textContent = c.title || `Chapter ${cNum}`;
+                  if (cNum === Number(currentChapterNum)) opt.selected = true;
                   chDropdown.appendChild(opt);
                 });
+                chDropdown.value = `/novel/${novelSlug}/chapter/${currentChapterNum}`;
               }
 
-              // 2. Resolve Previous & Next Chapter targets
-              const curIdx = allLocalChs.findIndex(c => c.chapterNumber === currentChapterNum);
-              const prevChDoc = curIdx > 0 ? allLocalChs[curIdx - 1] : null;
-              const nextChDoc = curIdx < allLocalChs.length - 1 ? allLocalChs[curIdx + 1] : null;
-
-              const prevNum = prevChDoc ? prevChDoc.chapterNumber : 0;
-              const nextNum = nextChDoc ? nextChDoc.chapterNumber : 0;
+              // 2. Resolve Previous & Next Chapter targets with resilient type casting
+              const curIdx = allLocalChs.findIndex(c => Number(c.chapterNumber) === Number(currentChapterNum));
+              let prevNum = 0;
+              let nextNum = 0;
+              if (curIdx !== -1) {
+                prevNum = curIdx > 0 ? Number(allLocalChs[curIdx - 1].chapterNumber) : 0;
+                nextNum = curIdx < allLocalChs.length - 1 ? Number(allLocalChs[curIdx + 1].chapterNumber) : 0;
+              } else {
+                prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
+                nextNum = currentChapterNum + 1;
+              }
 
               document.body.setAttribute('data-prev-num', prevNum > 0 ? String(prevNum) : '');
               document.body.setAttribute('data-next-num', nextNum > 0 ? String(nextNum) : '');

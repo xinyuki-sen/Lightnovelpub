@@ -2596,25 +2596,65 @@ a {
   }
 
   .chapter-nav-row {
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    padding: 0 0.75rem;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 0.45rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0.5rem 0.65rem !important;
+    margin: 1rem auto 0 auto !important;
+    box-sizing: border-box !important;
   }
 
   .chapter-dropdown-select {
-    order: -1;
-    width: 100%;
-    max-width: 100%;
-    font-size: 0.88rem;
-    padding: 0.55rem 0.85rem;
+    order: 0 !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: calc(100% - 160px) !important;
+    width: auto !important;
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+    padding: 0.55rem 1.6rem 0.55rem 0.75rem !important;
+    border-radius: var(--radius-full) !important;
+    background-color: var(--bg-surface-elevated) !important;
+    color: var(--text-primary) !important;
+    text-align: center !important;
+    text-align-last: center !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    min-height: 42px !important;
+    box-sizing: border-box !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239d4edd' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 0.6rem center !important;
+  }
+
+  .chapter-dropdown-select option {
+    background-color: #0d1117 !important;
+    color: #ffffff !important;
+    padding: 8px !important;
   }
 
   .nav-arrow-btn {
-    flex: 1;
-    justify-content: center;
-    padding: 0.65rem 0.8rem;
-    font-size: 0.86rem;
-    min-height: 42px;
+    flex: 0 0 auto !important;
+    order: 0 !important;
+    min-width: 68px !important;
+    padding: 0.55rem 0.75rem !important;
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+    min-height: 42px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
   }
 }
 
@@ -4679,19 +4719,22 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   /* 2. Top Chapter Navigation: Single line, no wrapping */
   .chapter-nav-row {
     display: flex !important;
+    flex-wrap: nowrap !important;
     align-items: center !important;
     justify-content: space-between !important;
-    gap: 0.4rem !important;
+    gap: 0.45rem !important;
     width: 100% !important;
-    padding: 0.5rem 0.6rem !important;
+    padding: 0.5rem 0.65rem !important;
     box-sizing: border-box !important;
   }
 
   .chapter-dropdown-select {
+    order: 0 !important;
     flex: 1 1 auto !important;
     min-width: 0 !important;
-    font-size: 0.8rem !important;
-    padding: 0.5rem !important;
+    max-width: calc(100% - 160px) !important;
+    font-size: 0.82rem !important;
+    padding: 0.55rem 1.6rem 0.55rem 0.75rem !important;
   }
 
   /* 3. Bottom 3-Button Navigation: Fits inside screen width */
