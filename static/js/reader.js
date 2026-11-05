@@ -1074,11 +1074,33 @@ function initReader() {
       paraStorageKey = `progress_para_${novelSlug}_ch${currentChapterNum}`;
       pctStorageKey = `progress_pct_${novelSlug}_ch${currentChapterNum}`;
 
+      // Resilient Next / Prev resolution for both server and local Dexie chapters
+      let nextNum = data.next_chapter;
+      let prevNum = data.prev_chapter;
+
+      if (typeof nextNum === 'undefined' || typeof prevNum === 'undefined') {
+        if (novelDb) {
+          try {
+            const allLocal = await novelDb.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase()).toArray();
+            if (allLocal && allLocal.length > 0) {
+              allLocal.sort((a, b) => a.chapterNumber - b.chapterNumber);
+              const curIdx = allLocal.findIndex(c => c.chapterNumber === currentChapterNum);
+              if (curIdx !== -1) {
+                prevNum = curIdx > 0 ? allLocal[curIdx - 1].chapterNumber : 0;
+                nextNum = curIdx < allLocal.length - 1 ? allLocal[curIdx + 1].chapterNumber : 0;
+              }
+            }
+          } catch (e) {}
+        }
+        if (typeof nextNum === 'undefined') nextNum = currentChapterNum + 1;
+        if (typeof prevNum === 'undefined') prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
+      }
+
       document.body.setAttribute('data-chapter-num', String(data.chapter_number));
-      document.body.setAttribute('data-next-num', data.next_chapter ? String(data.next_chapter) : '');
-      document.body.setAttribute('data-prev-num', data.prev_chapter ? String(data.prev_chapter) : '');
-      nextChapterUrl = data.next_chapter ? `/novel/${novelSlug}/chapter/${data.next_chapter}` : '';
-      const prevChapterUrl = data.prev_chapter ? `/novel/${novelSlug}/chapter/${data.prev_chapter}` : '';
+      document.body.setAttribute('data-next-num', nextNum && nextNum > 0 ? String(nextNum) : '');
+      document.body.setAttribute('data-prev-num', prevNum && prevNum > 0 ? String(prevNum) : '');
+      nextChapterUrl = nextNum && nextNum > 0 ? `/novel/${novelSlug}/chapter/${nextNum}` : '';
+      const prevChapterUrl = prevNum && prevNum > 0 ? `/novel/${novelSlug}/chapter/${prevNum}` : '';
       document.body.setAttribute('data-next-url', nextChapterUrl);
       document.body.setAttribute('data-prev-url', prevChapterUrl);
 
@@ -1101,7 +1123,7 @@ function initReader() {
       const audioChapterTitle = document.getElementById('np-audio-chapter-title');
       if (audioChapterTitle) audioChapterTitle.textContent = data.title;
 
-      updateNavButtons(data.prev_chapter, data.next_chapter);
+      updateNavButtons(prevNum, nextNum);
 
       if (chapterSelect) {
         chapterSelect.value = `/novel/${novelSlug}/chapter/${data.chapter_number}`;
@@ -4046,76 +4068,43 @@ function initReader() {
 
 
     if (index >= paragraphNodes.length) {
-
       restoreParagraphDOM();
-
-      audioState.isPlaying = false;
-
-      audioState.isPaused = false;
-
-      pauseAudioPipeline();
-
-      updatePlayStateUI(false);
-
-      updateMediaSession();
-
       recordReadingProgress(paragraphNodes.length - 1, true);
 
-
-
+      // Check sleep timer stop request
       if (audioState.stopAtChapterEnd) {
-
         audioState.stopAtChapterEnd = false;
-
-        const sleepSelect = document.getElementById('np-sleep-timer-select');
-
-        if (sleepSelect) sleepSelect.value = '0';
-
-        const sBadge = document.getElementById('np-sleep-badge');
-
-        if (sBadge) {
-
-          sBadge.style.display = 'none';
-
-          sBadge.classList.remove('decaying');
-
-        }
-
+        audioState.isPlaying = false;
+        audioState.isPaused = false;
+        pauseAudioPipeline();
+        updatePlayStateUI(false);
         releaseWakeLock();
-
         showSleepToast('🌙 End of Chapter reached. Reading progress locked. Sweet dreams.');
-
         return;
-
       }
 
-
-
+      // Seamless Auto-Play to Next Chapter (DO NOT pause audio pipe on mobile!)
       if (audioState.autoNext) {
-
         const nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
-
         if (nextNum > 0) {
-
-          // Gapless, zero-reload transition to next chapter
-
+          audioState.currentIndex = 0;
           navigateToChapter(nextNum, true);
-
+          return;
         } else if (nextChapterUrl) {
-
           localStorage.setItem('novel_auto_play_tts', 'true');
-
           window.location.href = nextChapterUrl;
-
+          return;
         }
-
       }
 
+      // End of book or autoNext disabled: safely pause
+      audioState.isPlaying = false;
+      audioState.isPaused = false;
+      pauseAudioPipeline();
+      updatePlayStateUI(false);
+      updateMediaSession();
       return;
-
     }
-
-
 
     if (index < 0) index = 0;
 
