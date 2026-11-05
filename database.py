@@ -457,7 +457,7 @@ def get_novel_by_slug(slug: str) -> Optional[Dict]:
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM novels WHERE slug = ?", (slug,))
+        cursor.execute("SELECT * FROM novels WHERE LOWER(slug) = LOWER(?)", (slug,))
         row = cursor.fetchone()
         if not row:
             return None
@@ -478,7 +478,7 @@ def get_chapter(slug: str, chapter_number: int) -> Optional[Tuple[Dict, Dict]]:
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM novels WHERE slug = ?", (slug,))
+        cursor.execute("SELECT * FROM novels WHERE LOWER(slug) = LOWER(?)", (slug,))
         novel_row = cursor.fetchone()
         if not novel_row:
             return None

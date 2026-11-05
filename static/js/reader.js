@@ -870,24 +870,18 @@ function initReader() {
 
     }
 
-    // Check Dexie IndexedDB
-
+    // Check Dexie IndexedDB (Case-Insensitive Resilient Query)
     if (novelDb) {
-
       try {
-
-        const cached = await novelDb.chapters.get([novelSlug, chNum]);
-
-        if (cached && cached.paragraphs && cached.paragraphs.length > 0) {
-
-          chapterCache.set(chNum, cached);
-
-          return cached;
-
+        let cached = await novelDb.chapters.get([novelSlug, chNum]);
+        if (!cached) {
+          cached = await novelDb.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase() && c.chapterNumber === chNum).first();
         }
-
+        if (cached && cached.paragraphs && cached.paragraphs.length > 0) {
+          chapterCache.set(chNum, cached);
+          return cached;
+        }
       } catch (e) {}
-
     }
 
     // Fetch JSON from high-speed backend API
@@ -1301,7 +1295,7 @@ function initReader() {
 
             // Client-Side Authoritative Hydration: Load chapter & full TOC from Dexie
       if (novelDb && novelSlug) {
-        novelDb.chapters.where('novelSlug').equals(novelSlug).toArray().then(allLocalChs => {
+        novelDb.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase()).toArray().then(allLocalChs => {
           if (allLocalChs && allLocalChs.length > 0) {
             allLocalChs.sort((a, b) => a.chapterNumber - b.chapterNumber);
 
