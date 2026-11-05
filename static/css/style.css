@@ -4745,11 +4745,19 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   .novel-hero-section-bento {
     border-radius: 16px !important;
     margin-bottom: 1.5rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 
   .novel-detail-inner-bento {
-    padding: 1.25rem 0.75rem !important;
+    padding: 1.25rem 0.65rem !important;
     gap: 1.25rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 
   .detail-cover-bento-container {
@@ -4757,15 +4765,31 @@ body.system-hud-disabled .reader-system-card .system-card-header {
     margin: 0 auto !important;
   }
 
+  .detail-header-bento-info {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
   .detail-telemetry-badge-row {
+    display: flex !important;
     flex-wrap: wrap !important;
     justify-content: center !important;
     gap: 0.35rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    margin-bottom: 0.75rem !important;
   }
 
   .telemetry-chip {
-    font-size: 0.7rem !important;
+    font-size: 0.68rem !important;
     padding: 3px 8px !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    max-width: 100% !important;
   }
 
   .detail-bento-title {
@@ -4783,7 +4807,7 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   .detail-meta-bento-grid {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 0.5rem !important;
+    gap: 0.45rem !important;
     width: 100% !important;
     max-width: 100% !important;
     padding: 0 !important;
@@ -4792,18 +4816,48 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   }
 
   .meta-bento-chip {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.45rem !important;
     width: 100% !important;
     min-width: 0 !important;
     padding: 0.65rem 0.5rem !important;
     box-sizing: border-box !important;
+    border-radius: 12px !important;
+    background: rgba(255, 255, 255, 0.035) !important;
+  }
+
+  .meta-chip-icon {
+    font-size: 1.25rem !important;
+    flex-shrink: 0 !important;
+    line-height: 1 !important;
+  }
+
+  .meta-chip-content {
+    display: flex !important;
+    flex-direction: column !important;
+    min-width: 0 !important;
+    flex: 1 1 0 !important;
+    overflow: hidden !important;
   }
 
   .meta-chip-val {
-    font-size: 0.78rem !important;
+    font-size: 0.82rem !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     font-weight: 700 !important;
+    line-height: 1.2 !important;
+  }
+
+  .meta-chip-lbl {
+    font-size: 0.65rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    letter-spacing: 0.02em !important;
+    line-height: 1.2 !important;
   }
 
   .detail-actions-bento-row {

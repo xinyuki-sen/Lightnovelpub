@@ -94,12 +94,12 @@ async def library_home(request: Request, sort: Optional[str] = "recent"):
 async def novel_detail(request: Request, slug: str):
     novel = database.get_novel_by_slug(slug)
     if not novel:
-        clean_title = slug.replace("-", " ").title()
+        clean_title, clean_author = sanitize_title_and_author(slug.replace("-", " "), "Unknown Author")
         fallback_novel = {
             "id": 0,
             "slug": slug,
-            "title": clean_title,
-            "author": "Local Archive",
+            "title": clean_title or slug.replace("-", " ").title(),
+            "author": clean_author or "Unknown Author",
             "synopsis": "Loading novel details from local storage...",
             "cover_image": "",
             "total_chapters": 1,
@@ -127,12 +127,12 @@ async def chapter_reader(request: Request, slug: str, chapter_number: int):
             first_ch = full_novel["chapters"][0]["chapter_number"]
             return RedirectResponse(url=f"/novel/{slug}/chapter/{first_ch}", status_code=302)
         
-        clean_title = slug.replace("-", " ").title()
+        clean_title, clean_author = sanitize_title_and_author(slug.replace("-", " "), "Unknown Author")
         fallback_novel = {
             "id": 0,
             "slug": slug,
-            "title": clean_title,
-            "author": "Local Archive",
+            "title": clean_title or slug.replace("-", " ").title(),
+            "author": clean_author or "Unknown Author",
             "total_chapters": 1,
             "chapters": []
         }
