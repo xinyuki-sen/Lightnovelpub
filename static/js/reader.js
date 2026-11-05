@@ -942,7 +942,10 @@ function initReader() {
 
       try {
 
-        const local = await novelDb.chapters.get([novelSlug, chNum]);
+        let local = await novelDb.chapters.get([novelSlug, chNum]);
+        if (!local) {
+          local = await novelDb.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase() && c.chapterNumber === chNum).first();
+        }
 
         if (local) {
 
@@ -3533,6 +3536,16 @@ function initReader() {
 
 
 
+  
+  function prefetchLookaheadRunway(currentIndex) {
+    if (!paragraphNodes) return;
+    [currentIndex + 1, currentIndex + 2, currentIndex + 3].forEach(targetIdx => {
+      if (targetIdx < paragraphNodes.length && !prefetchedAudioMap.has(targetIdx) && !prefetchInFlight.has(targetIdx)) {
+        prefetchParagraphAudio(targetIdx);
+      }
+    });
+  }
+
   async function prefetchParagraphAudio(idx) {
 
     if (!paragraphNodes || idx < 0 || idx >= paragraphNodes.length) return null;
@@ -4358,10 +4371,10 @@ function initReader() {
 
 
 
-          // 1. Immediate Next Paragraph Lookahead (ensures 0ms gapless transition)
-          prefetchParagraphAudio(index + 1);
+          // 1. Concurrent 3-Paragraph Safety Runway (guarantees 0ms gapless speech)
+          prefetchLookaheadRunway(index);
 
-          // 2. Schedule Debounced 10-Paragraph Modem Runway Burst (DELAP 2.5s Gate)
+          // 2. Schedule Fast 10-Paragraph Modem Runway Burst (250ms Gate)
           scheduleRunwayBurst(index);
 
         };
@@ -5064,7 +5077,7 @@ function initReader() {
     runwayBurstTimer = setTimeout(() => {
       if (!audioState.isPlaying || audioState.isPaused) return;
       executeRunwayBurst(currentIndex);
-    }, 2500);
+    }, 250);
   }
 
   async function executeRunwayBurst(currentIndex) {
