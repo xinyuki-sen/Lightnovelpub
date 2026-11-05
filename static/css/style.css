@@ -4702,3 +4702,122 @@ body.system-hud-disabled .reader-system-card .system-card-header {
     bottom: 0.75rem !important;
   }
 }
+
+
+/* =========================================================================
+   COMPREHENSIVE MOBILE VIEWPORT POLISH
+   ========================================================================= */
+@media (max-width: 640px) {
+  html, body {
+    overflow-x: hidden !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+  }
+
+  .novel-hero-section-bento {
+    border-radius: 16px !important;
+    margin-bottom: 1.5rem !important;
+  }
+
+  .novel-detail-inner-bento {
+    padding: 1.25rem 0.75rem !important;
+    gap: 1.25rem !important;
+  }
+
+  .detail-cover-bento-container {
+    max-width: 160px !important;
+    margin: 0 auto !important;
+  }
+
+  .detail-telemetry-badge-row {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    gap: 0.35rem !important;
+  }
+
+  .telemetry-chip {
+    font-size: 0.7rem !important;
+    padding: 3px 8px !important;
+  }
+
+  .detail-bento-title {
+    font-size: 1.5rem !important;
+    text-align: center !important;
+    word-break: break-word !important;
+  }
+
+  .detail-author-bento-row {
+    justify-content: center !important;
+    font-size: 0.85rem !important;
+    flex-wrap: wrap !important;
+  }
+
+  .detail-meta-bento-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 1rem 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .meta-bento-chip {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0.65rem 0.5rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .meta-chip-val {
+    font-size: 0.85rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .detail-actions-bento-row {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 0.65rem !important;
+  }
+
+  .btn-read-primary-bento, .btn-delete-ghost-bento {
+    width: 100% !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    text-align: center !important;
+  }
+
+  .reader-extension-dock {
+    left: 0.5rem !important;
+    right: 0.5rem !important;
+    bottom: 0.5rem !important;
+    width: calc(100vw - 1rem) !important;
+    max-width: calc(100vw - 1rem) !important;
+    box-sizing: border-box !important;
+  }
+
+  .dock-pill-main {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 4px 6px !important;
+    gap: 2px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .dock-btn {
+    padding: 6px 8px !important;
+    font-size: 0.78rem !important;
+    gap: 3px !important;
+  }
+
+  .dock-btn-audio {
+    padding: 6px 12px !important;
+  }
+}

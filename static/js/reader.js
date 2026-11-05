@@ -1021,27 +1021,151 @@ function initReader() {
 
 
   function updateNavButtons(prevCh, nextCh) {
-
     const topPrev = document.getElementById('prev-chapter-btn');
-
     const topNext = document.getElementById('next-chapter-btn');
-
     const btmPrev = document.getElementById('prev-chapter-btn-bottom');
-
     const btmNext = document.getElementById('next-chapter-btn-bottom');
 
+    const prevNum = parseInt(prevCh || '0', 10);
+    const nextNum = parseInt(nextCh || '0', 10);
 
+    [topPrev, btmPrev].forEach(btn => {
+      if (!btn) return;
+      if (prevNum > 0) {
+        btn.removeAttribute('disabled');
+        btn.removeAttribute('aria-disabled');
+        btn.classList.remove('disabled');
+        btn.setAttribute('href', `/novel/${novelSlug}/chapter/${prevNum}`);
+      } else {
+        btn.setAttribute('disabled', 'true');
+        btn.setAttribute('aria-disabled', 'true');
+        btn.classList.add('disabled');
+        btn.setAttribute('href', '#');
+      }
+    });
 
-        [topPrev, btmPrev].forEach(btn => {
+    [topNext, btmNext].forEach(btn => {
+      if (!btn) return;
+      if (nextNum > 0) {
+        btn.removeAttribute('disabled');
+        btn.removeAttribute('aria-disabled');
+        btn.classList.remove('disabled');
+        btn.setAttribute('href', `/novel/${novelSlug}/chapter/${nextNum}`);
+      } else {
+        btn.setAttribute('disabled', 'true');
+        btn.setAttribute('aria-disabled', 'true');
+        btn.classList.add('disabled');
+        btn.setAttribute('href', '#');
+      }
+    });
+  }
+
+  async function navigateToChapter(targetChapterNum, continueAudio = false) {
+    if (!targetChapterNum || isChapterLoading) return;
+    if (targetChapterNum === currentChapterNum) return;
+    isChapterLoading = true;
+
+    const progBar = document.getElementById('reader-progress-bar');
+    if (progBar) {
+      progBar.style.width = '65%';
+      progBar.style.transition = 'width 0.15s ease';
+    }
+
+    try {
+      const data = await fetchChapterData(targetChapterNum);
+      if (!data || !data.paragraphs) throw new Error('Invalid chapter data');
+
+      currentChapterNum = data.chapter_number;
+      storageKey = `progress_${novelSlug}_ch${currentChapterNum}`;
+      paraStorageKey = `progress_para_${novelSlug}_ch${currentChapterNum}`;
+      pctStorageKey = `progress_pct_${novelSlug}_ch${currentChapterNum}`;
+
+      document.body.setAttribute('data-chapter-num', String(data.chapter_number));
+      document.body.setAttribute('data-next-num', data.next_chapter ? String(data.next_chapter) : '');
+      document.body.setAttribute('data-prev-num', data.prev_chapter ? String(data.prev_chapter) : '');
+      nextChapterUrl = data.next_chapter ? `/novel/${novelSlug}/chapter/${data.next_chapter}` : '';
+      const prevChapterUrl = data.prev_chapter ? `/novel/${novelSlug}/chapter/${data.prev_chapter}` : '';
+      document.body.setAttribute('data-next-url', nextChapterUrl);
+      document.body.setAttribute('data-prev-url', prevChapterUrl);
+
+      const pageTitle = `${data.title} — ${data.novel_title || 'Novel'} — LightnovelPub`;
+      document.title = pageTitle;
+      window.history.pushState({ chapterNumber: data.chapter_number }, pageTitle, `/novel/${novelSlug}/chapter/${data.chapter_number}`);
+
+      const topbarTitle = document.querySelector('.reader-chapter-title-text');
+      if (topbarTitle) topbarTitle.textContent = data.title;
+
+      const headlineTitle = document.querySelector('.chapter-headline-title');
+      if (headlineTitle) headlineTitle.textContent = data.title;
+
+      const headlineWords = document.querySelector('.chapter-headline-words') || document.querySelector('.chapter-reading-meta');
+      if (headlineWords) {
+        const words = data.word_count || (data.paragraphs ? data.paragraphs.join(' ').split(/\s+/).filter(Boolean).length : 0);
+        headlineWords.innerHTML = `${words.toLocaleString()} WORDS &bull; ESTIMATED READ: ${Math.max(1, Math.round(words / 220))} MINS`;
+      }
+
+      const audioChapterTitle = document.getElementById('np-audio-chapter-title');
+      if (audioChapterTitle) audioChapterTitle.textContent = data.title;
+
+      updateNavButtons(data.prev_chapter, data.next_chapter);
+
+      if (chapterSelect) {
+        chapterSelect.value = `/novel/${novelSlug}/chapter/${data.chapter_number}`;
+      }
+
+      const chapterContent = document.getElementById('chapter-content');
+      if (chapterContent) {
+        chapterContent.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+        data.paragraphs.forEach((pText, idx) => {
+          fragment.appendChild(buildParagraphElement(pText, idx));
+        });
+        chapterContent.appendChild(fragment);
+      }
+
+      paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p, #chapter-content .reader-system-card'));
+      if (typeof attachParagraphTouchGuards === 'function') {
+        attachParagraphTouchGuards();
+      }
+
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      if (progBar) progBar.style.width = '0%';
+      recordReadingProgress(0, false);
+      updateMediaSession();
+
+      const wasAudioActive = continueAudio || (audioState.isPlaying && !audioState.isPaused);
+      if (wasAudioActive) {
+        stopSpeech();
+        clearPrefetchedAudio();
+        audioState.currentIndex = 0;
+        setTimeout(() => {
+          speakParagraph(0, false);
+        }, 150);
+      }
+
+      prefetchAdjacentChapters(data.chapter_number);
+    } catch (err) {
+      console.warn('Dynamic navigation fallback:', err);
+      window.location.href = `/novel/${novelSlug}/chapter/${targetChapterNum}`;
+    } finally {
+      isChapterLoading = false;
+      if (progBar) progBar.style.width = '0%';
+    }
+  }
+
+  function attachChapterNavButtons() {
+    const topPrev = document.getElementById('prev-chapter-btn');
+    const topNext = document.getElementById('next-chapter-btn');
+    const btmPrev = document.getElementById('prev-chapter-btn-bottom');
+    const btmNext = document.getElementById('next-chapter-btn-bottom');
+
+    [topPrev, btmPrev].forEach(btn => {
       if (!btn) return;
       btn.addEventListener('click', (e) => {
         const prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
         if (prevNum > 0) {
-          // If audio is playing, seamlessly transition via AJAX; otherwise let standard robust href navigate
-          if (audioState && audioState.isPlaying && !audioState.isPaused) {
-            e.preventDefault();
-            navigateToChapter(prevNum, true);
-          }
+          e.preventDefault();
+          navigateToChapter(prevNum, audioState && audioState.isPlaying && !audioState.isPaused);
         }
       });
     });
@@ -1051,20 +1175,15 @@ function initReader() {
       btn.addEventListener('click', (e) => {
         const nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
         if (nextNum > 0) {
-          // If audio is playing, seamlessly transition via AJAX; otherwise let standard robust href navigate
-          if (audioState && audioState.isPlaying && !audioState.isPaused) {
-            e.preventDefault();
-            navigateToChapter(nextNum, true);
-          }
+          e.preventDefault();
+          navigateToChapter(nextNum, audioState && audioState.isPlaying && !audioState.isPaused);
         }
       });
     });
-
   }
 
-
-
   attachChapterNavButtons();
+
 
 
 
@@ -1180,31 +1299,76 @@ function initReader() {
 
       });
 
-      // Client-Side Authoritative Hydration: Load chapter from Dexie if DOM content is empty
-      const contentEl = document.getElementById('chapter-content');
-      if (contentEl && contentEl.children.length === 0) {
-        novelDb.chapters.get([novelSlug, currentChapterNum]).then(localCh => {
-          if (localCh) {
-            const paras = localCh.paragraphs || (localCh.content ? localCh.content.split('\n\n') : []);
-            contentEl.innerHTML = '';
-            paras.forEach((pText, pIdx) => {
-              const pEl = document.createElement('p');
-              pEl.className = 'novel-paragraph';
-              pEl.setAttribute('data-para-index', String(pIdx));
-              pEl.textContent = pText;
-              contentEl.appendChild(pEl);
-            });
-            paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p, #chapter-content .reader-system-card'));
-            if (localCh.title) {
-              const headTitle = document.querySelector('.chapter-headline-title');
-              if (headTitle) headTitle.textContent = localCh.title;
-              document.title = `${localCh.title} — LightnovelPub`;
+            // Client-Side Authoritative Hydration: Load chapter & full TOC from Dexie
+      if (novelDb && novelSlug) {
+        novelDb.chapters.where('novelSlug').equals(novelSlug).toArray().then(allLocalChs => {
+          if (allLocalChs && allLocalChs.length > 0) {
+            allLocalChs.sort((a, b) => a.chapterNumber - b.chapterNumber);
+
+            // 1. Populate Table of Contents dropdown selector
+            const chDropdown = document.getElementById('chapter-select-dropdown');
+            if (chDropdown) {
+              chDropdown.innerHTML = '';
+              allLocalChs.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = `/novel/${novelSlug}/chapter/${c.chapterNumber}`;
+                opt.textContent = c.title || `Chapter ${c.chapterNumber}`;
+                if (c.chapterNumber === currentChapterNum) opt.selected = true;
+                chDropdown.appendChild(opt);
+              });
             }
-            if (typeof restoreReadingPosition === 'function') {
-              restoreReadingPosition();
+
+            // 2. Resolve Previous & Next Chapter targets
+            const curIdx = allLocalChs.findIndex(c => c.chapterNumber === currentChapterNum);
+            const prevChDoc = curIdx > 0 ? allLocalChs[curIdx - 1] : null;
+            const nextChDoc = curIdx < allLocalChs.length - 1 ? allLocalChs[curIdx + 1] : null;
+
+            const prevNum = prevChDoc ? prevChDoc.chapterNumber : 0;
+            const nextNum = nextChDoc ? nextChDoc.chapterNumber : 0;
+
+            document.body.setAttribute('data-prev-num', prevNum > 0 ? String(prevNum) : '');
+            document.body.setAttribute('data-next-num', nextNum > 0 ? String(nextNum) : '');
+            document.body.setAttribute('data-prev-url', prevNum > 0 ? `/novel/${novelSlug}/chapter/${prevNum}` : '');
+            document.body.setAttribute('data-next-url', nextNum > 0 ? `/novel/${novelSlug}/chapter/${nextNum}` : '');
+            updateNavButtons(prevNum, nextNum);
+
+            // 3. Populate Chapter Content if not rendered by server
+            const contentEl = document.getElementById('chapter-content');
+            if (contentEl && (contentEl.children.length === 0 || !contentEl.textContent.trim())) {
+              const localCh = allLocalChs.find(c => c.chapterNumber === currentChapterNum) || allLocalChs[0];
+              if (localCh) {
+                const paras = localCh.paragraphs || (localCh.content ? localCh.content.split('\n\n') : []);
+                contentEl.innerHTML = '';
+                paras.forEach((pText, pIdx) => {
+                  contentEl.appendChild(buildParagraphElement(pText, pIdx));
+                });
+                paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p, #chapter-content .reader-system-card'));
+
+                const totalWords = localCh.word_count || paras.join(' ').split(/\s+/).filter(Boolean).length;
+                const estMins = Math.max(1, Math.round(totalWords / 220));
+                const headlineWords = document.querySelector('.chapter-reading-meta') || document.querySelector('.chapter-headline-words');
+                if (headlineWords) {
+                  headlineWords.innerHTML = `${totalWords.toLocaleString()} WORDS &bull; ESTIMATED READ: ${estMins} MINS`;
+                }
+
+                if (localCh.title) {
+                  const headTitle = document.querySelector('.chapter-headline-title');
+                  if (headTitle) headTitle.textContent = localCh.title;
+                  const topbarTitle = document.querySelector('.reader-chapter-title-text');
+                  if (topbarTitle) topbarTitle.textContent = localCh.title;
+                  document.title = `${localCh.title} — LightnovelPub`;
+                }
+
+                if (typeof attachParagraphTouchGuards === 'function') {
+                  attachParagraphTouchGuards();
+                }
+                if (typeof restoreReadingPosition === 'function') {
+                  restoreReadingPosition();
+                }
+              }
             }
           }
-        });
+        }).catch(err => console.warn('Dexie reader hydration note:', err));
       }
 
 

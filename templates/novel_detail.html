@@ -221,68 +221,7 @@ async function deleteNovel(slug) {
 }
 </script>
 
-<!-- Dexie.js Client-Side Authoritative Hydration (Resilient Offline Detail Progress) -->
-<script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', async () => {
-  if (typeof Dexie !== 'undefined') {
-    try {
-      const db = new Dexie('LightnovelpubDB');
-      db.version(1).stores({
-        chapters: '[novelSlug+chapterNumber], novelSlug, chapterNumber, title, content, updated_at',
-        progress: 'novelSlug, chapterNumber, percent, paraIndex, updated_at',
-        audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at'
-      });
-      const novelSlug = "{{ novel.slug }}";
-      const progressList = await db.progress.where('novelSlug').equals(novelSlug).toArray();
-      if (!progressList || progressList.length === 0) return;
-      
-      // Find latest progress
-      progressList.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
-      const latest = progressList[0];
-      if (latest && latest.chapterNumber) {
-        const valSpan = document.getElementById('detail-progress-val');
-        if (valSpan) valSpan.textContent = `Chapter ${latest.chapterNumber} (${Math.round(latest.percent)}%)`;
-        
-        const ctaBtn = document.querySelector('.btn-read-primary-bento');
-        if (ctaBtn) {
-          ctaBtn.href = `/novel/${novelSlug}/chapter/${latest.chapterNumber}`;
-          ctaBtn.innerHTML = `<span>▶</span> Continue Chapter ${latest.chapterNumber}`;
-        }
 
-        // Update TOC badges
-        document.querySelectorAll('.chapter-pill-item-bento').forEach(item => {
-          const chNum = parseInt(item.getAttribute('data-chapter-num') || '0', 10);
-          const badgeWrap = item.querySelector('.chapter-item-badge-wrap') || item.querySelector('.chapter-item-left');
-          const existingBadge = item.querySelector('.ch-badge');
-          if (existingBadge) existingBadge.remove();
-          item.classList.remove('ch-finished', 'ch-reading');
-
-          if (chNum < latest.chapterNumber) {
-            item.classList.add('ch-finished');
-            if (badgeWrap) {
-              const b = document.createElement('span');
-              b.className = 'ch-badge ch-badge-done';
-              b.textContent = '✓ Finished';
-              badgeWrap.appendChild(b);
-            }
-          } else if (chNum === latest.chapterNumber) {
-            item.classList.add('ch-reading');
-            if (badgeWrap) {
-              const b = document.createElement('span');
-              b.className = 'ch-badge ch-badge-reading';
-              b.textContent = `▶ Reading ${Math.round(latest.percent)}%`;
-              badgeWrap.appendChild(b);
-            }
-          }
-        });
-      }
-    } catch(err) {
-      console.warn('Dexie detail hydration note:', err);
-    }
-  }
-});
-</script>
 {% endblock %}
 
 {% block scripts %}
@@ -342,6 +281,18 @@ document.addEventListener('DOMContentLoaded', async () => {
           const metaVals = document.querySelectorAll('.meta-chip-val');
           if (metaVals.length > 0) metaVals[0].textContent = String(localChapters.length);
 
+          // Update top telemetry badge
+          const telemetryChips = document.querySelectorAll('.detail-telemetry-badge-row .telemetry-chip');
+          if (telemetryChips && telemetryChips.length > 1) {
+            telemetryChips[1].textContent = `✦ ${localChapters.length} CHAPTERS`;
+          }
+
+          // Update estimated read time
+          const estMins = localChapters.length * 8;
+          if (metaVals.length >= 4) {
+            metaVals[3].textContent = `~${estMins} min`;
+          }
+
           chaptersGrid.innerHTML = '';
           localChapters.forEach(ch => {
             const words = ch.word_count || (ch.content ? ch.content.split(/\s+/).length : 0);
@@ -376,14 +327,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       progressList.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
       const latest = progressList[0];
-      if (latest && latest.chapterNumber) {
+      const chNum = (latest && (latest.chapterNumber || latest.chapter)) ? (latest.chapterNumber || latest.chapter) : 1;
+      const chPct = (latest && typeof latest.percent === 'number' && !isNaN(latest.percent)) ? Math.round(latest.percent) : 0;
+      if (latest) {
         const valSpan = document.getElementById('detail-progress-val');
-        if (valSpan) valSpan.textContent = `Chapter ${latest.chapterNumber} (${Math.round(latest.percent)}%)`;
+        if (valSpan) valSpan.textContent = `Chapter ${chNum} (${chPct}%)`;
         
         const ctaBtn = document.querySelector('.btn-read-primary-bento');
         if (ctaBtn) {
-          ctaBtn.href = `/novel/${novelSlug}/chapter/${latest.chapterNumber}`;
-          ctaBtn.innerHTML = `<span>▶</span> Continue Chapter ${latest.chapterNumber}`;
+          ctaBtn.href = `/novel/${novelSlug}/chapter/${chNum}`;
+          ctaBtn.innerHTML = `<span>▶</span> Continue Chapter ${chNum}`;
         }
 
         document.querySelectorAll('.chapter-pill-item-bento').forEach(item => {
