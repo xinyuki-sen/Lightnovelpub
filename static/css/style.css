@@ -5187,3 +5187,39 @@ body.system-hud-disabled .reader-system-card .system-card-header {
     font-size: 0.74rem !important;
   }
 }
+
+/* ========================================================================= */
+/* EMPTY CHAPTER NOTICE CARD (FOR FRONTMATTER / DIVIDER / 0-WORD CHAPTERS)   */
+/* ========================================================================= */
+.empty-chapter-notice-card {
+  margin: 3.5rem auto;
+  max-width: 520px;
+  padding: 2.5rem 2rem;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  text-align: center;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 16px 35px rgba(0, 0, 0, 0.5);
+}
+
+.empty-notice-icon {
+  font-size: 3.2rem;
+  margin-bottom: 0.85rem;
+  line-height: 1;
+}
+
+.empty-notice-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 0.65rem;
+}
+
+.empty-notice-desc {
+  font-size: 0.94rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 1.6rem;
+}

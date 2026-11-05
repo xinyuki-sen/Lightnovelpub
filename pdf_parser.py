@@ -407,6 +407,15 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, str, List[Dict[str, any]]
             ch["number"] = idx + 1
             final_chapters.append(ch)
 
+        # Strip any leading stub chapters (cover / title / dedication pages with < 80 words)
+        while final_chapters and len(final_chapters) > 1 and final_chapters[0]["word_count"] < 80:
+            print(f"[PDF Parser] Dropped frontmatter stub chapter '{final_chapters[0]['title']}' ({final_chapters[0]['word_count']} words)")
+            final_chapters.pop(0)
+
+        # Re-index chapters contiguously from 1
+        for idx, ch in enumerate(final_chapters):
+            ch["number"] = idx + 1
+
         if final_chapters:
             return title, author, final_chapters, cover_bytes, cover_data_url
 
@@ -465,6 +474,15 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, str, List[Dict[str, any]]
             continue
         ch["number"] = len(final_chapters) + 1
         final_chapters.append(ch)
+
+    # Strip any leading stub chapters (cover / title / dedication pages with < 80 words)
+    while final_chapters and len(final_chapters) > 1 and final_chapters[0]["word_count"] < 80:
+        print(f"[PDF Parser] Dropped frontmatter stub chapter '{final_chapters[0]['title']}' ({final_chapters[0]['word_count']} words)")
+        final_chapters.pop(0)
+
+    # Re-index chapters contiguously from 1
+    for idx, ch in enumerate(final_chapters):
+        ch["number"] = idx + 1
 
     if final_chapters and (len(final_chapters) > 1 or found_any_chapter_heading):
         return title, author, final_chapters, cover_bytes, cover_data_url

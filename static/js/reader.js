@@ -1139,11 +1139,34 @@ function initReader() {
         const chapterContent = document.getElementById('chapter-content');
         if (chapterContent) {
           chapterContent.innerHTML = '';
-          const fragment = document.createDocumentFragment();
-          data.paragraphs.forEach((pText, idx) => {
-            fragment.appendChild(buildParagraphElement(pText, idx));
-          });
-          chapterContent.appendChild(fragment);
+          if (data.paragraphs && data.paragraphs.length > 0) {
+            const fragment = document.createDocumentFragment();
+            data.paragraphs.forEach((pText, idx) => {
+              fragment.appendChild(buildParagraphElement(pText, idx));
+            });
+            chapterContent.appendChild(fragment);
+          } else {
+            const nextTarget = nextNum || (currentChapterNum + 1);
+            chapterContent.innerHTML = `
+              <div class="empty-chapter-notice-card">
+                <div class="empty-notice-icon">📄</div>
+                <h3 class="empty-notice-title">Empty Illustration Page (0 Words)</h3>
+                <p class="empty-notice-desc">
+                  In this PDF edition, <strong>${data.title || `Chapter ${currentChapterNum}`}</strong> was a cover or blank divider page with no story text.
+                </p>
+                <a href="/novel/${novelSlug}/chapter/${nextTarget}" class="btn-read-primary" id="btn-skip-empty-chapter" style="display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; padding: 0.75rem 1.4rem; border-radius: 9999px;">
+                  <span>Start Reading Story (Chapter ${nextTarget})</span> →
+                </a>
+              </div>
+            `;
+            const skipBtn = document.getElementById('btn-skip-empty-chapter');
+            if (skipBtn) {
+              skipBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                navigateToChapter(nextTarget, audioState && audioState.isPlaying && !audioState.isPaused);
+              });
+            }
+          }
         }
 
         paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p, #chapter-content .reader-system-card'));
@@ -1370,13 +1393,37 @@ function initReader() {
               // 3. Populate Chapter Content if not rendered by server
               const contentEl = document.getElementById('chapter-content');
               if (contentEl && (contentEl.children.length === 0 || !contentEl.textContent.trim())) {
-                const localCh = allLocalChs.find(c => c.chapterNumber === currentChapterNum) || allLocalChs[0];
+                const localCh = allLocalChs.find(c => Number(c.chapterNumber) === Number(currentChapterNum)) || allLocalChs[0];
                 if (localCh) {
                   const paras = localCh.paragraphs || (localCh.content ? localCh.content.split('\n\n') : []);
                   contentEl.innerHTML = '';
-                  paras.forEach((pText, pIdx) => {
-                    contentEl.appendChild(buildParagraphElement(pText, pIdx));
-                  });
+                  if (paras.length > 0) {
+                    paras.forEach((pText, pIdx) => {
+                      contentEl.appendChild(buildParagraphElement(pText, pIdx));
+                    });
+                  } else {
+                    const nextTextChapter = allLocalChs.find(c => Number(c.chapterNumber) > Number(currentChapterNum) && ((c.paragraphs && c.paragraphs.length > 0) || (c.content && c.content.trim().length > 30) || (c.word_count && c.word_count > 30)));
+                    const nextChTarget = nextTextChapter ? nextTextChapter.chapterNumber : (currentChapterNum + 1);
+                    contentEl.innerHTML = `
+                      <div class="empty-chapter-notice-card">
+                        <div class="empty-notice-icon">📄</div>
+                        <h3 class="empty-notice-title">Empty Illustration Page (0 Words)</h3>
+                        <p class="empty-notice-desc">
+                          In this PDF edition, <strong>${localCh.title || `Chapter ${currentChapterNum}`}</strong> was a cover or blank divider page with no story text.
+                        </p>
+                        <a href="/novel/${novelSlug}/chapter/${nextChTarget}" class="btn-read-primary" id="btn-skip-empty-chapter-hydrated" style="display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; padding: 0.75rem 1.4rem; border-radius: 9999px;">
+                          <span>Start Reading Story (Chapter ${nextChTarget})</span> →
+                        </a>
+                      </div>
+                    `;
+                    const skipBtn = document.getElementById('btn-skip-empty-chapter-hydrated');
+                    if (skipBtn) {
+                      skipBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        navigateToChapter(nextChTarget, audioState && audioState.isPlaying && !audioState.isPaused);
+                      });
+                    }
+                  }
                   paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p, #chapter-content .reader-system-card'));
 
                   const totalWords = localCh.word_count || paras.join(' ').split(/\s+/).filter(Boolean).length;
@@ -4092,7 +4139,15 @@ function initReader() {
 
     async function speakParagraph(index, isContinuous = false) {
 
-      if (!paragraphNodes || paragraphNodes.length === 0) return;
+      if (!paragraphNodes || paragraphNodes.length === 0) {
+        if (audioState.autoNext) {
+          let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10) || (currentChapterNum + 1);
+          if (nextNum > 0) {
+            navigateToChapter(nextNum, true);
+          }
+        }
+        return;
+      }
 
 
 
@@ -5134,7 +5189,15 @@ function initReader() {
 
     async function executeRunwayBurst(currentIndex) {
       if (isRunwayBurstInFlight) return;
-      if (!paragraphNodes || paragraphNodes.length === 0) return;
+      if (!paragraphNodes || paragraphNodes.length === 0) {
+        if (audioState.autoNext) {
+          let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10) || (currentChapterNum + 1);
+          if (nextNum > 0) {
+            navigateToChapter(nextNum, true);
+          }
+        }
+        return;
+      }
       if (navigator.onLine === false) return;
 
       const currentVoice = audioState.selectedVoice || NEURAL_VOICES[0];
