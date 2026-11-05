@@ -1081,22 +1081,26 @@ function initReader() {
       let nextNum = data.next_chapter;
       let prevNum = data.prev_chapter;
 
-      if (typeof nextNum === 'undefined' || typeof prevNum === 'undefined') {
+      if (!nextNum || typeof nextNum === 'undefined' || !prevNum || typeof prevNum === 'undefined') {
         if (novelDb) {
           try {
             const allLocal = await novelDb.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase()).toArray();
             if (allLocal && allLocal.length > 0) {
-              allLocal.sort((a, b) => a.chapterNumber - b.chapterNumber);
-              const curIdx = allLocal.findIndex(c => c.chapterNumber === currentChapterNum);
+              allLocal.sort((a, b) => Number(a.chapterNumber) - Number(b.chapterNumber));
+              const curIdx = allLocal.findIndex(c => Number(c.chapterNumber) === Number(currentChapterNum));
               if (curIdx !== -1) {
-                prevNum = curIdx > 0 ? allLocal[curIdx - 1].chapterNumber : 0;
-                nextNum = curIdx < allLocal.length - 1 ? allLocal[curIdx + 1].chapterNumber : 0;
+                if (!prevNum || typeof prevNum === 'undefined') {
+                  prevNum = curIdx > 0 ? allLocal[curIdx - 1].chapterNumber : 0;
+                }
+                if (!nextNum || typeof nextNum === 'undefined') {
+                  nextNum = curIdx < allLocal.length - 1 ? allLocal[curIdx + 1].chapterNumber : 0;
+                }
               }
             }
           } catch (e) {}
         }
-        if (typeof nextNum === 'undefined') nextNum = currentChapterNum + 1;
-        if (typeof prevNum === 'undefined') prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
+        if (!nextNum || typeof nextNum === 'undefined') nextNum = currentChapterNum + 1;
+        if (!prevNum || typeof prevNum === 'undefined') prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
       }
 
       document.body.setAttribute('data-chapter-num', String(data.chapter_number));
@@ -1157,14 +1161,20 @@ function initReader() {
         stopSpeech();
         clearPrefetchedAudio();
         audioState.currentIndex = 0;
+        audioState.isPlaying = true;
+        audioState.isPaused = false;
+        updatePlayStateUI(true);
         setTimeout(() => {
           speakParagraph(0, false);
-        }, 150);
+        }, 120);
       }
 
       prefetchAdjacentChapters(data.chapter_number);
     } catch (err) {
       console.warn('Dynamic navigation fallback:', err);
+      if (continueAudio) {
+        localStorage.setItem('novel_auto_play_tts', 'true');
+      }
       window.location.href = `/novel/${novelSlug}/chapter/${targetChapterNum}`;
     } finally {
       isChapterLoading = false;
@@ -1181,7 +1191,10 @@ function initReader() {
     [topPrev, btmPrev].forEach(btn => {
       if (!btn) return;
       btn.addEventListener('click', (e) => {
-        const prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
+        let prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
+        if (!prevNum || isNaN(prevNum) || prevNum <= 0) {
+          prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
+        }
         if (prevNum > 0) {
           e.preventDefault();
           navigateToChapter(prevNum, audioState && audioState.isPlaying && !audioState.isPaused);
@@ -1192,7 +1205,10 @@ function initReader() {
     [topNext, btmNext].forEach(btn => {
       if (!btn) return;
       btn.addEventListener('click', (e) => {
-        const nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+        let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+        if (!nextNum || isNaN(nextNum) || nextNum <= 0) {
+          nextNum = currentChapterNum + 1;
+        }
         if (nextNum > 0) {
           e.preventDefault();
           navigateToChapter(nextNum, audioState && audioState.isPlaying && !audioState.isPaused);
@@ -4098,7 +4114,41 @@ function initReader() {
 
       // Seamless Auto-Play to Next Chapter (DO NOT pause audio pipe on mobile!)
       if (audioState.autoNext) {
-        const nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+        let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+        if (!nextNum || isNaN(nextNum) || nextNum <= 0) {
+          const nextBtn = document.getElementById('next-chapter-btn') || document.getElementById('next-chapter-btn-bottom');
+          if (nextBtn && nextBtn.getAttribute('href')) {
+            const m = nextBtn.getAttribute('href').match(/\/chapter\/(\d+)/);
+            if (m) nextNum = parseInt(m[1], 10);
+          }
+        }
+        if (!nextNum || isNaN(nextNum) || nextNum <= 0) {
+          const chDropdown = document.getElementById('chapter-select-dropdown');
+          if (chDropdown && chDropdown.options) {
+            for (let i = 0; i < chDropdown.options.length; i++) {
+              const m = (chDropdown.options[i].value || '').match(/\/chapter\/(\d+)/);
+              if (m && parseInt(m[1], 10) > currentChapterNum) {
+                nextNum = parseInt(m[1], 10);
+                break;
+              }
+            }
+          }
+        }
+        if (!nextNum || isNaN(nextNum) || nextNum <= 0) {
+          nextNum = currentChapterNum + 1;
+        }
+
+        const totalChapters = parseInt(document.body.getAttribute('data-total-chapters') || '0', 10);
+        if (totalChapters > 0 && nextNum > totalChapters) {
+          audioState.isPlaying = false;
+          audioState.isPaused = false;
+          pauseAudioPipeline();
+          updatePlayStateUI(false);
+          updateMediaSession();
+          showSleepToast('🎉 End of novel reached! All chapters completed.');
+          return;
+        }
+
         if (nextNum > 0) {
           audioState.currentIndex = 0;
           navigateToChapter(nextNum, true);
@@ -4704,13 +4754,17 @@ function initReader() {
 
 
   function playPrevParagraph() {
-
     if (audioState.currentIndex > 0) {
-
       speakParagraph(audioState.currentIndex - 1, false);
-
+    } else {
+      let prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
+      if (!prevNum || prevNum <= 0) {
+        prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
+      }
+      if (prevNum > 0) {
+        navigateToChapter(prevNum, audioState && audioState.isPlaying && !audioState.isPaused);
+      }
     }
-
   }
 
 
@@ -4784,13 +4838,11 @@ function initReader() {
 
 
   function playNextParagraph() {
-
     if (audioState.currentIndex < paragraphNodes.length - 1) {
-
       speakParagraph(audioState.currentIndex + 1, false);
-
+    } else {
+      speakParagraph(paragraphNodes.length, false);
     }
-
   }
 
 

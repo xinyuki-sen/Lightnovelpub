@@ -4643,15 +4643,19 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   }
 
   .meta-chip-val {
-    font-size: 0.95rem !important;
+    font-size: 0.84rem !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    font-weight: 700 !important;
   }
 
   .meta-chip-lbl {
-    font-size: 0.68rem !important;
+    font-size: 0.65rem !important;
     white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    letter-spacing: 0.02em !important;
   }
 
   /* 2. Top Chapter Navigation: Single line, no wrapping */
@@ -4777,10 +4781,11 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   }
 
   .meta-chip-val {
-    font-size: 0.85rem !important;
+    font-size: 0.78rem !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    font-weight: 700 !important;
   }
 
   .detail-actions-bento-row {

@@ -51,7 +51,7 @@
         <div class="meta-bento-chip">
           <span class="meta-chip-icon">🔖</span>
           <div class="meta-chip-content">
-            <span class="meta-chip-val" id="detail-progress-val">Chapter {{ novel.last_read_chapter }} ({{ (novel.last_read_percent or 0)|round|int }}%)</span>
+            <span class="meta-chip-val" id="detail-progress-val">Ch. {{ novel.last_read_chapter }} &bull; {{ (novel.last_read_percent or 0)|round|int }}%</span>
             <span class="meta-chip-lbl">Reading Progress</span>
           </div>
         </div>
@@ -368,7 +368,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const chPct = (latest && typeof latest.percent === 'number' && !isNaN(latest.percent)) ? Math.round(latest.percent) : 0;
       if (latest) {
         const valSpan = document.getElementById('detail-progress-val');
-        if (valSpan) valSpan.textContent = `Chapter ${chNum} (${chPct}%)`;
+        if (valSpan) valSpan.innerHTML = window.innerWidth <= 640 ? `Ch. ${chNum} &bull; ${chPct}%` : `Chapter ${chNum} (${chPct}%)`;
         
         const ctaBtn = document.querySelector('.btn-read-primary-bento');
         if (ctaBtn) {
