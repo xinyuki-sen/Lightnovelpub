@@ -218,7 +218,7 @@ def extract_epub_chapters(epub_path: str):
         if cover_bytes:
             import base64
             cover_data_url = f"data:image/jpeg;base64,{base64.b64encode(cover_bytes).decode('ascii')}"
-        return title, chapters, cover_bytes, cover_data_url
+        return title, author, chapters, cover_bytes, cover_data_url
 
 # Self-test with synthesized EPUB
 if __name__ == '__main__':

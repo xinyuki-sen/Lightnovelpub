@@ -179,7 +179,7 @@
       
       <div class="novel-progress-bar-wrap">
         <div class="progress-header">
-          <span>Chapter {{ cur_ch }} / {{ novel.total_chapters }}</span>
+          <span>Ch. {{ cur_ch }} / {{ novel.total_chapters }}</span>
           <span class="progress-pct-text">{{ percent }}%</span>
         </div>
         <div class="progress-track">
@@ -437,41 +437,105 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (gridContainer) {
+          function sanitizeNovelMetadata(rawTitle, rawAuthor) {
+            let title = (rawTitle || '').trim();
+            let author = (rawAuthor || '').trim();
+
+            title = title.replace(/\[\s*oceanofpdf(?:\.com)?\s*\]/gi, '');
+            title = title.replace(/\(\s*oceanofpdf(?:\.com)?\s*\)/gi, '');
+            title = title.replace(/(?:https?:\/\/)?(?:www\.)?oceanofpdf(?:\.com)?/gi, '');
+            title = title.replace(/[_\s]+/g, ' ').trim();
+
+            if (author) {
+              author = author.replace(/(?:https?:\/\/)?(?:www\.)?oceanofpdf(?:\.com)?/gi, '').trim();
+            }
+
+            if (!author || author.toLowerCase() === 'unknown' || author.toLowerCase() === 'unknown author') {
+              const dashMatch = title.match(/^(.*?)\s*[-–—]\s*([A-Za-z0-9\s.]{2,30})$/);
+              const byMatch = title.match(/^(.*?)\s+by\s+([A-Za-z0-9\s.]{2,30})$/i);
+              const trailingAuthorMatch = title.match(/^(.*?\b(?:\d+|[IVXLCDM]+))\s+([A-Z][a-z]{2,20})$/);
+
+              if (dashMatch) {
+                title = dashMatch[1].trim();
+                author = dashMatch[2].trim();
+              } else if (byMatch) {
+                title = byMatch[1].trim();
+                author = byMatch[2].trim();
+              } else if (trailingAuthorMatch) {
+                title = trailingAuthorMatch[1].trim();
+                author = trailingAuthorMatch[2].trim();
+              }
+            }
+
+            if (title) {
+              const minorWords = new Set(['and', 'of', 'the', 'in', 'on', 'at', 'to', 'for', 'with', 'a', 'an']);
+              title = title.split(' ').map((w, idx) => {
+                const low = w.toLowerCase();
+                if (idx > 0 && minorWords.has(low)) return low;
+                return w.charAt(0).toUpperCase() + w.slice(1);
+              }).join(' ');
+            }
+
+            if (author && author.toLowerCase() !== 'unknown' && author.toLowerCase() !== 'unknown author') {
+              author = author.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+            } else {
+              author = 'Unknown Author';
+            }
+
+            return { title: title || 'Untitled Novel', author: author };
+          }
+
           for (const novel of customNovels) {
+            // Auto-clean watermarks and missing author on existing Dexie records
+            const meta = sanitizeNovelMetadata(novel.title, novel.author);
+            if (meta.title !== novel.title || (novel.author === 'Unknown Author' && meta.author !== 'Unknown Author')) {
+              novel.title = meta.title;
+              if (meta.author !== 'Unknown Author') novel.author = meta.author;
+              db.customNovels.put(novel).catch(() => {});
+            }
+
             let existingCard = document.querySelector(`.novel-card[data-novel-slug="${novel.slug}"]`);
-            if (!existingCard) {
-              const card = document.createElement('div');
+            if (existingCard) {
+              const titleEl = existingCard.querySelector('.novel-title, .novel-card-title');
+              if (titleEl && titleEl.textContent !== novel.title) {
+                titleEl.textContent = novel.title;
+                titleEl.setAttribute('title', novel.title);
+              }
+              const authorEl = existingCard.querySelector('.novel-author, .novel-card-author');
+              if (authorEl && authorEl.textContent !== novel.author) {
+                authorEl.textContent = novel.author;
+              }
+            } else {
+              const card = document.createElement('a');
+              card.href = `/novel/${novel.slug}`;
               card.className = 'novel-card status-unread';
               card.setAttribute('data-novel-slug', novel.slug);
               card.setAttribute('data-novel-title', novel.title);
-              card.setAttribute('data-novel-author', novel.author || 'Unknown');
+              card.setAttribute('data-novel-author', novel.author || 'Unknown Author');
               card.setAttribute('data-total-chs', String(novel.total_chapters || 1));
               card.setAttribute('data-percent', '0');
               card.setAttribute('data-ch', '1');
 
-              const coverSrc = novel.cover_image || '/static/img/logo.png?v=38';
+              const coverSrc = novel.cover_image || '/static/img/logo.png?v=39';
               card.innerHTML = `
                 <div class="novel-cover-wrap">
                   <img src="${coverSrc}" alt="${novel.title}" class="novel-cover-img" loading="lazy">
-                  <div class="novel-cover-overlay">
-                    <span class="novel-status-chip">Unread</span>
-                    <button class="card-delete-quick-btn" title="Delete novel" onclick="deleteNovelFromLibrary(event, '${novel.slug}', '${novel.title.replace(/'/g, "\\'")}')">🗑️</button>
-                    <a href="/novel/${novel.slug}" class="novel-cover-hover-action">
-                      <span>Explore Chapters →</span>
-                    </a>
+                  <div class="novel-badge-top-row">
+                    <span class="novel-card-badge">${novel.total_chapters || 1} Chs</span>
+                    <button type="button" class="btn-card-quick-delete" title="Delete novel from library" onclick="deleteNovelFromLibrary(event, '${novel.slug}', '${novel.title.replace(/'/g, "\\'")}')">
+                      🗑️
+                    </button>
+                  </div>
+                  <div class="novel-cover-hover-action">
+                    <span>Start Reading →</span>
                   </div>
                 </div>
-                <div class="novel-meta-content">
-                  <div class="novel-tag-row">
-                    <span class="novel-tag-pill">📚 ${novel.total_chapters} Chapters</span>
-                  </div>
-                  <h3 class="novel-card-title">
-                    <a href="/novel/${novel.slug}">${novel.title}</a>
-                  </h3>
-                  <p class="novel-card-author">${novel.author || 'Unknown Author'}</p>
+                <div class="novel-info-body">
+                  <h3 class="novel-title" title="${novel.title}">${novel.title}</h3>
+                  <div class="novel-author">${novel.author || 'Unknown Author'}</div>
                   <div class="novel-progress-bar-wrap">
                     <div class="progress-header">
-                      <span>Chapter 1 / ${novel.total_chapters}</span>
+                      <span>Ch. 1 / ${novel.total_chapters || 1}</span>
                       <span class="progress-pct-text">0%</span>
                     </div>
                     <div class="progress-track">
@@ -600,15 +664,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (fill) fill.style.width = compPct + '%';
             if (pctText) pctText.textContent = compPct + '%';
-            if (chLabel) chLabel.textContent = `Chapter ${chNum} / ${totalChs}`;
-            if (statusChip) statusChip.textContent = `Reading Ch. ${chNum} (${Math.round(pPct)}%)`;
+            if (chLabel) chLabel.textContent = `Ch. ${chNum} / ${totalChs}`;
+            if (statusChip) statusChip.textContent = `Ch. ${chNum} (${Math.round(pPct)}%)`;
             if (hoverBtn) hoverBtn.textContent = `Continue Chapter ${chNum} →`;
 
             card.setAttribute('data-percent', String(compPct));
-            card.setAttribute('data-ch', String(p.chapterNumber));
-            if (p.chapterNumber > 1 || p.percent > 3) {
+            card.setAttribute('data-ch', String(chNum));
+            if (chNum > 1 || pPct > 3) {
               card.classList.remove('status-unread');
               card.classList.add('status-reading');
+              if (!statusChip) {
+                const badgeRow = card.querySelector('.novel-badge-top-row');
+                if (badgeRow) {
+                  const chip = document.createElement('span');
+                  chip.className = 'novel-status-chip';
+                  chip.textContent = `Ch. ${chNum} (${Math.round(pPct)}%)`;
+                  badgeRow.insertBefore(chip, badgeRow.querySelector('.btn-card-quick-delete'));
+                }
+              }
             }
           }
         });

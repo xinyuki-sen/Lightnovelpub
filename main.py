@@ -12,7 +12,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 import database
-from pdf_parser import extract_pdf_chapters
+from pdf_parser import extract_pdf_chapters, sanitize_title_and_author
 from epub_parser import extract_epub_chapters
 
 app = FastAPI(title="LightnovelPub Custom Novel Reader")
@@ -280,15 +280,20 @@ async def upload_novel(
             tmp_path = tmp.name
 
         cover_data_url = ""
+        detected_author = "Unknown Author"
         if is_epub:
             res = extract_epub_chapters(tmp_path)
-            if len(res) == 4:
+            if len(res) == 5:
+                detected_title, detected_author, chapters, cover_bytes, cover_data_url = res
+            elif len(res) == 4:
                 detected_title, chapters, cover_bytes, cover_data_url = res
             else:
                 detected_title, chapters, cover_bytes = res[:3]
         else:
             res = extract_pdf_chapters(tmp_path)
-            if len(res) == 4:
+            if len(res) == 5:
+                detected_title, detected_author, chapters, cover_bytes, cover_data_url = res
+            elif len(res) == 4:
                 detected_title, chapters, cover_bytes, cover_data_url = res
             else:
                 detected_title, chapters, cover_bytes = res[:3]
@@ -296,9 +301,10 @@ async def upload_novel(
         if not chapters:
             return JSONResponse({"error": "Could not extract any readable chapters from the file."}, status_code=400)
 
-        final_title = title.strip() if title and title.strip() else detected_title
-        if not final_title:
-            final_title = os.path.splitext(file.filename)[0].replace("_", " ").title()
+        # Sanitize title & author against OceanofPDF / watermarks and filename author suffixes
+        raw_user_title = title.strip() if title and title.strip() else detected_title
+        raw_user_author = author.strip() if author and author.strip() else detected_author
+        final_title, final_author = sanitize_title_and_author(raw_user_title or file.filename, raw_user_author)
             
         slug = database.generate_unique_slug(final_title)
         cover_url = ""
@@ -316,7 +322,7 @@ async def upload_novel(
         final_cover_path = cover_data_url if cover_data_url else cover_url
         saved_slug = database.save_novel(
             title=final_title,
-            author=author.strip() if author and author.strip() else "Unknown Author",
+            author=final_author,
             synopsis=synopsis.strip() if synopsis and synopsis.strip() else f"Imported from {file.filename}.",
             cover_path=final_cover_path,
             chapters=chapters,
@@ -326,7 +332,7 @@ async def upload_novel(
         novel_payload = {
             "slug": saved_slug,
             "title": final_title,
-            "author": author.strip() if author and author.strip() else "Unknown Author",
+            "author": final_author,
             "synopsis": synopsis.strip() if synopsis and synopsis.strip() else f"Imported from {file.filename}.",
             "cover_image": final_cover_path,
             "total_chapters": len(chapters),

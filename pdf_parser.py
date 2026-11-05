@@ -238,21 +238,75 @@ def extract_pdf_toc_bookmarks(file_path: str) -> List[Tuple[str, int]]:
 
     return filtered
 
-def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Optional[bytes], str]:
+def sanitize_title_and_author(filename_or_title: str, detected_author: Optional[str] = None) -> Tuple[str, str]:
+    """
+    Sanitizes book titles and extracts author names:
+    - Strips OceanofPDF and common piracy watermarks.
+    - Resolves 'Title - Author', 'Title by Author', or 'Title 1 Author' patterns.
+    - Applies smart title casing preserving minor prepositions and conjunctions.
+    """
+    base = os.path.basename(filename_or_title)
+    if re.search(r'\.(pdf|epub|mobi|azw3?|txt)$', base, flags=re.IGNORECASE):
+        base = re.sub(r'\.(pdf|epub|mobi|azw3?|txt)$', '', base, flags=re.IGNORECASE)
+
+    title = base
+    title = re.sub(r'(?i)\[\s*oceanofpdf(?:\.com)?\s*\]', '', title)
+    title = re.sub(r'(?i)\(\s*oceanofpdf(?:\.com)?\s*\)', '', title)
+    title = re.sub(r'(?i)(?:https?://)?(?:www\.)?oceanofpdf(?:\.com)?', '', title)
+    title = re.sub(r'[_\s]+', ' ', title).strip()
+
+    author = (detected_author or '').strip()
+    if author:
+        author = re.sub(r'(?i)(?:https?://)?(?:www\.)?oceanofpdf(?:\.com)?', '', author).strip()
+
+    if not author or author.lower() in ("unknown", "unknown author", ""):
+        m = re.match(r'^(.*?)\s*[-–—]\s*([A-Za-z0-9\s.]{2,30})$', title)
+        if m:
+            title = m.group(1).strip()
+            author = m.group(2).strip()
+        else:
+            m = re.match(r'(?i)^(.*?)\s+by\s+([A-Za-z0-9\s.]{2,30})$', title)
+            if m:
+                title = m.group(1).strip()
+                author = m.group(2).strip()
+            else:
+                m = re.match(r'^(.*?\b(?:\d+|[IVXLCDM]+))\s+([A-Z][a-z]{2,20})$', title)
+                if m:
+                    title = m.group(1).strip()
+                    author = m.group(2).strip()
+
+    words = title.split()
+    minor_words = {'and', 'of', 'the', 'in', 'on', 'at', 'to', 'for', 'with', 'a', 'an'}
+    titled_words = [w.capitalize() if i == 0 or w.lower() not in minor_words else w.lower() for i, w in enumerate(words)]
+    title = ' '.join(titled_words) if titled_words else "Untitled Novel"
+    author = author.title() if author else "Unknown Author"
+    return title, author
+
+def extract_pdf_chapters(file_path: str) -> Tuple[str, str, List[Dict[str, any]], Optional[bytes], str]:
     """
     High-Speed PDF Chapter Slicing Engine (Chromium PDFium Native):
     1. Extracts full document in ~2s using pypdfium2 (10x speedup over pypdf).
     2. Slices chapters cleanly by digital TOC bookmarks or line scanner.
     3. Strips drop-cap headings, watermarks, frontmatter & backmatter.
     4. Generates both JPEG binary and Base64 Data URL for persistent offline display.
-    Returns: (novel_title, chapters_list, cover_bytes, cover_data_url)
+    Returns: (novel_title, detected_author, chapters_list, cover_bytes, cover_data_url)
     """
     import pypdfium2
     import pypdf
 
-    # 1. Title detection
-    title = os.path.splitext(os.path.basename(file_path))[0]
-    title = re.sub(r'^_?(?:oceanofpdf\.com_)?', '', title, flags=re.IGNORECASE).replace('_', ' ').title()
+    # 1. Clean Title & Author detection
+    raw_name = os.path.splitext(os.path.basename(file_path))[0]
+    meta_author = ""
+    try:
+        reader = pypdf.PdfReader(file_path)
+        if reader.metadata:
+            meta_title = reader.metadata.get('/Title') or ''
+            meta_author = reader.metadata.get('/Author') or ''
+            if meta_title and len(meta_title.strip()) > 3:
+                raw_name = meta_title.strip()
+    except Exception:
+        pass
+    title, author = sanitize_title_and_author(raw_name, meta_author)
 
     # 2. Extract cover image & Data URL from page 0
     cover_bytes = None
@@ -354,7 +408,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
             final_chapters.append(ch)
 
         if final_chapters:
-            return title, final_chapters, cover_bytes, cover_data_url
+            return title, author, final_chapters, cover_bytes, cover_data_url
 
     # =========================================================================
     # STRATEGY 2: Scan for Chapter Headings Line by Line across all pages
@@ -413,7 +467,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
         final_chapters.append(ch)
 
     if final_chapters and (len(final_chapters) > 1 or found_any_chapter_heading):
-        return title, final_chapters, cover_bytes, cover_data_url
+        return title, author, final_chapters, cover_bytes, cover_data_url
 
     # =========================================================================
     # STRATEGY 3: Equal-Word Fallback Chunking (If PDF had no headings/TOC)
@@ -423,7 +477,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
     total_words = sum(len(p.split()) for p in all_paras)
 
     if total_words < 500:
-        return title, [{
+        return title, author, [{
             "number": 1,
             "title": "Complete Novel Text",
             "content": all_paras,
@@ -460,4 +514,4 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
             "word_count": chunk_word_acc
         })
 
-    return title, fallback_chapters, cover_bytes, cover_data_url
+    return title, author, fallback_chapters, cover_bytes, cover_data_url

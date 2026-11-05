@@ -68,16 +68,70 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function sanitizeNovelMetadata(rawTitle, rawAuthor) {
+    let title = (rawTitle || '').trim();
+    let author = (rawAuthor || '').trim();
+
+    // 1. Remove oceanofpdf and common piracy watermarks
+    title = title.replace(/\[\s*oceanofpdf(?:\.com)?\s*\]/gi, '');
+    title = title.replace(/\(\s*oceanofpdf(?:\.com)?\s*\)/gi, '');
+    title = title.replace(/(?:https?:\/\/)?(?:www\.)?oceanofpdf(?:\.com)?/gi, '');
+    title = title.replace(/[_\s]+/g, ' ').trim();
+
+    if (author) {
+      author = author.replace(/(?:https?:\/\/)?(?:www\.)?oceanofpdf(?:\.com)?/gi, '').trim();
+    }
+
+    // 2. Extract author from title if author is empty or unknown
+    if (!author || author.toLowerCase() === 'unknown' || author.toLowerCase() === 'unknown author') {
+      const dashMatch = title.match(/^(.*?)\s*[-–—]\s*([A-Za-z0-9\s.]{2,30})$/);
+      const byMatch = title.match(/^(.*?)\s+by\s+([A-Za-z0-9\s.]{2,30})$/i);
+      const trailingAuthorMatch = title.match(/^(.*?\b(?:\d+|[IVXLCDM]+))\s+([A-Z][a-z]{2,20})$/);
+
+      if (dashMatch) {
+        title = dashMatch[1].trim();
+        author = dashMatch[2].trim();
+      } else if (byMatch) {
+        title = byMatch[1].trim();
+        author = byMatch[2].trim();
+      } else if (trailingAuthorMatch) {
+        title = trailingAuthorMatch[1].trim();
+        author = trailingAuthorMatch[2].trim();
+      }
+    }
+
+    if (title) {
+      const minorWords = new Set(['and', 'of', 'the', 'in', 'on', 'at', 'to', 'for', 'with', 'a', 'an']);
+      title = title.split(' ').map((w, idx) => {
+        const low = w.toLowerCase();
+        if (idx > 0 && minorWords.has(low)) return low;
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      }).join(' ');
+    }
+
+    if (author && author.toLowerCase() !== 'unknown' && author.toLowerCase() !== 'unknown author') {
+      author = author.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    } else {
+      author = 'Unknown Author';
+    }
+
+    return { title: title || 'Untitled Novel', author: author };
+  }
+
   function handleFileSelect(file) {
     if (fileSelectedNotice) {
       fileSelectedNotice.textContent = `Selected: ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
       fileSelectedNotice.style.display = 'block';
     }
-    // Auto-populate title if empty
+    // Auto-populate clean title and author
     const titleInput = document.getElementById('novel-title-input');
-    if (titleInput && !titleInput.value.trim()) {
-      const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_\-]+/g, ' ');
-      titleInput.value = cleanName;
+    const authorInput = document.getElementById('novel-author-input');
+    const meta = sanitizeNovelMetadata(file.name.replace(/\.[^/.]+$/, ''));
+    if (titleInput && (!titleInput.value.trim() || /oceanofpdf/i.test(titleInput.value))) {
+      titleInput.value = meta.title;
+    }
+    if (authorInput && (!authorInput.value.trim() || authorInput.value.toLowerCase() === 'unknown author') && meta.author !== 'Unknown Author') {
+      authorInput.value = meta.author;
     }
   }
 

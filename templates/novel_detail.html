@@ -283,6 +283,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const isClientHydration = {{ 'true' if is_client_hydration else 'false' }};
       
       if (custom) {
+        let cleanTitle = (custom.title || '').replace(/\b(?:https?:\/\/)?(?:www\.)?oceanofpdf(?:\.com)?\b/gi, '').replace(/[_\s]+/g, ' ').trim();
+        if (cleanTitle && cleanTitle !== custom.title) {
+          custom.title = cleanTitle;
+          db.customNovels.put(custom).catch(() => {});
+        }
         if (custom.title) {
           const titleEl = document.querySelector('.detail-bento-title');
           if (titleEl) titleEl.textContent = custom.title;
@@ -290,7 +295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (custom.author) {
           const authorEl = document.querySelector('.author-name');
-          if (authorEl) authorEl.textContent = custom.author;
+          if (authorEl && custom.author !== 'Unknown Author') authorEl.textContent = custom.author;
         }
         if (custom.synopsis) {
           const synEl = document.querySelector('.synopsis-text');
