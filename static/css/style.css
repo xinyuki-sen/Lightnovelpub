@@ -4601,3 +4601,104 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   color: #7dd3fc;
   background: rgba(56, 189, 248, 0.12);
 }
+ 
+
+
+
+
+/* =========================================================================
+   MOBILE RESPONSIVENESS OVERRIDES
+   ========================================================================= */
+
+@media (max-width: 640px) {
+  html, body {
+    overflow-x: hidden !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+  }
+
+  /* 1. Bento Meta Chips: Clean 2x2 grid that fits on mobile */
+  .detail-meta-bento-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.6rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 1.25rem 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .meta-bento-chip {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0.75rem 0.6rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .meta-chip-val {
+    font-size: 0.95rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .meta-chip-lbl {
+    font-size: 0.68rem !important;
+    white-space: nowrap !important;
+  }
+
+  /* 2. Top Chapter Navigation: Single line, no wrapping */
+  .chapter-nav-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 0.4rem !important;
+    width: 100% !important;
+    padding: 0.5rem 0.6rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .chapter-dropdown-select {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    font-size: 0.8rem !important;
+    padding: 0.5rem !important;
+  }
+
+  /* 3. Bottom 3-Button Navigation: Fits inside screen width */
+  div[style*="margin-bottom: 6rem"], .chapter-nav-row-bottom {
+    display: grid !important;
+    grid-template-columns: 1fr 1.2fr 1fr !important;
+    gap: 0.35rem !important;
+    width: 100% !important;
+    padding: 0.75rem 0.5rem !important;
+    box-sizing: border-box !important;
+    margin-bottom: 5rem !important;
+  }
+
+  div[style*="margin-bottom: 6rem"] .nav-arrow-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0.65rem 0.2rem !important;
+    font-size: 0.72rem !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* 4. Reading text padding */
+  .chapter-text-container, .chapter-body-text {
+    padding: 1.25rem 0.85rem !important;
+    font-size: 1.05rem !important;
+    line-height: 1.8 !important;
+  }
+
+  /* 5. Mobile Floating Action Bar */
+  .np-floating-dock {
+    max-width: 92vw !important;
+    left: 4vw !important;
+    bottom: 0.75rem !important;
+  }
+}
