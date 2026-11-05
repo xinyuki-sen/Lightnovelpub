@@ -189,18 +189,26 @@ if (sortBtn && gridContainer) {
 }
 
 async function deleteNovel(slug) {
-  if (!confirm("Are you sure you want to delete this novel from your library?")) {
-    return;
-  }
-
-  const lowerSlug = (slug || '').toLowerCase();
-
-  // 1. Send delete request to backend server (ignore 404 since offline/client novels only live in Dexie)
+  let confirmed = true;
   try {
-    await fetch(`/api/novel/${slug}`, { method: 'DELETE' }).catch(() => null);
+    confirmed = confirm("Are you sure you want to delete this novel from your library?");
+  } catch (e) {
+    confirmed = true;
+  }
+  if (!confirmed) return;
+
+  const rawSlug = slug || '{{ novel.slug }}' || window.location.pathname.split('/')[2] || '';
+  const lowerSlug = rawSlug.trim().toLowerCase();
+
+  // 1. Send delete request to backend server (ignore 404 for client/offline novels)
+  try {
+    await fetch(`/api/novel/${rawSlug}`, { method: 'DELETE' }).catch(() => null);
+    if (lowerSlug !== rawSlug) {
+      await fetch(`/api/novel/${lowerSlug}`, { method: 'DELETE' }).catch(() => null);
+    }
   } catch (e) {}
 
-  // 2. Authoritatively purge Dexie IndexedDB across current and legacy schemas
+  // 2. Authoritatively purge Dexie IndexedDB with bulkDelete on primary keys
   if (typeof Dexie !== 'undefined') {
     try {
       const db = new Dexie('LightnovelpubDB_v4');
@@ -211,27 +219,31 @@ async function deleteNovel(slug) {
         audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at',
         covers: 'slug, dataUrl, updated_at'
       });
-      await Promise.allSettled([
-        db.customNovels.filter(n => n.slug && n.slug.toLowerCase() === lowerSlug).delete(),
-        db.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === lowerSlug).delete(),
-        db.progress.filter(p => p.novelSlug && p.novelSlug.toLowerCase() === lowerSlug).delete(),
-        db.audioCache.filter(a => a.novelSlug && a.novelSlug.toLowerCase() === lowerSlug).delete(),
-        db.covers.filter(c => c.slug && c.slug.toLowerCase() === lowerSlug).delete()
-      ]);
-    } catch (e) {
-      console.warn("Dexie purge note:", e);
+
+      const novelKeys = await db.customNovels.filter(n => n.slug && n.slug.toLowerCase() === lowerSlug).primaryKeys();
+      if (novelKeys.length > 0) await db.customNovels.bulkDelete(novelKeys);
+
+      const chKeys = await db.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === lowerSlug).primaryKeys();
+      if (chKeys.length > 0) await db.chapters.bulkDelete(chKeys);
+
+      const progKeys = await db.progress.filter(p => p.novelSlug && p.novelSlug.toLowerCase() === lowerSlug).primaryKeys();
+      if (progKeys.length > 0) await db.progress.bulkDelete(progKeys);
+
+      const audKeys = await db.audioCache.filter(a => a.novelSlug && a.novelSlug.toLowerCase() === lowerSlug).primaryKeys();
+      if (audKeys.length > 0) await db.audioCache.bulkDelete(audKeys);
+
+      const covKeys = await db.covers.filter(c => c.slug && c.slug.toLowerCase() === lowerSlug).primaryKeys();
+      if (covKeys.length > 0) await db.covers.bulkDelete(covKeys);
+    } catch (dbErr) {
+      console.warn("Dexie delete note:", dbErr);
     }
 
-    // Also purge legacy DBs if present
     ['LightnovelpubDB', 'LightnovelpubDB_v1', 'LightnovelpubDB_v2', 'LightnovelpubDB_v3'].forEach(oldName => {
-      try {
-        const oldDb = new Dexie(oldName);
-        oldDb.delete().catch(() => {});
-      } catch (e) {}
+      try { new Dexie(oldName).delete().catch(() => {}); } catch (e) {}
     });
   }
 
-  // 3. Purge all related localStorage keys
+  // 3. Purge matching localStorage keys
   try {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);

@@ -338,7 +338,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
             full_str = " ".join(paragraphs).lower()
             if any(k in full_str for k in ["subscribepage.com", "discord server", "facebook | instagram", "amazon product page"]) and word_count < 250:
                 continue
-            if word_count < 18:
+            if word_count < 40:
                 continue
 
             raw_chapters.append({
@@ -407,7 +407,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, List[Dict[str, any]], Opt
 
     final_chapters = []
     for ch in raw_chapters:
-        if is_ignored_title(ch["title"], title) or ch["word_count"] < 18:
+        if is_ignored_title(ch["title"], title) or ch["word_count"] < 40:
             continue
         ch["number"] = len(final_chapters) + 1
         final_chapters.append(ch)
