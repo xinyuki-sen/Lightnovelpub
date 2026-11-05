@@ -1969,7 +1969,7 @@ function initReader() {
 
   // Saved audio & display states
 
-  const savedRate = parseFloat(localStorage.getItem('novel_reader_audio_rate') || '1.0');
+  const savedRate = parseFloat(localStorage.getItem('novel_reader_audio_rate') || '1.35');
 
   const savedPitch = parseFloat(localStorage.getItem('novel_reader_audio_pitch') || '1.0');
 
@@ -1977,7 +1977,7 @@ function initReader() {
 
   const savedBrightness = parseInt(localStorage.getItem('novel_reader_brightness') || '100', 10);
 
-  const savedVoiceURI = localStorage.getItem('novel_reader_voice_uri') || '';
+  const savedVoiceURI = localStorage.getItem('novel_reader_voice_uri') || 'edge:en-US-ChristopherNeural';
 
   const savedHighlightMode = localStorage.getItem('novel_reader_highlight_mode') || 'word';
 
@@ -4473,7 +4473,7 @@ function initReader() {
 
         activeHtml5Audio = new Audio(activeAudioUrl);
 
-        activeHtml5Audio.playbackRate = audioState.rate || 1.0;
+        activeHtml5Audio.playbackRate = audioState.rate || 1.35;
 
         activeHtml5Audio.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
 
