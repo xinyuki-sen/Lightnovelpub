@@ -441,13 +441,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             let title = (rawTitle || '').trim();
             let author = (rawAuthor || '').trim();
 
-            title = title.replace(/\[\s*oceanofpdf(?:\.com)?\s*\]/gi, '');
-            title = title.replace(/\(\s*oceanofpdf(?:\.com)?\s*\)/gi, '');
-            title = title.replace(/(?:https?:\/\/)?(?:www\.)?oceanofpdf(?:\.com)?/gi, '');
+            title = title.replace(/\[\s*oceanofpdf(?:\.com|\.org|\.net|\.io)?\s*\]/gi, '');
+            title = title.replace(/\(\s*oceanofpdf(?:\.com|\.org|\.net|\.io)?\s*\)/gi, '');
+            title = title.replace(/(?:https?:\/\/)?(?:www\.)?oceanofpdf(?:\.com|\.org|\.net|\.io)?(?:[._\-\s]*)/gi, '');
             title = title.replace(/[_\s]+/g, ' ').trim();
 
             if (author) {
-              author = author.replace(/(?:https?:\/\/)?(?:www\.)?oceanofpdf(?:\.com)?/gi, '').trim();
+              author = author.replace(/(?:https?:\/\/)?(?:www\.)?oceanofpdf(?:\.com|\.org|\.net|\.io)?(?:[._\-\s]*)/gi, '').trim();
             }
 
             if (!author || author.toLowerCase() === 'unknown' || author.toLowerCase() === 'unknown author') {
@@ -485,6 +485,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             return { title: title || 'Untitled Novel', author: author };
           }
 
+          // Authoritatively clean all rendered cards (both server and client)
+          document.querySelectorAll('.novel-card').forEach(card => {
+            const titleEl = card.querySelector('.novel-title, .novel-card-title');
+            const authorEl = card.querySelector('.novel-author, .novel-card-author');
+            if (titleEl) {
+              const meta = sanitizeNovelMetadata(titleEl.textContent, authorEl ? authorEl.textContent : '');
+              titleEl.textContent = meta.title;
+              titleEl.setAttribute('title', meta.title);
+              if (authorEl && meta.author !== 'Unknown Author') {
+                authorEl.textContent = meta.author;
+              }
+            }
+          });
+
           for (const novel of customNovels) {
             // Auto-clean watermarks and missing author on existing Dexie records
             const meta = sanitizeNovelMetadata(novel.title, novel.author);
@@ -516,7 +530,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               card.setAttribute('data-percent', '0');
               card.setAttribute('data-ch', '1');
 
-              const coverSrc = novel.cover_image || '/static/img/logo.png?v=43';
+              const coverSrc = novel.cover_image || '/static/img/logo.png?v=44';
               card.innerHTML = `
                 <div class="novel-cover-wrap">
                   <img src="${coverSrc}" alt="${novel.title}" class="novel-cover-img" loading="lazy">

@@ -3,6 +3,7 @@ import time
 import os
 import shutil
 import tempfile
+import asyncio
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response, RedirectResponse
 from starlette.middleware.gzip import GZipMiddleware
@@ -282,7 +283,7 @@ async def upload_novel(
         cover_data_url = ""
         detected_author = "Unknown Author"
         if is_epub:
-            res = extract_epub_chapters(tmp_path)
+            res = await asyncio.to_thread(extract_epub_chapters, tmp_path)
             if len(res) == 5:
                 detected_title, detected_author, chapters, cover_bytes, cover_data_url = res
             elif len(res) == 4:
@@ -290,7 +291,7 @@ async def upload_novel(
             else:
                 detected_title, chapters, cover_bytes = res[:3]
         else:
-            res = extract_pdf_chapters(tmp_path)
+            res = await asyncio.to_thread(extract_pdf_chapters, tmp_path)
             if len(res) == 5:
                 detected_title, detected_author, chapters, cover_bytes, cover_data_url = res
             elif len(res) == 4:

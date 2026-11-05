@@ -374,7 +374,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Check if TOC is empty in DOM (need to populate from Dexie)
       let chaptersGrid = document.getElementById('chapters-grid-container');
       const existingPills = document.querySelectorAll('.chapter-pill-item-bento');
-      const localChapters = await db.chapters.where('novelSlug').equals(novelSlug).toArray();
+      let localChapters = await db.chapters.filter(c => c.novelSlug && (
+        c.novelSlug.toLowerCase() === novelSlug.toLowerCase() ||
+        c.novelSlug.toLowerCase().includes(novelSlug.toLowerCase()) ||
+        novelSlug.toLowerCase().includes(c.novelSlug.toLowerCase())
+      )).toArray();
       let firstReadableChapter = 1;
 
       if (localChapters && localChapters.length > 0) {
@@ -436,7 +440,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       // 2. Hydrate reading progress badges and CTA button
-      const progressList = await db.progress.where('novelSlug').equals(novelSlug).toArray();
+      const progressList = await db.progress.filter(p => p.novelSlug && (
+        p.novelSlug.toLowerCase() === novelSlug.toLowerCase() ||
+        p.novelSlug.toLowerCase().includes(novelSlug.toLowerCase()) ||
+        novelSlug.toLowerCase().includes(p.novelSlug.toLowerCase())
+      )).toArray();
       const ctaBtn = document.querySelector('.btn-read-primary-bento');
 
       if (!progressList || progressList.length === 0) {

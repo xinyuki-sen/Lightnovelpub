@@ -214,6 +214,15 @@ def extract_epub_chapters(epub_path: str):
                 except Exception:
                     pass
 
+        # Strip any leading stub chapters (cover / title / dedication pages with < 80 words)
+        while chapters and len(chapters) > 1 and chapters[0].get("word_count", 0) < 80:
+            print(f"[EPUB Parser] Dropped frontmatter stub chapter '{chapters[0]['title']}' ({chapters[0].get('word_count', 0)} words)")
+            chapters.pop(0)
+
+        # Re-index chapters contiguously from 1
+        for idx, ch in enumerate(chapters):
+            ch["number"] = idx + 1
+
         cover_data_url = ""
         if cover_bytes:
             import base64

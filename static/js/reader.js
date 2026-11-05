@@ -878,9 +878,15 @@ function initReader() {
             cached = await novelDb.chapters.get([novelSlug, String(num)]).catch(() => null);
           }
           if (!cached) {
+            cached = await novelDb.chapters.get([novelSlug.toLowerCase(), num]).catch(() => null);
+          }
+          if (!cached) {
             cached = await novelDb.chapters.filter(c => 
-              c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase() && 
-              Number(c.chapterNumber) === num
+              c.novelSlug && (
+                c.novelSlug.toLowerCase() === novelSlug.toLowerCase() ||
+                c.novelSlug.toLowerCase().includes(novelSlug.toLowerCase()) ||
+                novelSlug.toLowerCase().includes(c.novelSlug.toLowerCase())
+              ) && Number(c.chapterNumber) === num
             ).first();
           }
 
@@ -965,8 +971,16 @@ function initReader() {
       const btmPrev = document.getElementById('prev-chapter-btn-bottom');
       const btmNext = document.getElementById('next-chapter-btn-bottom');
 
-      const prevNum = parseInt(prevCh || '0', 10);
-      const nextNum = parseInt(nextCh || '0', 10);
+      let prevNum = parseInt(prevCh || '0', 10);
+      let nextNum = parseInt(nextCh || '0', 10);
+      const totalChapters = parseInt(document.body.getAttribute('data-total-chapters') || '0', 10);
+
+      if ((!prevNum || prevNum <= 0) && currentChapterNum > 1) {
+        prevNum = currentChapterNum - 1;
+      }
+      if ((!nextNum || nextNum <= 0) && (totalChapters === 0 || currentChapterNum < totalChapters)) {
+        nextNum = currentChapterNum + 1;
+      }
 
       [topPrev, btmPrev].forEach(btn => {
         if (!btn) return;
@@ -976,7 +990,7 @@ function initReader() {
           btn.classList.remove('disabled');
           btn.setAttribute('href', `/novel/${novelSlug}/chapter/${prevNum}`);
         } else {
-          btn.setAttribute('disabled', 'true');
+          btn.removeAttribute('disabled');
           btn.setAttribute('aria-disabled', 'true');
           btn.classList.add('disabled');
           btn.setAttribute('href', '#');
@@ -991,7 +1005,7 @@ function initReader() {
           btn.classList.remove('disabled');
           btn.setAttribute('href', `/novel/${novelSlug}/chapter/${nextNum}`);
         } else {
-          btn.setAttribute('disabled', 'true');
+          btn.removeAttribute('disabled');
           btn.setAttribute('aria-disabled', 'true');
           btn.classList.add('disabled');
           btn.setAttribute('href', '#');
@@ -1001,8 +1015,18 @@ function initReader() {
 
     async function navigateToChapter(targetChapterNum, continueAudio = false) {
       if (!targetChapterNum || isChapterLoading) return;
-      if (targetChapterNum === currentChapterNum) return;
+      if (Number(targetChapterNum) === Number(currentChapterNum)) return;
       isChapterLoading = true;
+
+      // Retain Android media playback focus during async transitions
+      if (continueAudio || (audioState && audioState.isPlaying && !audioState.isPaused)) {
+        try {
+          const pipe = getSilentAudioPipe();
+          if (pipe && pipe.paused) {
+            pipe.play().catch(() => {});
+          }
+        } catch (e) {}
+      }
 
       const progBar = document.getElementById('reader-progress-bar');
       if (progBar) {
@@ -1153,32 +1177,48 @@ function initReader() {
       const btmPrev = document.getElementById('prev-chapter-btn-bottom');
       const btmNext = document.getElementById('next-chapter-btn-bottom');
 
+      function handlePrev(e) {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        let prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
+        if (!prevNum || isNaN(prevNum) || prevNum <= 0) {
+          prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
+        }
+        if (prevNum > 0) {
+          navigateToChapter(prevNum, audioState && audioState.isPlaying && !audioState.isPaused);
+        }
+      }
+
+      function handleNext(e) {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+        if (!nextNum || isNaN(nextNum) || nextNum <= 0) {
+          nextNum = currentChapterNum + 1;
+        }
+        if (nextNum > 0) {
+          navigateToChapter(nextNum, audioState && audioState.isPlaying && !audioState.isPaused);
+        }
+      }
+
       [topPrev, btmPrev].forEach(btn => {
         if (!btn) return;
-        btn.onclick = (e) => {
-          let prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
-          if (!prevNum || isNaN(prevNum) || prevNum <= 0) {
-            prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
-          }
-          if (prevNum > 0) {
-            e.preventDefault();
-            navigateToChapter(prevNum, audioState && audioState.isPlaying && !audioState.isPaused);
-          }
-        };
+        btn.onclick = handlePrev;
+        btn.addEventListener('touchend', (e) => {
+          handlePrev(e);
+        }, { passive: false });
       });
 
       [topNext, btmNext].forEach(btn => {
         if (!btn) return;
-        btn.onclick = (e) => {
-          let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
-          if (!nextNum || isNaN(nextNum) || nextNum <= 0) {
-            nextNum = currentChapterNum + 1;
-          }
-          if (nextNum > 0) {
-            e.preventDefault();
-            navigateToChapter(nextNum, audioState && audioState.isPlaying && !audioState.isPaused);
-          }
-        };
+        btn.onclick = handleNext;
+        btn.addEventListener('touchend', (e) => {
+          handleNext(e);
+        }, { passive: false });
       });
     }
 
@@ -1301,12 +1341,23 @@ function initReader() {
 
         // Client-Side Authoritative Hydration: Load chapter & full TOC from Dexie
         if (novelDb && novelSlug) {
-          novelDb.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase()).toArray().then(allLocalChs => {
+          async function loadLocalChapters() {
+            let chs = await novelDb.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase()).toArray();
+            if (!chs || chs.length === 0) {
+              chs = await novelDb.chapters.filter(c => c.novelSlug && (
+                c.novelSlug.toLowerCase().includes(novelSlug.toLowerCase()) || 
+                novelSlug.toLowerCase().includes(c.novelSlug.toLowerCase())
+              )).toArray();
+            }
+            return chs || [];
+          }
+
+          loadLocalChapters().then(allLocalChs => {
+            const chDropdown = document.getElementById('chapter-select-dropdown');
             if (allLocalChs && allLocalChs.length > 0) {
               allLocalChs.sort((a, b) => Number(a.chapterNumber) - Number(b.chapterNumber));
 
               // 1. Populate Table of Contents dropdown selector
-              const chDropdown = document.getElementById('chapter-select-dropdown');
               if (chDropdown) {
                 chDropdown.innerHTML = '';
                 allLocalChs.forEach(c => {
@@ -1352,7 +1403,14 @@ function initReader() {
                     });
                   } else {
                     const nextTextChapter = allLocalChs.find(c => Number(c.chapterNumber) > Number(currentChapterNum) && ((c.paragraphs && c.paragraphs.length > 0) || (c.content && c.content.trim().length > 30) || (c.word_count && c.word_count > 30)));
-                    const nextChTarget = nextTextChapter ? nextTextChapter.chapterNumber : (currentChapterNum + 1);
+                    const nextChTarget = nextTextChapter ? Number(nextTextChapter.chapterNumber) : (currentChapterNum + 1);
+                    
+                    if (Number(currentChapterNum) === 1 && nextChTarget > 1) {
+                      console.log("Auto-skipping 0-word stub Chapter 1 to Chapter", nextChTarget);
+                      navigateToChapter(nextChTarget, audioState && audioState.isPlaying && !audioState.isPaused);
+                      return;
+                    }
+
                     contentEl.innerHTML = `
                       <div class="empty-chapter-notice-card">
                         <div class="empty-notice-icon">📄</div>
@@ -1397,6 +1455,20 @@ function initReader() {
                     restoreReadingPosition();
                   }
                 }
+              }
+            } else {
+              // Resilient Dropdown Fallback: If still empty, synthesize options from total_chapters
+              if (chDropdown && chDropdown.options.length === 0) {
+                const totalChs = parseInt(document.body.getAttribute('data-total-chapters') || '0', 10);
+                const maxRange = totalChs > 0 ? totalChs : Math.max(currentChapterNum, 1);
+                for (let i = 1; i <= maxRange; i++) {
+                  const opt = document.createElement('option');
+                  opt.value = `/novel/${novelSlug}/chapter/${i}`;
+                  opt.textContent = `Chapter ${i}`;
+                  if (i === Number(currentChapterNum)) opt.selected = true;
+                  chDropdown.appendChild(opt);
+                }
+                chDropdown.value = `/novel/${novelSlug}/chapter/${currentChapterNum}`;
               }
             }
           }).catch(err => console.warn('Dexie reader hydration note:', err));

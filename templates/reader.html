@@ -4,16 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#09090b">
-  <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v=43">
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png?v=43">
-  <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png?v=43">
-  <link rel="icon" type="image/png" sizes="192x192" href="/static/img/icon-192.png?v=43">
-  <link rel="icon" type="image/png" sizes="512x512" href="/static/img/icon-512.png?v=43">
-  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v=43">
-  <link rel="apple-touch-icon" href="/static/img/logo.png?v=43">
-  <link rel="manifest" href="/static/manifest.json?v=43">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v=44">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png?v=44">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png?v=44">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/img/icon-192.png?v=44">
+  <link rel="icon" type="image/png" sizes="512x512" href="/static/img/icon-512.png?v=44">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v=44">
+  <link rel="apple-touch-icon" href="/static/img/logo.png?v=44">
+  <link rel="manifest" href="/static/manifest.json?v=44">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=43">
+  <link rel="stylesheet" href="/static/css/style.css?v=44">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-total-chapters="{{ novel.total_chapters or 0 }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
@@ -167,22 +167,28 @@
     <a href="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% else %}#{% endif %}" 
        class="nav-arrow-btn{% if not prev_chapter %} disabled{% endif %}" 
        id="prev-chapter-btn"
-       {% if not prev_chapter %}aria-disabled="true" disabled{% endif %}>
+       {% if not prev_chapter %}aria-disabled="true"{% endif %}>
       ← Prev
     </a>
 
     <select class="chapter-dropdown-select" id="chapter-select-dropdown">
-      {% for ch in all_chapters %}
-      <option value="/novel/{{ novel.slug }}/chapter/{{ ch.chapter_number }}" {% if ch.chapter_number == chapter.chapter_number %}selected{% endif %}>
-        {{ ch.title }}
-      </option>
-      {% endfor %}
+      {% if all_chapters %}
+        {% for ch in all_chapters %}
+        <option value="/novel/{{ novel.slug }}/chapter/{{ ch.chapter_number }}" {% if ch.chapter_number == chapter.chapter_number %}selected{% endif %}>
+          {{ ch.title }}
+        </option>
+        {% endfor %}
+      {% else %}
+        <option value="/novel/{{ novel.slug }}/chapter/{{ chapter.chapter_number }}" selected>
+          {{ chapter.title }}
+        </option>
+      {% endif %}
     </select>
 
     <a href="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% else %}#{% endif %}" 
        class="nav-arrow-btn{% if not next_chapter %} disabled{% endif %}" 
        id="next-chapter-btn"
-       {% if not next_chapter %}aria-disabled="true" disabled{% endif %}>
+       {% if not next_chapter %}aria-disabled="true"{% endif %}>
       Next →
     </a>
   </div>
@@ -195,6 +201,20 @@
     </div>
 
     <div id="chapter-content">
+      {% if not chapter.paragraphs or chapter.paragraphs|length == 0 or chapter.word_count == 0 %}
+        <div class="empty-chapter-notice-card">
+          <div class="empty-notice-icon">📄</div>
+          <h3 class="empty-notice-title">Frontmatter / Divider Page (0 Words)</h3>
+          <p class="empty-notice-desc">
+            In this edition, <strong>{{ chapter.title }}</strong> is a cover or divider page with no story text.
+          </p>
+          {% if next_chapter %}
+          <a href="/novel/{{ novel.slug }}/chapter/{{ next_chapter }}" class="btn-read-primary" style="display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; padding: 0.75rem 1.4rem; border-radius: 9999px;">
+            <span>Start Reading Story (Chapter {{ next_chapter }})</span> →
+          </a>
+          {% endif %}
+        </div>
+      {% endif %}
       {% for para in chapter.paragraphs %}
         {% set p_text = para.strip() %}
         {% if 'New achievement!' in p_text or p_text.startswith('Reward:') or 'Congratulations!' in p_text or 'Achievement Unlocked:' in p_text or 'Quest Completed:' in p_text or '+1 Stat point' in p_text %}
@@ -578,7 +598,7 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=43"></script>
-  <script src="/static/js/reader.js?v=43"></script>
+  <script src="/static/js/dexie.min.js?v=44"></script>
+  <script src="/static/js/reader.js?v=44"></script>
 </body>
 </html>
