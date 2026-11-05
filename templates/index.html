@@ -360,18 +360,24 @@ async function deleteNovelFromLibrary(e, slug, title) {
           audioCache: '[novelSlug+chapterNumber+paraIndex], novelSlug, chapterNumber, paraIndex, audioBlob, created_at',
           covers: 'slug, dataUrl, updated_at'
         });
-        await db.customNovels.where('slug').equals(slug).delete().catch(() => {});
-        await db.chapters.where('novelSlug').equals(slug).delete().catch(() => {});
-        await db.progress.where('novelSlug').equals(slug).delete().catch(() => {});
-        await db.audioCache.where('novelSlug').equals(slug).delete().catch(() => {});
-        await db.covers.where('slug').equals(slug).delete().catch(() => {});
+        const lowerSlug = (slug || '').toLowerCase();
+        await Promise.allSettled([
+          db.customNovels.filter(n => n.slug && n.slug.toLowerCase() === lowerSlug).delete(),
+          db.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === lowerSlug).delete(),
+          db.progress.filter(p => p.novelSlug && p.novelSlug.toLowerCase() === lowerSlug).delete(),
+          db.audioCache.filter(a => a.novelSlug && a.novelSlug.toLowerCase() === lowerSlug).delete(),
+          db.covers.filter(c => c.slug && c.slug.toLowerCase() === lowerSlug).delete()
+        ]);
+        ['LightnovelpubDB', 'LightnovelpubDB_v1', 'LightnovelpubDB_v2', 'LightnovelpubDB_v3'].forEach(oldName => {
+          try { new Dexie(oldName).delete().catch(() => {}); } catch (e) {}
+        });
       } catch (e) {}
     }
 
     // Purge localStorage keys
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
-      if (k && k.includes(slug)) {
+      if (k && k.toLowerCase().includes((slug || '').toLowerCase())) {
         localStorage.removeItem(k);
       }
     }
@@ -443,7 +449,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               card.setAttribute('data-percent', '0');
               card.setAttribute('data-ch', '1');
 
-              const coverSrc = novel.cover_image || '/static/img/logo.png?v=35';
+              const coverSrc = novel.cover_image || '/static/img/logo.png?v=36';
               card.innerHTML = `
                 <div class="novel-cover-wrap">
                   <img src="${coverSrc}" alt="${novel.title}" class="novel-cover-img" loading="lazy">

@@ -518,7 +518,7 @@ def delete_novel(slug: str) -> Optional[str]:
     try:
         with conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, cover_image FROM novels WHERE slug = ?", (slug,))
+            cursor.execute("SELECT id, cover_image FROM novels WHERE LOWER(slug) = LOWER(?)", (slug,))
             row = cursor.fetchone()
             if row:
                 cover_image = row["cover_image"]
