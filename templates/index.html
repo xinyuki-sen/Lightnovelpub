@@ -580,7 +580,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           const card = document.querySelector(`.novel-card[data-novel-slug="${p.novelSlug}"]`);
           if (card) {
             const totalChs = parseInt(card.getAttribute('data-total-chs') || '1', 10);
-            const compPct = Math.min(100, Math.max(0, Math.round((((p.chapterNumber - 1) + (p.percent / 100)) / totalChs) * 1000) / 10));
+            const chNum = (p && p.chapterNumber) ? p.chapterNumber : 1;
+            const pPct = (p && typeof p.percent === 'number' && !isNaN(p.percent)) ? p.percent : 0;
+            const compPct = Math.min(100, Math.max(0, Math.round((((chNum - 1) + (pPct / 100)) / totalChs) * 1000) / 10)) || 0;
 
             const fill = card.querySelector('.progress-fill');
             const pctText = card.querySelector('.progress-pct-text');
@@ -590,9 +592,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (fill) fill.style.width = compPct + '%';
             if (pctText) pctText.textContent = compPct + '%';
-            if (chLabel) chLabel.textContent = `Chapter ${p.chapterNumber} / ${totalChs}`;
-            if (statusChip) statusChip.textContent = `Reading Ch. ${p.chapterNumber} (${Math.round(p.percent)}%)`;
-            if (hoverBtn) hoverBtn.textContent = `Continue Chapter ${p.chapterNumber} →`;
+            if (chLabel) chLabel.textContent = `Chapter ${chNum} / ${totalChs}`;
+            if (statusChip) statusChip.textContent = `Reading Ch. ${chNum} (${Math.round(pPct)}%)`;
+            if (hoverBtn) hoverBtn.textContent = `Continue Chapter ${chNum} →`;
 
             card.setAttribute('data-percent', String(compPct));
             card.setAttribute('data-ch', String(p.chapterNumber));
