@@ -2174,6 +2174,8 @@ a {
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-overlay.active {
@@ -2186,6 +2188,9 @@ a {
   border-radius: var(--radius-lg);
   max-width: 540px;
   width: 100%;
+  max-height: 88vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 2.25rem;
   box-shadow: var(--shadow-elevated);
   position: relative;
@@ -4820,4 +4825,27 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   .dock-btn-audio {
     padding: 6px 12px !important;
   }
+}
+
+@media (max-width: 640px) {
+
+  /* Upload Modal Scroll & Mobile Polish */
+  .modal-overlay {
+    padding: 0.75rem 0.5rem !important;
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .modal-card {
+    padding: 1.5rem 1rem !important;
+    max-height: 90vh !important;
+    margin: 1.5rem auto !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .dropzone-area {
+    padding: 1.25rem 0.75rem !important;
+    margin: 0.75rem 0 !important;
+  }
+
 }
