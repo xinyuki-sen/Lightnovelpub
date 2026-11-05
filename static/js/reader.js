@@ -1336,6 +1336,7 @@ function initReader() {
               document.body.setAttribute('data-next-num', nextNum > 0 ? String(nextNum) : '');
               document.body.setAttribute('data-prev-url', prevNum > 0 ? `/novel/${novelSlug}/chapter/${prevNum}` : '');
               document.body.setAttribute('data-next-url', nextNum > 0 ? `/novel/${novelSlug}/chapter/${nextNum}` : '');
+              document.body.setAttribute('data-total-chapters', String(allLocalChs.length));
               updateNavButtons(prevNum, nextNum);
 
               // 3. Populate Chapter Content if not rendered by server
@@ -4089,7 +4090,10 @@ function initReader() {
 
       if (!paragraphNodes || paragraphNodes.length === 0) {
         if (audioState.autoNext) {
-          let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10) || (currentChapterNum + 1);
+          let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+          if (!nextNum || nextNum <= 0) {
+            nextNum = currentChapterNum + 1;
+          }
           if (nextNum > 0) {
             navigateToChapter(nextNum, true);
           }
@@ -4141,8 +4145,23 @@ function initReader() {
             nextNum = currentChapterNum + 1;
           }
 
-          const totalChapters = parseInt(document.body.getAttribute('data-total-chapters') || '0', 10);
-          if (totalChapters > 0 && nextNum > totalChapters) {
+          let totalChapters = parseInt(document.body.getAttribute('data-total-chapters') || '0', 10);
+          if (novelDb) {
+            try {
+              const custom = await novelDb.customNovels.get(novelSlug);
+              if (custom && custom.total_chapters && custom.total_chapters > totalChapters) {
+                totalChapters = custom.total_chapters;
+                document.body.setAttribute('data-total-chapters', String(totalChapters));
+              }
+            } catch (e) {}
+          }
+
+          // Check if nextNum exists in chapter dropdown options
+          const chDropdown = document.getElementById('chapter-select-dropdown');
+          const hasOptionInDropdown = chDropdown && chDropdown.options && Array.from(chDropdown.options).some(o => (o.value || '').includes(`/chapter/${nextNum}`));
+
+          // Only declare end of book if totalChapters is known and > 1, AND nextNum exceeds it, AND no option exists
+          if (totalChapters > 1 && nextNum > totalChapters && !hasOptionInDropdown) {
             audioState.isPlaying = false;
             audioState.isPaused = false;
             pauseAudioPipeline();

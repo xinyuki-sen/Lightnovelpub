@@ -102,7 +102,7 @@ async def novel_detail(request: Request, slug: str):
             "author": clean_author or "Unknown Author",
             "synopsis": "Loading novel details from local storage...",
             "cover_image": "",
-            "total_chapters": 1,
+            "total_chapters": 0,
             "last_read_chapter": 1,
             "last_read_percent": 0.0,
             "chapters": []
@@ -133,7 +133,7 @@ async def chapter_reader(request: Request, slug: str, chapter_number: int):
             "slug": slug,
             "title": clean_title or slug.replace("-", " ").title(),
             "author": clean_author or "Unknown Author",
-            "total_chapters": 1,
+            "total_chapters": 0,
             "chapters": []
         }
         fallback_chapter = {
