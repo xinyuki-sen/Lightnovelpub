@@ -423,6 +423,7 @@ class TTSRequest(BaseModel):
     voice: str = "en-US-ChristopherNeural"
     rate: float = 1.0
     pitch: Optional[float] = 1.0
+    volume: Optional[str] = "+20%"
 
 @app.post("/api/tts")
 async def generate_tts(req: TTSRequest):
@@ -441,11 +442,17 @@ async def generate_tts(req: TTSRequest):
     pitch_hz = int((pitch_val - 1.0) * 50)
     pitch_str = f"{pitch_hz:+d}Hz"
 
+    raw_vol = req.volume.strip() if req.volume else "+20%"
+    if not raw_vol.endswith("%"):
+        raw_vol = f"{raw_vol}%"
+    vol_str = raw_vol if (raw_vol.startswith("+") or raw_vol.startswith("-")) else f"+{raw_vol}"
+
     try:
         comm = edge_tts.Communicate(
             text=text, 
             voice=req.voice, 
             rate=rate_str, 
+            volume=vol_str,
             pitch=pitch_str, 
             boundary="WordBoundary",
             connect_timeout=6,

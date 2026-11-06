@@ -1979,6 +1979,115 @@ function initReader() {
 
     let audioPlaybackEpoch = 0;
 
+    function getMasterAudio() {
+      if (!window.__novelMasterAudio) {
+        window.__novelMasterAudio = new Audio();
+        window.__novelMasterAudio.preload = 'auto';
+      }
+      return window.__novelMasterAudio;
+    }
+
+    // High-Clarity Broadcast Psychoacoustic Audio Engine (Web Audio API)
+    let audioCtx = null;
+    let audioGraphMasterGain = null;
+    let audioGraphInitialized = false;
+
+    function initAudioGraph() {
+      if (audioGraphInitialized) return;
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        if (!audioCtx) {
+          audioCtx = new AudioContextClass();
+        }
+
+        const masterAudio = getMasterAudio();
+        if (!window.__novelAudioSource) {
+          window.__novelAudioSource = audioCtx.createMediaElementSource(masterAudio);
+
+          // 1. Highpass Filter @ 90Hz (cuts muddy sub-bass rumble that causes small speakers to distort)
+          const highpass = audioCtx.createBiquadFilter();
+          highpass.type = 'highpass';
+          highpass.frequency.setValueAtTime(90, audioCtx.currentTime);
+          highpass.Q.setValueAtTime(0.707, audioCtx.currentTime);
+
+          // 2. Vocal Presence Peaking EQ @ 2.8kHz (+2.5dB boost to consonants and speech intelligibility)
+          const presenceEq = audioCtx.createBiquadFilter();
+          presenceEq.type = 'peaking';
+          presenceEq.frequency.setValueAtTime(2800, audioCtx.currentTime);
+          presenceEq.Q.setValueAtTime(1.2, audioCtx.currentTime);
+          presenceEq.gain.setValueAtTime(2.5, audioCtx.currentTime);
+
+          // 3. Broadcast Dynamics Compressor / Peak Limiter (smooth ceiling, prevents digital clipping)
+          const compressor = audioCtx.createDynamicsCompressor();
+          compressor.threshold.setValueAtTime(-2, audioCtx.currentTime);
+          compressor.knee.setValueAtTime(30, audioCtx.currentTime);
+          compressor.ratio.setValueAtTime(12, audioCtx.currentTime);
+          compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
+          compressor.release.setValueAtTime(0.25, audioCtx.currentTime);
+
+          // 4. Master Gain Node (supports 0.0 up to 1.4x amplification)
+          audioGraphMasterGain = audioCtx.createGain();
+          const initialVol = typeof audioState !== 'undefined' && audioState.volume !== undefined ? audioState.volume : savedVolume;
+          audioGraphMasterGain.gain.setValueAtTime(initialVol, audioCtx.currentTime);
+
+          // Audio Signal Chain: Source -> Highpass -> Presence EQ -> Compressor -> Master Gain -> Destination
+          window.__novelAudioSource.connect(highpass);
+          highpass.connect(presenceEq);
+          presenceEq.connect(compressor);
+          compressor.connect(audioGraphMasterGain);
+          audioGraphMasterGain.connect(audioCtx.destination);
+
+          window.__novelAudioGraph = {
+            ctx: audioCtx,
+            source: window.__novelAudioSource,
+            highpass,
+            presenceEq,
+            compressor,
+            masterGain: audioGraphMasterGain
+          };
+          audioGraphInitialized = true;
+        }
+      } catch (e) {
+        console.warn('Web Audio Graph initialization note (transparent fallback active):', e);
+      }
+    }
+
+    function resumeAudioGraph() {
+      try {
+        if (!audioGraphInitialized) initAudioGraph();
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume().catch(() => {});
+        }
+      } catch (e) {}
+    }
+
+    function applyAudioGraphVolume(vol) {
+      if (audioGraphMasterGain && audioCtx) {
+        try {
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+          }
+          audioGraphMasterGain.gain.setValueAtTime(vol, audioCtx.currentTime);
+          if (activeHtml5Audio) {
+            activeHtml5Audio.volume = 1.0;
+          }
+          return;
+        } catch (e) {}
+      }
+      if (activeHtml5Audio) {
+        try {
+          activeHtml5Audio.volume = Math.max(0, Math.min(1.0, vol));
+        } catch (e) {}
+      }
+    }
+
+    // Unlock Web Audio context seamlessly on the user's first touch/interaction
+    ['click', 'touchstart', 'keydown'].forEach(evt => {
+      window.addEventListener(evt, () => resumeAudioGraph(), { once: true, passive: true });
+    });
+
 
 
     // Topbar Button
@@ -2119,6 +2228,7 @@ function initReader() {
     function startAudioPipeline() {
 
       try {
+        resumeAudioGraph();
 
         const audioPipe = getSilentAudioPipe();
 
@@ -2823,7 +2933,7 @@ function initReader() {
 
     function setAudioVolume(vol) {
 
-      vol = Math.max(0, Math.min(1, vol));
+      vol = Math.max(0, Math.min(1.4, vol));
 
       audioState.volume = vol;
 
@@ -2839,15 +2949,9 @@ function initReader() {
 
       if (dockVolPercent) dockVolPercent.textContent = percent;
 
+      resumeAudioGraph();
 
-
-      if (activeHtml5Audio) {
-
-        activeHtml5Audio.volume = vol;
-
-      }
-
-
+      applyAudioGraphVolume(vol);
 
       if (vol === 0) {
 
@@ -3302,6 +3406,7 @@ function initReader() {
     // Open Audio Player & start immediately
 
     function openAudioPlayer(startIndex = null) {
+      resumeAudioGraph();
 
 
 
@@ -4665,7 +4770,9 @@ function initReader() {
 
           activeHtml5Audio.playbackRate = audioState.rate || 1.0;
 
-          activeHtml5Audio.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
+          const currentPlayVol = audioState.volume !== undefined ? audioState.volume : 1.0;
+          activeHtml5Audio.volume = Math.max(0, Math.min(1.0, currentPlayVol));
+          applyAudioGraphVolume(currentPlayVol);
 
 
 
@@ -5814,9 +5921,7 @@ function initReader() {
       if (sleepTimerSelect) sleepTimerSelect.value = String(val);
 
       // Restore volume if previous timer was decaying
-      if (activeHtml5Audio) {
-        activeHtml5Audio.volume = audioState.volume !== undefined ? audioState.volume : 1.0;
-      }
+      applyAudioGraphVolume(audioState.volume !== undefined ? audioState.volume : 1.0);
       if (sleepBadge) {
         sleepBadge.classList.remove('decaying');
       }
@@ -5861,11 +5966,9 @@ function initReader() {
         // Smooth 60-Second Logarithmic Volume Decay: V(t) = V_base * (t / 60000)^2
         if (remainingMs <= 60000 && remainingMs > 0) {
           if (sleepBadge) sleepBadge.classList.add('decaying');
-          if (activeHtml5Audio) {
-            const decayRatio = Math.max(0, remainingMs / 60000);
-            const expDecay = Math.pow(decayRatio, 2);
-            activeHtml5Audio.volume = Math.max(0, sleepTimerBaseVolume * expDecay);
-          }
+          const decayRatio = Math.max(0, remainingMs / 60000);
+          const expDecay = Math.pow(decayRatio, 2);
+          applyAudioGraphVolume(Math.max(0, sleepTimerBaseVolume * expDecay));
         } else if (remainingMs <= 0) {
           // Sleep Timer Expired!
           clearInterval(sleepTimerInterval);
@@ -5877,9 +5980,7 @@ function initReader() {
           }
 
           // 2. Restore volume for the next session
-          if (activeHtml5Audio) {
-            activeHtml5Audio.volume = sleepTimerBaseVolume;
-          }
+          applyAudioGraphVolume(sleepTimerBaseVolume);
 
           // 3. Authoritative Dexie reading progress freeze
           recordReadingProgress(audioState.currentIndex, true);
