@@ -479,7 +479,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (existingBadge) existingBadge.remove();
           item.classList.remove('ch-finished', 'ch-reading');
 
-          if (chNum < latest.chapterNumber) {
+          if (itemNum < chNum) {
             item.classList.add('ch-finished');
             if (badgeWrap) {
               const b = document.createElement('span');
@@ -487,12 +487,12 @@ document.addEventListener('DOMContentLoaded', async () => {
               b.textContent = '✓ Finished';
               badgeWrap.appendChild(b);
             }
-          } else if (chNum === latest.chapterNumber) {
+          } else if (itemNum === chNum) {
             item.classList.add('ch-reading');
             if (badgeWrap) {
               const b = document.createElement('span');
               b.className = 'ch-badge ch-badge-reading';
-              b.textContent = `▶ Reading ${Math.round(latest.percent)}%`;
+              b.textContent = `▶ Reading ${chPct}%`;
               badgeWrap.appendChild(b);
             }
           }

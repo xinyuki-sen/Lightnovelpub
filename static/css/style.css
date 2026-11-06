@@ -4248,12 +4248,34 @@ a {
 
 /* Mobile Overrides (Prevent badge collision on narrow screens) */
 @media (max-width: 640px) {
+  .chapters-section-card-bento {
+    padding: 1rem 0.65rem !important;
+    border-radius: 16px !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .chapters-grid-view-bento {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 0.65rem !important;
+    box-sizing: border-box !important;
+  }
+
   .chapter-pill-item-bento {
     display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 0.45rem !important;
-    padding: 0.75rem 0.95rem !important;
+    padding: 0.75rem 0.85rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 
   .chapter-item-main {
@@ -4261,20 +4283,24 @@ a {
     align-items: center !important;
     justify-content: space-between !important;
     width: 100% !important;
+    max-width: 100% !important;
     gap: 0.5rem !important;
+    box-sizing: border-box !important;
   }
 
   .chapter-item-left {
     display: flex !important;
     align-items: center !important;
-    gap: 0.6rem !important;
+    gap: 0.5rem !important;
     min-width: 0 !important;
-    flex: 1 !important;
+    flex: 1 1 auto !important;
+    overflow: hidden !important;
   }
 
   .chapter-item-title {
-    font-size: 0.9rem !important;
-    max-width: 175px !important;
+    font-size: 0.88rem !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -4284,6 +4310,11 @@ a {
     flex-shrink: 0 !important;
   }
 
+  .ch-badge {
+    font-size: 0.72rem !important;
+    padding: 0.2rem 0.5rem !important;
+    white-space: nowrap !important;
+  }
   .chapter-item-right {
     display: flex !important;
     align-items: center !important;
