@@ -1182,6 +1182,10 @@ function initReader() {
           e.preventDefault();
           e.stopPropagation();
         }
+        const btn = (e && e.currentTarget) || topPrev;
+        if (btn && (btn.classList.contains('disabled') || btn.getAttribute('aria-disabled') === 'true')) {
+          return;
+        }
         let prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
         if (!prevNum || isNaN(prevNum) || prevNum <= 0) {
           prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
@@ -1196,9 +1200,21 @@ function initReader() {
           e.preventDefault();
           e.stopPropagation();
         }
+        const btn = (e && e.currentTarget) || topNext;
+        if (btn && (btn.classList.contains('disabled') || btn.getAttribute('aria-disabled') === 'true')) {
+          return;
+        }
+        const totalChapters = parseInt(document.body.getAttribute('data-total-chapters') || '0', 10);
         let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
         if (!nextNum || isNaN(nextNum) || nextNum <= 0) {
-          nextNum = currentChapterNum + 1;
+          if (totalChapters === 0 || currentChapterNum < totalChapters) {
+            nextNum = currentChapterNum + 1;
+          } else {
+            return;
+          }
+        }
+        if (totalChapters > 0 && nextNum > totalChapters) {
+          return;
         }
         if (nextNum > 0) {
           navigateToChapter(nextNum, audioState && audioState.isPlaying && !audioState.isPaused);
@@ -1208,17 +1224,11 @@ function initReader() {
       [topPrev, btmPrev].forEach(btn => {
         if (!btn) return;
         btn.onclick = handlePrev;
-        btn.addEventListener('touchend', (e) => {
-          handlePrev(e);
-        }, { passive: false });
       });
 
       [topNext, btmNext].forEach(btn => {
         if (!btn) return;
         btn.onclick = handleNext;
-        btn.addEventListener('touchend', (e) => {
-          handleNext(e);
-        }, { passive: false });
       });
     }
 
@@ -1356,6 +1366,14 @@ function initReader() {
             const chDropdown = document.getElementById('chapter-select-dropdown');
             if (allLocalChs && allLocalChs.length > 0) {
               allLocalChs.sort((a, b) => Number(a.chapterNumber) - Number(b.chapterNumber));
+              // Prune leading frontmatter stubs (< 80 words) from local cache if substantive chapters exist
+              const hasSubstantive = allLocalChs.some(c => (c.word_count && c.word_count > 300) || (c.paragraphs && c.paragraphs.length > 5));
+              if (hasSubstantive) {
+                while (allLocalChs.length > 1 && ((allLocalChs[0].word_count && allLocalChs[0].word_count < 80) || (!allLocalChs[0].word_count && (!allLocalChs[0].paragraphs || allLocalChs[0].paragraphs.join(' ').split(/\s+/).length < 80)))) {
+                  const dropped = allLocalChs.shift();
+                  try { novelDb.chapters.delete([novelSlug, dropped.chapterNumber]); } catch (e) {}
+                }
+              }
 
               // 1. Populate Table of Contents dropdown selector
               if (chDropdown) {
@@ -1407,7 +1425,7 @@ function initReader() {
                     const nextTextChapter = allLocalChs.find(c => Number(c.chapterNumber) > Number(currentChapterNum) && ((c.paragraphs && c.paragraphs.length > 0) || (c.content && c.content.trim().length > 30) || (c.word_count && c.word_count > 30)));
                     const nextChTarget = nextTextChapter ? Number(nextTextChapter.chapterNumber) : (currentChapterNum + 1);
                     
-                    if (Number(currentChapterNum) === 1 && nextChTarget > 1) {
+                    if (Number(currentChapterNum) <= 3 && nextChTarget > currentChapterNum) {
                       console.log("Auto-skipping 0-word stub Chapter 1 to Chapter", nextChTarget);
                       navigateToChapter(nextChTarget, audioState && audioState.isPlaying && !audioState.isPaused);
                       return;
@@ -1968,18 +1986,41 @@ function initReader() {
 
     let silentAudioElement = null;
 
+    function createSilentAudioBlob() {
+      const sampleRate = 8000;
+      const numSamples = 8000;
+      const buffer = new ArrayBuffer(44 + numSamples);
+      const view = new DataView(buffer);
+      view.setUint32(0, 0x52494646, false); // "RIFF"
+      view.setUint32(4, 36 + numSamples, true);
+      view.setUint32(8, 0x57415645, false); // "WAVE"
+      view.setUint32(12, 0x666d7420, false); // "fmt "
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true); // PCM format
+      view.setUint16(22, 1, true); // 1 channel
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate, true);
+      view.setUint16(32, 1, true);
+      view.setUint16(34, 8, true);
+      view.setUint32(36, 0x64617461, false); // "data"
+      view.setUint32(40, numSamples, true);
+      const bytes = new Uint8Array(buffer, 44, numSamples);
+      bytes.fill(128); // 8-bit PCM silence
+      return new Blob([buffer], { type: 'audio/wav' });
+    }
+
     function getSilentAudioPipe() {
-
       if (!silentAudioElement) {
-
-        silentAudioElement = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
-
-        silentAudioElement.loop = true;
-
+        try {
+          const blob = createSilentAudioBlob();
+          silentAudioElement = new Audio(URL.createObjectURL(blob));
+          silentAudioElement.loop = true;
+          silentAudioElement.volume = 0.001;
+        } catch (e) {
+          silentAudioElement = new Audio();
+        }
       }
-
       return silentAudioElement;
-
     }
 
 
@@ -4524,7 +4565,12 @@ function initReader() {
 
           activeAudioUrl = URL.createObjectURL(audioBlob);
 
-          activeHtml5Audio = new Audio(activeAudioUrl);
+          if (!window.__novelMasterAudio) {
+            window.__novelMasterAudio = new Audio();
+            window.__novelMasterAudio.preload = 'auto';
+          }
+          activeHtml5Audio = window.__novelMasterAudio;
+          activeHtml5Audio.src = activeAudioUrl;
 
           activeHtml5Audio.playbackRate = audioState.rate || 1.0;
 
@@ -4719,33 +4765,33 @@ function initReader() {
             return;
 
           } catch (playErr) {
-
-            console.warn("HTML5 audio playback error, retrying in-place:", playErr);
-
+            console.warn("HTML5 audio playback error:", playErr);
             if (currentEpoch !== audioPlaybackEpoch) return;
-
             if (activeAudioUrl) {
-
               URL.revokeObjectURL(activeAudioUrl);
-
               activeAudioUrl = null;
-
             }
-
-            activeHtml5Audio = null;
-
-            setTimeout(() => {
-
-              if (currentEpoch === audioPlaybackEpoch && audioState.isPlaying && !audioState.isPaused) {
-
+            if (playErr && (playErr.name === 'NotAllowedError' || (playErr.message && playErr.message.includes("user didn't interact")))) {
+              audioState.isPlaying = false;
+              audioState.isPaused = true;
+              updatePlayStateUI(false);
+              showSleepToast("▶ Tap screen or play button to continue audio");
+              const resumeOnTap = () => {
+                document.removeEventListener('click', resumeOnTap);
+                audioState.isPlaying = true;
+                audioState.isPaused = false;
+                updatePlayStateUI(true);
                 speakParagraph(index, true);
-
+              };
+              document.addEventListener('click', resumeOnTap, { once: true });
+              return;
+            }
+            setTimeout(() => {
+              if (currentEpoch === audioPlaybackEpoch && audioState.isPlaying && !audioState.isPaused) {
+                speakParagraph(index, true);
               }
-
             }, 600);
-
             return;
-
           }
 
         } else {

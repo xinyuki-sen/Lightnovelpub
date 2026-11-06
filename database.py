@@ -412,8 +412,19 @@ def init_db():
     finally:
         conn.close()
 
+IGNORED_FRONTMATTER_TITLES = {
+    "cover", "title page", "title", "copyright", "also in series",
+    "contents", "table of contents", "toc", "dedication", "acknowledgments",
+    "acknowledgements", "about the author", "author's note", "epigraph",
+    "frontmatter", "backmatter", "publisher notes", "disclaimer", "map"
+}
+
+def is_frontmatter_title(title: str) -> bool:
+    t = re.sub(r'[^a-z0-9\s]', '', (title or "").lower()).strip()
+    return any(t == ign or t.startswith(ign + " ") for ign in IGNORED_FRONTMATTER_TITLES)
+
 def cleanup_orphan_frontmatter_stubs(conn):
-    """Cleans up leading 0-word or frontmatter stubs (< 80 words) from novels that have substantive chapters."""
+    """Cleans up leading 0-word or frontmatter stubs (< 100 words or TOC titles) from novels that have substantive chapters."""
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT id, slug, total_chapters FROM novels")
@@ -426,7 +437,8 @@ def cleanup_orphan_frontmatter_stubs(conn):
                 continue
             to_delete = []
             for ch in chs:
-                if ch["word_count"] < 80:
+                ch_title = ch["title"] if "title" in ch else ""
+                if ch["word_count"] < 100 or is_frontmatter_title(ch_title):
                     to_delete.append(ch["id"])
                 else:
                     break

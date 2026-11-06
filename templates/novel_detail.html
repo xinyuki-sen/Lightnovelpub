@@ -384,10 +384,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (localChapters && localChapters.length > 0) {
         localChapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
 
-        // Find the first chapter that has meaningful text (> 20 words)
+        // Find the first chapter that has meaningful text (>= 100 words, skipping frontmatter/divider stubs)
         const firstGood = localChapters.find(c => {
           const w = c.word_count || (c.content ? c.content.trim().split(/\s+/).length : 0);
-          return w >= 20;
+          return w >= 100;
         });
         if (firstGood) {
           firstReadableChapter = firstGood.chapterNumber;

@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 import asyncio
+import zipfile
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response, RedirectResponse
 from starlette.middleware.gzip import GZipMiddleware
@@ -354,7 +355,6 @@ async def upload_novel(
             {
                 "number": ch.get("number", idx + 1),
                 "title": ch["title"],
-                "content": "\n\n".join(ch.get("content", [])) if isinstance(ch.get("content"), list) else str(ch.get("content", "")),
                 "paragraphs": ch.get("content", []) if isinstance(ch.get("content"), list) else [str(ch.get("content", ""))],
                 "word_count": ch.get("word_count", 0)
             }
@@ -369,6 +369,8 @@ async def upload_novel(
             "novel": novel_payload,
             "chapters": chapters_payload
         }
+    except (zipfile.BadZipFile, ValueError) as ve:
+        return JSONResponse({"error": f"Invalid or corrupted archive: {str(ve)}"}, status_code=400)
     except Exception as e:
         return JSONResponse({"error": f"Failed to parse file: {str(e)}"}, status_code=500)
     finally:
