@@ -21,6 +21,7 @@ IGNORE_TITLES = {
     "frontmatter", "backmatter", "publisher notes", "publisher's note",
     "disclaimer", "map", "dramatis personae", "cast of characters"
 }
+IGNORE_TITLES_CLEAN = {re.sub(r'[^a-z0-9\s]', '', ign).strip() for ign in IGNORE_TITLES}
 
 def is_ignored_title(title: str, novel_title: str) -> bool:
     t = title.strip().lower()
@@ -28,8 +29,7 @@ def is_ignored_title(title: str, novel_title: str) -> bool:
     if t == nt:
         return True
     t_clean = re.sub(r'[^a-z0-9\s]', '', t).strip()
-    for ign in IGNORE_TITLES:
-        ign_clean = re.sub(r'[^a-z0-9\s]', '', ign).strip()
+    for ign_clean in IGNORE_TITLES_CLEAN:
         if t_clean == ign_clean or t_clean.startswith(ign_clean):
             return True
     return False

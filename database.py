@@ -4,6 +4,8 @@ import re
 import json
 import shutil
 import sqlite3
+import urllib.request
+import base64
 from typing import List, Dict, Optional, Tuple, Any
 
 ABBREVIATIONS = [
@@ -17,6 +19,10 @@ ABBR_REGEX = re.compile(r'\b(?:' + '|'.join(ABBREVIATIONS) + r')\.', re.IGNORECA
 INITIAL_REGEX = re.compile(r'\b([A-Z])\.(?=\s+[A-Z])')
 DECIMAL_REGEX = re.compile(r'(\d+)\.(\d+)')
 
+DOT_MASK = "\uE000DOT\uE000"
+ELLIPSIS_MASK = "\uE000ELLIPSIS\uE000"
+SENTENCE_PATTERN = re.compile(r'(.+?[.!?]+(?:[\"\'”’»\)\]]+)?)(?:\s+(?=[A-Z“\"\'‘\[\d])|$)', re.UNICODE)
+
 def tokenize_sentences(text: str) -> List[str]:
     """
     3-Stage Tokenized Sentence Lexer:
@@ -29,17 +35,13 @@ def tokenize_sentences(text: str) -> List[str]:
     if not t:
         return []
 
-    DOT_MASK = "\uE000DOT\uE000"
-    ELLIPSIS_MASK = "\uE000ELLIPSIS\uE000"
-
     t = ABBR_REGEX.sub(lambda m: m.group(0)[:-1] + DOT_MASK, t)
     t = INITIAL_REGEX.sub(lambda m: m.group(1) + DOT_MASK, t)
     t = DECIMAL_REGEX.sub(r'\1' + DOT_MASK + r'\2', t)
     t = t.replace('...', ELLIPSIS_MASK).replace('…', ELLIPSIS_MASK)
 
     # Terminal sentence regex requiring capital letter, opening quote, bracket, or string-end
-    sentence_pattern = re.compile(r'(.+?[.!?]+(?:[\"\'”’»\)\]]+)?)(?:\s+(?=[A-Z“\"\'‘\[\d])|$)', re.UNICODE)
-    raw = sentence_pattern.findall(t)
+    raw = SENTENCE_PATTERN.findall(t)
 
     if not raw:
         raw = [t]
@@ -217,7 +219,6 @@ class TursoCursor:
             requests.append({"type": "close"})
             payload = {"requests": requests}
             try:
-                import urllib.request
                 body_bytes = json.dumps(payload).encode("utf-8")
                 req = urllib.request.Request(
                     self.conn.endpoint,
@@ -280,7 +281,6 @@ class TursoConnection:
         elif isinstance(val, float):
             return {"type": "float", "value": val}
         elif isinstance(val, (bytes, bytearray)):
-            import base64
             return {"type": "blob", "base64": base64.b64encode(val).decode("ascii")}
         else:
             return {"type": "text", "value": str(val)}
@@ -299,7 +299,6 @@ class TursoConnection:
                 {"type": "close"}
             ]
         }
-        import urllib.request
         body_bytes = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             self.endpoint,
@@ -328,7 +327,6 @@ class TursoConnection:
                         elif val_type == "float":
                             row_data[col_name] = float(cell.get("value", 0.0))
                         elif val_type == "blob":
-                            import base64
                             row_data[col_name] = base64.b64decode(cell.get("base64", ""))
                         else:
                             row_data[col_name] = cell.get("value")
@@ -578,8 +576,26 @@ def get_chapter(slug: str, chapter_number: int) -> Optional[Tuple[Dict, Dict]]:
         """, (novel["id"], chapter_number))
         ch_row = cursor.fetchone()
         if not ch_row:
-            return None
+            # Fallback to the first readable chapter if the requested chapter number does not exist
+            cursor.execute("""
+                SELECT * FROM chapters 
+                WHERE novel_id = ? 
+                ORDER BY chapter_number ASC LIMIT 1
+            """, (novel["id"],))
+            ch_row = cursor.fetchone()
+            if not ch_row:
+                return None
         chapter = dict(ch_row)
+
+        # Single-roundtrip ToC hydration: populate novel["chapters"] in the same connection
+        cursor.execute("""
+            SELECT chapter_number, title, word_count 
+            FROM chapters 
+            WHERE novel_id = ? 
+            ORDER BY chapter_number ASC
+        """, (novel["id"],))
+        novel["chapters"] = [dict(r) for r in cursor.fetchall()]
+
         raw_paras = json.loads(chapter["content_json"])
         if isinstance(raw_paras, list) and raw_paras and all(len(p) <= 520 for p in raw_paras):
             chapter["paragraphs"] = raw_paras

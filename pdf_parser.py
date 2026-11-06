@@ -40,6 +40,33 @@ IGNORE_TITLES = {
     "frontmatter", "backmatter", "publisher notes", "publisher's note",
     "disclaimer", "map", "dramatis personae", "cast of characters"
 }
+IGNORE_TITLES_CLEAN = {re.sub(r'[^a-z0-9\s]', '', ign).strip() for ign in IGNORE_TITLES}
+
+RE_WATERMARK_OCEAN = re.compile(r'\s*(?:https?://)?(?:www\.)?oceanofpdf\.com\s*', re.IGNORECASE)
+RE_WATERMARK_SUBSCRIBE = re.compile(r'\s*(?:https?://)?(?:www\.)?subscribepage\.com/\S+\s*', re.IGNORECASE)
+RE_SPACES = re.compile(r'[ \t]+')
+RE_HYPHEN_BREAK = re.compile(r'(\w+)-\s+(\w+)')
+RE_MULTISPACE = re.compile(r'\s+')
+RE_DROP_HEADER = re.compile(r'^(?:(?:chapter|ch\.|act|book|volume)\s+[A-Za-z0-9\s\-–—]+|epilogue|prologue|interlude)\s*$', re.IGNORECASE)
+RE_REWARD = re.compile(r'^Reward:\s*', re.IGNORECASE)
+
+LITRPG_PATTERNS = [
+    (re.compile(r'(\bNew\s+achievement!\s*)', re.IGNORECASE), r'\n\n\1'),
+    (re.compile(r'(\bReward:\s*)', re.IGNORECASE), r'\n\n\1'),
+    (re.compile(r'(\bCongratulations!\s*)', re.IGNORECASE), r'\n\n\1'),
+    (re.compile(r'(\bCrawler\s*#\d+)', re.IGNORECASE), r'\n\n\1'),
+    (re.compile(r'(\bLevel:\s*(?:N/A|\d+))', re.IGNORECASE), r'\n\n\1'),
+    (re.compile(r'(\bLevel\s+\d+\.\s*(?:Race:|Class:|Small,|Engineers\.|\b))', re.IGNORECASE), r'\n\n\1'),
+    (re.compile(r'(\bHealth\([^)]*\):)', re.IGNORECASE), r'\n\n\1'),
+    (re.compile(r'(\bMana\([^)]*\):)', re.IGNORECASE), r'\n\n\1'),
+    (re.compile(r'(\bStam\([^)]*\):)', re.IGNORECASE), r'\n\n\1'),
+    (re.compile(r'(\bVitality:\s*\d+)', re.IGNORECASE), r'\n\n\1'),
+]
+
+DIALOGUE_PATTERNS = [
+    (re.compile(r'([.!?])\s*([“"][A-Z])'), r'\1\n\n\2'),
+    (re.compile(r'([”"][.!?]?)\s+([A-Z][a-z]+(?:\s+[a-z]+){0,3}\s+[a-z]+)'), r'\1\n\n\2'),
+]
 
 def is_toc_page_lines(lines: List[str]) -> bool:
     """Detects whether a set of lines belongs to an in-text Table of Contents page."""
@@ -62,17 +89,16 @@ def is_ignored_title(title: str, novel_title: str) -> bool:
     if t == nt:
         return True
     t_clean = re.sub(r'[^a-z0-9\s]', '', t).strip()
-    for ign in IGNORE_TITLES:
-        ign_clean = re.sub(r'[^a-z0-9\s]', '', ign).strip()
+    for ign_clean in IGNORE_TITLES_CLEAN:
         if t_clean == ign_clean or t_clean.startswith(ign_clean):
             return True
     return False
 
 def clean_watermarks(text: str) -> str:
     """Strips OceanofPDF and common piracy banner watermarks and multiple spaces."""
-    text = re.sub(r'\s*(?:https?://)?(?:www\.)?oceanofpdf\.com\s*', ' ', text, flags=re.IGNORECASE)
-    text = re.sub(r'\s*(?:https?://)?(?:www\.)?subscribepage\.com/\S+\s*', ' ', text, flags=re.IGNORECASE)
-    text = re.sub(r'[ \t]+', ' ', text).strip()
+    text = RE_WATERMARK_OCEAN.sub(' ', text)
+    text = RE_WATERMARK_SUBSCRIBE.sub(' ', text)
+    text = RE_SPACES.sub(' ', text).strip()
     return text
 
 def fix_pdf_dropcap_lines(lines: List[str]) -> List[str]:
@@ -86,7 +112,6 @@ def fix_pdf_dropcap_lines(lines: List[str]) -> List[str]:
     """
     new_lines = []
     i = 0
-    header_regex = re.compile(r'^(?:(?:chapter|ch\.|act|book|volume)\s+[A-Za-z0-9\s\-–—]+|epilogue|prologue|interlude)\s*$', re.IGNORECASE)
 
     while i < len(lines):
         line = lines[i].strip()
@@ -94,12 +119,12 @@ def fix_pdf_dropcap_lines(lines: List[str]) -> List[str]:
         if len(line) == 1 and line.isupper() and (i + 2) < len(lines):
             next_line = lines[i + 1].strip()
             third_line = lines[i + 2].strip()
-            if header_regex.match(next_line) and third_line and third_line[0].islower():
+            if RE_DROP_HEADER.match(next_line) and third_line and third_line[0].islower():
                 new_lines.append(line + third_line)
                 i += 3
                 continue
         # Case B: 'CHAPTER ...' -> 'H' -> 'elen ...'
-        if header_regex.match(line) and (i + 2) < len(lines):
+        if RE_DROP_HEADER.match(line) and (i + 2) < len(lines):
             next_line = lines[i + 1].strip()
             third_line = lines[i + 2].strip()
             if len(next_line) == 1 and next_line.isupper() and third_line and third_line[0].islower():
@@ -133,8 +158,8 @@ def clean_lines_into_paragraphs(lines: List[str]) -> List[str]:
         if not line:
             if current_para:
                 para_text = " ".join(current_para).strip()
-                para_text = re.sub(r'(\w+)-\s+(\w+)', r'\1\2', para_text)
-                para_text = re.sub(r'\s+', ' ', para_text)
+                para_text = RE_HYPHEN_BREAK.sub(r'\1\2', para_text)
+                para_text = RE_MULTISPACE.sub(' ', para_text)
                 para_text = clean_watermarks(para_text)
                 if para_text:
                     paragraphs.append(para_text)
@@ -148,8 +173,8 @@ def clean_lines_into_paragraphs(lines: List[str]) -> List[str]:
 
     if current_para:
         para_text = " ".join(current_para).strip()
-        para_text = re.sub(r'(\w+)-\s+(\w+)', r'\1\2', para_text)
-        para_text = re.sub(r'\s+', ' ', para_text)
+        para_text = RE_HYPHEN_BREAK.sub(r'\1\2', para_text)
+        para_text = RE_MULTISPACE.sub(' ', para_text)
         para_text = clean_watermarks(para_text)
         if para_text:
             paragraphs.append(para_text)
@@ -157,7 +182,7 @@ def clean_lines_into_paragraphs(lines: List[str]) -> List[str]:
     return format_novel_paragraphs(paragraphs)
 
 def format_novel_paragraphs(paragraphs: List[str]) -> List[str]:
-    """Splits dialogue and system alerts into clean paragraphs."""
+    """Splits dialogue and system alerts into clean paragraphs using precompiled regexes."""
     structured_paras = []
     for p in paragraphs:
         t = clean_watermarks(p.strip())
@@ -165,25 +190,17 @@ def format_novel_paragraphs(paragraphs: List[str]) -> List[str]:
             continue
 
         # LitRPG triggers
-        t = re.sub(r'(\bNew\s+achievement!\s*)', r'\n\n\1', t, flags=re.IGNORECASE)
-        t = re.sub(r'(\bReward:\s*)', r'\n\n\1', t, flags=re.IGNORECASE)
-        t = re.sub(r'(\bCongratulations!\s*)', r'\n\n\1', t, flags=re.IGNORECASE)
-        t = re.sub(r'(\bCrawler\s*#\d+)', r'\n\n\1', t, flags=re.IGNORECASE)
-        t = re.sub(r'(\bLevel:\s*(?:N/A|\d+))', r'\n\n\1', t, flags=re.IGNORECASE)
-        t = re.sub(r'(\bLevel\s+\d+\.\s*(?:Race:|Class:|Small,|Engineers\.|\b))', r'\n\n\1', t, flags=re.IGNORECASE)
-        t = re.sub(r'(\bHealth\([^)]*\):)', r'\n\n\1', t, flags=re.IGNORECASE)
-        t = re.sub(r'(\bMana\([^)]*\):)', r'\n\n\1', t, flags=re.IGNORECASE)
-        t = re.sub(r'(\bStam\([^)]*\):)', r'\n\n\1', t, flags=re.IGNORECASE)
-        t = re.sub(r'(\bVitality:\s*\d+)', r'\n\n\1', t, flags=re.IGNORECASE)
+        for pattern, repl in LITRPG_PATTERNS:
+            t = pattern.sub(repl, t)
 
         # Dialogue separation
-        t = re.sub(r'([.!?])\s*([“"][A-Z])', r'\1\n\n\2', t)
-        t = re.sub(r'([”"][.!?]?)\s+([A-Z][a-z]+(?:\s+[a-z]+){0,3}\s+[a-z]+)', r'\1\n\n\2', t)
+        for pattern, repl in DIALOGUE_PATTERNS:
+            t = pattern.sub(repl, t)
 
         for chunk in t.split('\n\n'):
             chunk = clean_watermarks(chunk.strip())
             if chunk:
-                if re.match(r'^Reward:\s*', chunk, re.IGNORECASE) and structured_paras:
+                if RE_REWARD.match(chunk) and structured_paras:
                     structured_paras[-1] += "\n" + chunk
                 else:
                     structured_paras.append(chunk)

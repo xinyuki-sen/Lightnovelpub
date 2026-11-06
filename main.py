@@ -5,6 +5,8 @@ import shutil
 import tempfile
 import asyncio
 import zipfile
+import base64
+import edge_tts
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response, RedirectResponse
 from starlette.middleware.gzip import GZipMiddleware
@@ -159,18 +161,13 @@ async def chapter_reader(request: Request, slug: str, chapter_number: int):
             }
         )
     novel, chapter = data
+    all_chapters = novel.get("chapters", [])
     
     # Auto-skip 0-word stub Chapter 1 to first substantive chapter
-    if chapter.get("word_count", 0) == 0 and chapter_number == 1 and novel.get("total_chapters", 0) > 1:
-        full_novel = database.get_novel_by_slug(slug)
-        for c in (full_novel.get("chapters", []) if full_novel else []):
+    if chapter.get("word_count", 0) == 0 and chapter_number == 1 and novel.get("total_chapters", len(all_chapters)) > 1:
+        for c in all_chapters:
             if c.get("word_count", 0) > 0:
                 return RedirectResponse(url=f"/novel/{slug}/chapter/{c['chapter_number']}", status_code=302)
-    
-    all_chapters = novel.get("chapters", [])
-    if not all_chapters:
-        full_novel = database.get_novel_by_slug(slug)
-        all_chapters = full_novel.get("chapters", []) if full_novel else []
     
     # Robust previous and next chapter resolution against non-contiguous numbering
     ch_nums = [c["chapter_number"] for c in all_chapters] if all_chapters else []
@@ -199,18 +196,10 @@ async def get_chapter_json(request: Request, slug: str, chapter_number: int):
     """High-speed JSON endpoint for instantaneous client-side chapter transitions (<50ms) with ETag caching."""
     data = database.get_chapter(slug, chapter_number)
     if not data:
-        full_novel = database.get_novel_by_slug(slug)
-        if full_novel and full_novel.get("chapters"):
-            first_ch = full_novel["chapters"][0]["chapter_number"]
-            data = database.get_chapter(slug, first_ch)
-        if not data:
-            raise HTTPException(status_code=404, detail="Chapter not found")
+        raise HTTPException(status_code=404, detail="Chapter not found")
     novel, chapter = data
     
     all_chapters = novel.get("chapters", [])
-    if not all_chapters:
-        full_novel = database.get_novel_by_slug(slug)
-        all_chapters = full_novel.get("chapters", []) if full_novel else []
     
     ch_nums = [c["chapter_number"] for c in all_chapters] if all_chapters else []
     if chapter_number in ch_nums:
@@ -453,9 +442,6 @@ async def generate_tts(req: TTSRequest):
     pitch_str = f"{pitch_hz:+d}Hz"
 
     try:
-        import base64
-        import json
-        import edge_tts
         comm = edge_tts.Communicate(
             text=text, 
             voice=req.voice, 
