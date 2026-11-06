@@ -129,27 +129,6 @@ def process_chapter_paragraphs(paragraphs: List[str], max_chars: int = 480) -> L
 # Backwards compatibility alias
 split_chapter_paragraphs = process_chapter_paragraphs
 
-def migrate_divide_chapter_paragraphs(conn):
-    """Automatic background migration to divide all existing chapters with strict sentence boundaries."""
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, content_json FROM chapters")
-        rows = cursor.fetchall()
-        updates = []
-        for ch_id, c_json in rows:
-            try:
-                paras = json.loads(c_json)
-                new_paras = process_chapter_paragraphs(paras, max_chars=480)
-                new_word_count = sum(len(p.split()) for p in new_paras)
-                updates.append((json.dumps(new_paras, ensure_ascii=False), new_word_count, ch_id))
-            except Exception:
-                pass
-        if updates:
-            cursor.executemany("UPDATE chapters SET content_json = ?, word_count = ? WHERE id = ?", updates)
-            print(f"[DB Migration] Successfully divided paragraphs for {len(updates)} chapters.")
-    except Exception as e:
-        print("[DB Migration note]:", e)
-
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
