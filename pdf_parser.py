@@ -255,12 +255,22 @@ def extract_pdf_toc_bookmarks(file_path: str) -> List[Tuple[str, int]]:
             print(f"pypdf outline extraction notice: {e}")
 
     sorted_entries = sorted(entries, key=lambda x: x[1])
+    # If multiple bookmarks share the same page, prefer specific chapters over generic volumes
+    page_to_titles = {}
+    for t_entry, p_entry in sorted_entries:
+        if p_entry not in page_to_titles:
+            page_to_titles[p_entry] = []
+        page_to_titles[p_entry].append(t_entry)
+
     filtered = []
-    seen_pages = set()
-    for title, page in sorted_entries:
-        if page not in seen_pages:
-            filtered.append((title, page))
-            seen_pages.add(page)
+    for p_num in sorted(page_to_titles.keys()):
+        t_list = page_to_titles[p_num]
+        chosen = t_list[-1]
+        for t_candidate in t_list:
+            if re.search(r'\b(?:chapter|ch\.)\b', t_candidate, re.IGNORECASE):
+                chosen = t_candidate
+                break
+        filtered.append((chosen, p_num))
 
     return filtered
 
@@ -438,6 +448,11 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, str, List[Dict[str, any]]
             print(f"[PDF Parser] Dropped frontmatter stub chapter '{final_chapters[0]['title']}' ({final_chapters[0]['word_count']} words)")
             final_chapters.pop(0)
 
+        # Strip any trailing backmatter stub chapters (< 100 words or promotional)
+        while final_chapters and len(final_chapters) > 1 and (final_chapters[-1]["word_count"] < 100 or is_ignored_title(final_chapters[-1]["title"], title)):
+            print(f"[PDF Parser] Dropped backmatter stub chapter '{final_chapters[-1]['title']}' ({final_chapters[-1]['word_count']} words)")
+            final_chapters.pop()
+
         # Re-index chapters contiguously from 1
         for idx, ch in enumerate(final_chapters):
             ch["number"] = idx + 1
@@ -451,8 +466,11 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, str, List[Dict[str, any]]
     print("[PDF Parser] Scanning content lines for chapter markers ([1], Chapter X, Prologue, etc.)...")
     all_lines = []
     for p_text in pages_text:
-        for l in p_text.splitlines():
-            line_str = l.strip()
+        p_lines = [l.strip() for l in p_text.splitlines() if l.strip()]
+        if is_toc_page_lines(p_lines):
+            print(f"[PDF Parser] Skipping in-text Table of Contents page ({len(p_lines)} entries)")
+            continue
+        for line_str in p_lines:
             if not PAGE_NUMBER_PATTERN.match(line_str):
                 all_lines.append(line_str)
         all_lines.append("")
@@ -496,7 +514,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, str, List[Dict[str, any]]
 
     final_chapters = []
     for ch in raw_chapters:
-        if is_ignored_title(ch["title"], title) or ch["word_count"] < 40:
+        if is_ignored_title(ch["title"], title) or ch["word_count"] < 80:
             continue
         ch["number"] = len(final_chapters) + 1
         final_chapters.append(ch)
@@ -505,6 +523,11 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, str, List[Dict[str, any]]
     while final_chapters and len(final_chapters) > 1 and (final_chapters[0]["word_count"] < 100 or is_ignored_title(final_chapters[0]["title"], title)):
         print(f"[PDF Parser] Dropped frontmatter stub chapter '{final_chapters[0]['title']}' ({final_chapters[0]['word_count']} words)")
         final_chapters.pop(0)
+
+    # Strip any trailing backmatter stub chapters (< 100 words or promotional)
+    while final_chapters and len(final_chapters) > 1 and (final_chapters[-1]["word_count"] < 100 or is_ignored_title(final_chapters[-1]["title"], title)):
+        print(f"[PDF Parser] Dropped backmatter stub chapter '{final_chapters[-1]['title']}' ({final_chapters[-1]['word_count']} words)")
+        final_chapters.pop()
 
     # Re-index chapters contiguously from 1
     for idx, ch in enumerate(final_chapters):

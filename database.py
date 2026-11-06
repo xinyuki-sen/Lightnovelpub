@@ -430,6 +430,10 @@ def cleanup_orphan_frontmatter_stubs(conn):
                     to_delete.append(ch["id"])
                 else:
                     break
+            # Also clean up any completely empty 0-word placeholder chapters
+            for ch in chs:
+                if ch["word_count"] == 0 and ch["id"] not in to_delete:
+                    to_delete.append(ch["id"])
             if to_delete and len(to_delete) < len(chs):
                 cursor.executemany("DELETE FROM chapters WHERE id = ?", [(cid,) for cid in to_delete])
                 cursor.execute("SELECT id FROM chapters WHERE novel_id = ? ORDER BY chapter_number ASC", (n_id,))

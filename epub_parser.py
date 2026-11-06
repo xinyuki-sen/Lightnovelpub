@@ -263,6 +263,11 @@ def extract_epub_chapters(epub_path: str):
             print(f"[EPUB Parser] Dropped frontmatter stub chapter '{chapters[0]['title']}' ({chapters[0].get('word_count', 0)} words)")
             chapters.pop(0)
 
+        # Strip any trailing stub chapters (< 100 words or promotional)
+        while chapters and len(chapters) > 1 and (chapters[-1].get("word_count", 0) < 100 or is_ignored_title(chapters[-1].get("title", ""), title)):
+            print(f"[EPUB Parser] Dropped backmatter stub chapter '{chapters[-1]['title']}' ({chapters[-1].get('word_count', 0)} words)")
+            chapters.pop()
+
         # Re-index chapters contiguously from 1
         for idx, ch in enumerate(chapters):
             ch["number"] = idx + 1

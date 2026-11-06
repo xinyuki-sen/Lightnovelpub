@@ -48,15 +48,16 @@ async def serve_cover_image(filename: str):
     if ".." in filename or "/" in filename or "\\" in filename:
         raise HTTPException(status_code=400, detail="Invalid cover filename")
 
-    # Check COVERS_DIR first
+    # Check COVERS_DIR first (with 7-day browser caching)
+    cover_headers = {"Cache-Control": "public, max-age=604800, immutable"}
     disk_cover = os.path.join(COVERS_DIR, safe_filename)
     if os.path.exists(disk_cover):
-        return FileResponse(disk_cover, media_type="image/jpeg")
+        return FileResponse(disk_cover, media_type="image/jpeg", headers=cover_headers)
     
     # Fallback to repo static/covers
     static_cover = os.path.join(STATIC_DIR, "covers", safe_filename)
     if os.path.exists(static_cover):
-        return FileResponse(static_cover, media_type="image/jpeg")
+        return FileResponse(static_cover, media_type="image/jpeg", headers=cover_headers)
         
     # Default fallback to logo if cover doesn't exist
     fallback_logo = os.path.join(STATIC_DIR, "img", "logo.png")
@@ -157,6 +158,13 @@ async def chapter_reader(request: Request, slug: str, chapter_number: int):
             }
         )
     novel, chapter = data
+    
+    # Auto-skip 0-word stub Chapter 1 to first substantive chapter
+    if chapter.get("word_count", 0) == 0 and chapter_number == 1 and novel.get("total_chapters", 0) > 1:
+        full_novel = database.get_novel_by_slug(slug)
+        for c in (full_novel.get("chapters", []) if full_novel else []):
+            if c.get("word_count", 0) > 0:
+                return RedirectResponse(url=f"/novel/{slug}/chapter/{c['chapter_number']}", status_code=302)
     
     all_chapters = novel.get("chapters", [])
     if not all_chapters:
