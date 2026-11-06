@@ -1,19 +1,47 @@
+# Python bytecode & cache
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.log
+
+# Environments & credentials
+.env
+.env.*
+*.env
+.venv/
+venv/
+env/
+ENV/
+
+# OS artifacts
 .DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Large book archives & test files (prevent accidental commit)
 *.pdf
+*.epub
+*.mobi
+*.azw3
+
+# Temporary scratch & benchmarks
 scratch/
+scratch_*
 test_*.py
 reparse_*.py
-.vercel/
+benchmark_results*.json
+temp_*
+*.tmp
+
+# SQLite journals & locks
 *.db-shm
 *.db-wal
 *.db-journal
-.pytest_cache/
-benchmark_results*.json
-*.log
 novels.db
-temp_*
-*.tmp
+
+# IDE & deployment artifacts
+.vscode/
+.idea/
+.vercel/
+node_modules/

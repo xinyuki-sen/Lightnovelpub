@@ -383,6 +383,7 @@ def init_db():
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_novels_created ON novels(created_at DESC);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_novels_progress ON novels(last_read_chapter, last_read_percent);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_novels_slug_lower ON novels(LOWER(slug));")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_chapters_novel_ch ON chapters(novel_id, chapter_number);")
             # Auto-cleanup any orphan 0-word frontmatter stubs from existing novels
             cleanup_orphan_frontmatter_stubs(conn)
