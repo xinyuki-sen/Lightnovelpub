@@ -1390,9 +1390,11 @@ function initReader() {
               document.body.setAttribute('data-total-chapters', String(allLocalChs.length));
               updateNavButtons(prevNum, nextNum);
 
-              // 3. Populate Chapter Content if not rendered by server
+              // 3. Populate Chapter Content if not rendered by server or if server rendered fallback
               const contentEl = document.getElementById('chapter-content');
-              if (contentEl && (contentEl.children.length === 0 || !contentEl.textContent.trim())) {
+              const hasEmptyNotice = contentEl && contentEl.querySelector('.empty-chapter-notice-card');
+              const isFallbackLoading = contentEl && contentEl.textContent.includes('Loading chapter from local cache');
+              if (contentEl && (contentEl.children.length === 0 || !contentEl.textContent.trim() || hasEmptyNotice || isFallbackLoading)) {
                 const localCh = allLocalChs.find(c => Number(c.chapterNumber) === Number(currentChapterNum)) || allLocalChs[0];
                 if (localCh) {
                   const paras = localCh.paragraphs || (localCh.content ? localCh.content.split('\n\n') : []);
