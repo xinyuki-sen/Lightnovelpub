@@ -2144,6 +2144,13 @@ function initReader() {
 
       if (npSpeedValLabel) npSpeedValLabel.textContent = `${label.toUpperCase()}`;
 
+      // Sync quick speed preset chips
+      const speedChips = document.querySelectorAll('.np-speed-chip');
+      speedChips.forEach(chip => {
+        const chipSpeed = parseFloat(chip.getAttribute('data-speed'));
+        chip.classList.toggle('active', Math.abs(chipSpeed - rounded) < 0.04);
+      });
+
     }
 
 
@@ -2518,6 +2525,38 @@ function initReader() {
 
       });
 
+    }
+
+    // Quick Speed Preset Chips Event Listeners
+    const npSpeedChips = document.querySelectorAll('.np-speed-chip');
+    npSpeedChips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        const speed = parseFloat(chip.getAttribute('data-speed'));
+        if (!isNaN(speed)) {
+          setAudioRate(speed);
+        }
+      });
+    });
+
+    // Ergonomic Tab Bar Navigation (Voice & Sound vs Preferences & Sleep)
+    const tabBtnAudio = document.getElementById('np-tab-btn-audio');
+    const tabBtnPrefs = document.getElementById('np-tab-btn-prefs');
+    const tabPaneAudio = document.getElementById('np-tab-pane-audio');
+    const tabPanePrefs = document.getElementById('np-tab-pane-prefs');
+
+    if (tabBtnAudio && tabBtnPrefs) {
+      tabBtnAudio.addEventListener('click', () => {
+        tabBtnAudio.classList.add('active');
+        tabBtnPrefs.classList.remove('active');
+        tabPaneAudio?.classList.add('active');
+        tabPanePrefs?.classList.remove('active');
+      });
+      tabBtnPrefs.addEventListener('click', () => {
+        tabBtnPrefs.classList.add('active');
+        tabBtnAudio.classList.remove('active');
+        tabPanePrefs?.classList.add('active');
+        tabPaneAudio?.classList.remove('active');
+      });
     }
 
 
@@ -5379,15 +5418,19 @@ function initReader() {
       const preloadStatus = document.getElementById('lbl-preload-status');
       if (badge) {
         if (bufferedCount > 0) {
-          badge.textContent = `⚡ Runway: ${bufferedCount} Paras (Radio Sleeping)`;
+          badge.textContent = `⚡ ${bufferedCount} Paras Cached (Radio Idle)`;
           badge.style.display = 'inline-flex';
           badge.classList.add('sleeping');
         } else {
           badge.style.display = 'none';
         }
       }
-      if (preloadStatus && bufferedCount > 0 && !isPreloadingChapter) {
-        preloadStatus.textContent = `Runway: ${bufferedCount} Paras Cached`;
+      if (preloadStatus && !isPreloadingChapter) {
+        if (bufferedCount > 0) {
+          preloadStatus.textContent = `⚡ Ready`;
+        } else {
+          preloadStatus.textContent = `Preload Chapter`;
+        }
       }
     }
 
@@ -5582,6 +5625,15 @@ function initReader() {
         });
       }
 
+      // Quick Sleep Preset Chips
+      const npSleepChips = document.querySelectorAll('.np-sleep-chip');
+      npSleepChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+          const sleepVal = chip.getAttribute('data-sleep');
+          setSleepTimer(sleepVal);
+        });
+      });
+
       if (sleepBadge) {
         sleepBadge.addEventListener('click', () => {
           if (!sleepTimerTargetMs && !audioState.stopAtChapterEnd) return;
@@ -5616,6 +5668,13 @@ function initReader() {
       }
       sleepTimerTargetMs = null;
       audioState.stopAtChapterEnd = false;
+
+      // Sync sleep preset chips active states
+      const npSleepChips = document.querySelectorAll('.np-sleep-chip');
+      npSleepChips.forEach(chip => {
+        chip.classList.toggle('active', chip.getAttribute('data-sleep') === String(val));
+      });
+      if (sleepTimerSelect) sleepTimerSelect.value = String(val);
 
       // Restore volume if previous timer was decaying
       if (activeHtml5Audio) {

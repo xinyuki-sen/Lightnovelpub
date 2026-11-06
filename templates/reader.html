@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="/static/img/logo.png?v=46">
   <link rel="manifest" href="/static/manifest.json?v=46">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=46">
+  <link rel="stylesheet" href="/static/css/style.css?v=47">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-total-chapters="{{ novel.total_chapters or 0 }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
@@ -285,8 +285,11 @@
     </a>
   </div>
 
-  <!-- Novel Phoenix Floating Audio Player Widget (Exact Replica) -->
+  <!-- Novel Phoenix Floating Audio Player Widget (Luxury Cyber-OLED Edition) -->
   <div class="np-audio-widget" id="np-audio-widget">
+    <!-- Top Drag / Pull Handle -->
+    <div class="np-drag-handle"></div>
+
     <!-- Top Header Bar -->
     <div class="np-audio-header">
       <div class="np-audio-title-group">
@@ -319,118 +322,156 @@
       </div>
     </div>
 
-    <!-- Collapsible Settings Panel (Matches User Screenshot: Expanded by default) -->
+    <!-- Segmented Tab Bar (Ergonomic Zero-Scroll Navigation) -->
+    <div class="np-tab-switch-bar">
+      <button type="button" class="np-tab-pill-btn active" id="np-tab-btn-audio" data-target="audio">
+        <span>🎙️</span> Voice & Sound
+      </button>
+      <button type="button" class="np-tab-pill-btn" id="np-tab-btn-prefs" data-target="prefs">
+        <span>⚙️</span> Preferences & Sleep
+      </button>
+    </div>
+
+    <!-- Collapsible Settings Panel -->
     <div class="np-audio-settings-body open" id="np-audio-settings-panel">
-      <!-- Row 1: Language & Voice -->
-      <div class="np-settings-grid-2">
-        <div class="np-setting-field">
-          <label class="np-field-label">LANGUAGE</label>
-          <div class="np-select-wrapper">
-            <select id="np-language-select" class="np-select-ctrl">
-              <option value="all">English (en-US)</option>
-            </select>
+      <!-- TAB 1: Voice & Sound -->
+      <div class="np-tab-pane active" id="np-tab-pane-audio">
+        <!-- Row 1: Language & Voice -->
+        <div class="np-settings-grid-2">
+          <div class="np-setting-field">
+            <label class="np-field-label">LANGUAGE</label>
+            <div class="np-select-wrapper">
+              <select id="np-language-select" class="np-select-ctrl">
+                <option value="all">English (en-US)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="np-setting-field">
+            <label class="np-field-label">VOICE ENGINE</label>
+            <div class="np-select-wrapper">
+              <select id="np-voice-select" class="np-select-ctrl">
+                <option value="">Default Voice</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div class="np-setting-field">
-          <label class="np-field-label">VOICE</label>
-          <div class="np-select-wrapper">
-            <select id="np-voice-select" class="np-select-ctrl">
-              <option value="">Default Voice</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <!-- Row 2: Sliders for Speed, Pitch & Volume -->
-      <div class="np-settings-grid-3" style="margin-top: 1.1rem;">
-        <div class="np-setting-field">
+        <!-- Row 2: Speed Quick Presets + Slider -->
+        <div class="np-setting-field" style="margin-top: 0.65rem;">
           <div class="np-slider-header">
-            <label class="np-field-label">SPEED</label>
-            <span class="np-slider-val" id="np-speed-val-label">1X</span>
+            <label class="np-field-label" style="margin-bottom: 0;">SPEED PRESETS</label>
+            <span class="np-slider-val" id="np-speed-val-label">1.0X</span>
+          </div>
+          <div class="np-speed-chips">
+            <button type="button" class="np-speed-chip" data-speed="0.8">0.8x</button>
+            <button type="button" class="np-speed-chip active" data-speed="1.0">1.0x</button>
+            <button type="button" class="np-speed-chip" data-speed="1.25">1.25x</button>
+            <button type="button" class="np-speed-chip" data-speed="1.5">1.5x</button>
+            <button type="button" class="np-speed-chip" data-speed="1.75">1.75x</button>
+            <button type="button" class="np-speed-chip" data-speed="2.0">2.0x</button>
           </div>
           <input type="range" id="np-speed-slider" class="np-range-slider" min="0.5" max="2.5" step="0.05" value="1.0">
         </div>
 
-        <div class="np-setting-field">
-          <div class="np-slider-header">
-            <label class="np-field-label">PITCH</label>
-            <span class="np-slider-val" id="np-pitch-val-label">1</span>
+        <!-- Row 3: Pitch, Volume & Highlight Mode -->
+        <div class="np-settings-grid-2" style="margin-top: 0.65rem;">
+          <div class="np-setting-field">
+            <div class="np-slider-header">
+              <label class="np-field-label">PITCH</label>
+              <span class="np-slider-val" id="np-pitch-val-label">1</span>
+            </div>
+            <input type="range" id="np-pitch-slider" class="np-range-slider" min="0.5" max="1.5" step="0.05" value="1.0">
           </div>
-          <input type="range" id="np-pitch-slider" class="np-range-slider" min="0.5" max="1.5" step="0.05" value="1.0">
+
+          <div class="np-setting-field">
+            <div class="np-slider-header">
+              <label class="np-field-label">VOLUME</label>
+              <span class="np-slider-val" id="np-vol-val-label">100%</span>
+            </div>
+            <input type="range" id="np-volume-slider" class="np-range-slider" min="0" max="1" step="0.05" value="1.0">
+          </div>
         </div>
 
-        <div class="np-setting-field">
-          <div class="np-slider-header">
-            <label class="np-field-label">VOLUME</label>
-            <span class="np-slider-val" id="np-vol-val-label">100%</span>
-          </div>
-          <input type="range" id="np-volume-slider" class="np-range-slider" min="0" max="1" step="0.05" value="1.0">
-        </div>
-      </div>
-
-      <!-- Row 3: Highlight Word vs Sentence & Sleep Timer -->
-      <div class="np-settings-grid-2" style="margin-top: 1.1rem;">
-        <div class="np-setting-field">
-          <label class="np-field-label">HIGHLIGHT</label>
+        <!-- Row 4: Highlight Word vs Sentence -->
+        <div class="np-setting-field" style="margin-top: 0.65rem;">
+          <label class="np-field-label">REAL-TIME HIGHLIGHT FOLLOWER</label>
           <div class="np-segmented-tabs">
-            <button type="button" class="np-seg-tab active" data-highlight="word" id="np-tab-highlight-word">Word</button>
-            <button type="button" class="np-seg-tab" data-highlight="sentence" id="np-tab-highlight-sentence">Sentence</button>
+            <button type="button" class="np-seg-tab active" data-highlight="word" id="np-tab-highlight-word">Word Follower</button>
+            <button type="button" class="np-seg-tab" data-highlight="sentence" id="np-tab-highlight-sentence">Sentence Block</button>
           </div>
         </div>
+      </div>
 
+      <!-- TAB 2: Preferences & Sleep -->
+      <div class="np-tab-pane" id="np-tab-pane-prefs">
+        <!-- Sleep Timer Chips -->
         <div class="np-setting-field">
-          <label class="np-field-label">SLEEP TIMER</label>
-          <div class="np-select-wrapper">
-            <select id="np-sleep-timer-select" class="np-select-ctrl">
-              <option value="0">Off</option>
-              <option value="15">15 Minutes</option>
-              <option value="30">30 Minutes</option>
-              <option value="45">45 Minutes</option>
-              <option value="60">60 Minutes</option>
-              <option value="ch_end">End of Chapter</option>
-            </select>
+          <label class="np-field-label">CIRCADIAN SLEEP TIMER</label>
+          <!-- Hidden fallback select to preserve 100% backwards compatibility -->
+          <select id="np-sleep-timer-select" class="np-select-ctrl" style="display: none;">
+            <option value="0">Off</option>
+            <option value="15">15 Minutes</option>
+            <option value="30">30 Minutes</option>
+            <option value="45">45 Minutes</option>
+            <option value="60">60 Minutes</option>
+            <option value="ch_end">End of Chapter</option>
+          </select>
+          <div class="np-sleep-chips">
+            <button type="button" class="np-sleep-chip active" data-sleep="0">Off</button>
+            <button type="button" class="np-sleep-chip" data-sleep="15">15m</button>
+            <button type="button" class="np-sleep-chip" data-sleep="30">30m</button>
+            <button type="button" class="np-sleep-chip" data-sleep="45">45m</button>
+            <button type="button" class="np-sleep-chip" data-sleep="ch_end">End Ch</button>
           </div>
         </div>
-      </div>
 
-      <!-- Row 4: Auto-Play & Auto-Scroll Toggles -->
-      <div class="np-switches-group">
-        <label class="np-switch-row">
-          <span class="np-switch-label">Auto-play next chapter</span>
-          <div class="np-switch-container">
-            <input type="checkbox" id="np-toggle-autonext" checked>
-            <span class="np-switch-slider"></span>
-          </div>
-        </label>
+        <!-- Automation Switches Group -->
+        <div class="np-switches-group">
+          <label class="np-switch-row">
+            <div class="np-switch-meta">
+              <span class="np-switch-label">Auto-play next chapter</span>
+              <span class="np-switch-subtext">Seamless gapless transition to next chapter</span>
+            </div>
+            <div class="np-switch-container">
+              <input type="checkbox" id="np-toggle-autonext" checked>
+              <span class="np-switch-slider"></span>
+            </div>
+          </label>
 
-        <label class="np-switch-row">
-          <span class="np-switch-label">Auto-scroll to spoken text</span>
-          <div class="np-switch-container">
-            <input type="checkbox" id="np-toggle-autoscroll" checked>
-            <span class="np-switch-slider"></span>
-          </div>
-        </label>
+          <label class="np-switch-row">
+            <div class="np-switch-meta">
+              <span class="np-switch-label">Auto-scroll to spoken text</span>
+              <span class="np-switch-subtext">Keep spoken paragraph smoothly centered in view</span>
+            </div>
+            <div class="np-switch-container">
+              <input type="checkbox" id="np-toggle-autoscroll" checked>
+              <span class="np-switch-slider"></span>
+            </div>
+          </label>
 
-        <!-- LitRPG Stat-Box Audio HUD Bypass -->
-        <label class="np-switch-row" title="Bypasses repetitive numerical tables in narration while keeping full glowing cards visible">
-          <span class="np-switch-label">LitRPG Stat-Box Audio Bypass <span style="display:block; font-size:0.71rem; color:#a1a1aa; font-weight:400; margin-top:0.1rem;">Skip drone of numbers; recite narrative summary</span></span>
-          <div class="np-switch-container">
-            <input type="checkbox" id="np-toggle-bypass-stats" checked>
-            <span class="np-switch-slider"></span>
-          </div>
-        </label>
-      </div>
-
-      <!-- Offline Battery-Saver Audio Download -->
-      <div style="padding: 0.55rem 1rem 0.25rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255, 255, 255, 0.08); margin-top: 0.35rem;">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <span style="font-size: 0.76rem; font-weight: 700; color: #a1a1aa; letter-spacing: 0.04em;">OFFLINE RUNWAY</span>
-          <span id="lbl-runway-battery-badge" class="runway-battery-badge" style="display:none;" title="Modem sleeping in ultra-low power idle">⚡ Runway: 10 Paras</span>
+          <label class="np-switch-row" title="Bypasses repetitive numerical tables in narration while keeping full glowing cards visible">
+            <div class="np-switch-meta">
+              <span class="np-switch-label">LitRPG Stat-Box Audio Bypass</span>
+              <span class="np-switch-subtext">Skip drone of numbers; recite narrative summary</span>
+            </div>
+            <div class="np-switch-container">
+              <input type="checkbox" id="np-toggle-bypass-stats" checked>
+              <span class="np-switch-slider"></span>
+            </div>
+          </label>
         </div>
-        <button type="button" id="btn-preload-chapter-audio" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); color: #d8b4fe; padding: 0.32rem 0.75rem; border-radius: 9999px; font-size: 0.76rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.35rem; transition: all 0.2s ease;">
-          <span>⚡</span> <span id="lbl-preload-status">Preload Chapter Audio</span>
-        </button>
+
+        <!-- Offline Battery-Saver & Preload Runway Bar -->
+        <div class="np-runway-bar">
+          <div class="np-runway-telemetry">
+            <span style="font-weight: 800; color: #a1a1aa;">OFFLINE RUNWAY:</span>
+            <span id="lbl-runway-battery-badge" class="runway-battery-badge" style="display:none;" title="Modem sleeping in ultra-low power idle">⚡ Ready</span>
+          </div>
+          <button type="button" id="btn-preload-chapter-audio" class="np-preload-btn">
+            <span>⚡</span> <span id="lbl-preload-status">Preload Chapter</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -456,13 +497,12 @@
       <!-- Next Paragraph -->
       <button type="button" class="np-circle-icon-btn" id="np-btn-next" title="Next Paragraph (K)">⏭</button>
       
-      <!-- Settings / Collapse Toggle Button (Exact down chevron matching Novel Phoenix) -->
+      <!-- Settings / Collapse Toggle Button -->
       <button type="button" class="np-circle-icon-btn" id="np-btn-settings-toggle" title="Collapse / Expand Panel">
         <span id="np-settings-toggle-icon">▼</span>
       </button>
     </div>
   </div>
-
   <!-- Inbuilt Floating Reader Extension Dock / HUD (Premium Native Tool) -->
   <aside class="reader-extension-dock" id="reader-extension-dock" aria-label="Quick Reader Dock">
     <div class="dock-pill-main">
@@ -599,6 +639,6 @@
   </div>
 
   <script src="/static/js/dexie.min.js?v=46"></script>
-  <script src="/static/js/reader.js?v=46"></script>
+  <script src="/static/js/reader.js?v=47"></script>
 </body>
 </html>
