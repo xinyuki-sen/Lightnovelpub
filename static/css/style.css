@@ -2501,7 +2501,6 @@ a {
     height: 46px;
     font-size: 1.1rem;
   }
-  }
 
   .np-audio-title-group {
     gap: 0.6rem;
@@ -5143,4 +5142,47 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   color: var(--text-secondary);
   line-height: 1.6;
   margin-bottom: 1.6rem;
+}
+
+@media (max-width: 480px) {
+  .empty-chapter-notice-card {
+    margin: 2rem 0.75rem !important;
+    padding: 1.75rem 1.15rem !important;
+    border-radius: 16px !important;
+    max-width: calc(100vw - 1.5rem) !important;
+    box-sizing: border-box !important;
+  }
+  .empty-notice-icon {
+    font-size: 2.5rem !important;
+  }
+  .empty-notice-title {
+    font-size: 1.1rem !important;
+  }
+  .empty-notice-desc {
+    font-size: 0.88rem !important;
+    line-height: 1.5 !important;
+    margin-bottom: 1.3rem !important;
+  }
+}
+
+/* GLOBAL RESPONSIVE SAFETY HARNESS (ALL DEVICE TIERS) */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (max-width: 360px) {
+  .dock-btn {
+    padding: 3px 5px !important;
+    font-size: 0.68rem !important;
+  }
+  .dock-stepper-val {
+    min-width: 24px !important;
+    font-size: 0.68rem !important;
+  }
+  .np-hero-play-btn {
+    width: 42px !important;
+    height: 42px !important;
+  }
 }
