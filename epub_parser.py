@@ -6,6 +6,35 @@ import os
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 
+def natural_sort_key(s: str):
+    """Sorts strings containing numbers in human order: ch1, ch2, ch10 (not ch1, ch10, ch2)."""
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
+
+IGNORE_TITLES = {
+    "cover", "title page", "title", "copyright", "also in series",
+    "contents", "table of contents", "toc", "dedication", "acknowledgments",
+    "acknowledgements", "about the author", "author's note",
+    "thank you for reading", "groups", "litrpg", "about the publisher",
+    "newsletter", "patreon", "discord", "other books", "preview of",
+    "sneak peek", "review", "connect with", "glossary", "advertisement",
+    "about this book", "more books by", "also by", "praise for", "epigraph",
+    "frontmatter", "backmatter", "publisher notes", "publisher's note",
+    "disclaimer", "map", "dramatis personae", "cast of characters"
+}
+
+def is_ignored_title(title: str, novel_title: str) -> bool:
+    t = title.strip().lower()
+    nt = novel_title.strip().lower()
+    if t == nt:
+        return True
+    t_clean = re.sub(r'[^a-z0-9\s]', '', t).strip()
+    for ign in IGNORE_TITLES:
+        ign_clean = re.sub(r'[^a-z0-9\s]', '', ign).strip()
+        if t_clean == ign_clean or t_clean.startswith(ign_clean):
+            return True
+    return False
+
+
 class SimpleHTMLTextExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -153,9 +182,18 @@ def extract_epub_chapters(epub_path: str):
             if not item:
                 continue
             
+            # Skip EPUB3 Navigation document and NCX Table of Contents files
+            item_props = str(item.get('properties', '')).lower()
+            if 'nav' in item_props or item_id.lower() in ('nav', 'toc', 'ncx'):
+                continue
+            
             href = item['href']
             # Only process html / xhtml documents
             if not any(href.lower().endswith(ext) for ext in ('.html', '.xhtml', '.htm', '.xml')):
+                continue
+            
+            href_lower = href.lower()
+            if any(href_lower.endswith(k) for k in ('toc.xhtml', 'toc.html', 'nav.xhtml', 'contents.xhtml', 'table_of_contents.xhtml')):
                 continue
 
             full_path = os.path.normpath(os.path.join(opf_dir, href)).replace('\\', '/')
@@ -174,15 +212,21 @@ def extract_epub_chapters(epub_path: str):
                     continue
 
                 total_words = sum(len(p.split()) for p in parser.paragraphs)
-                if total_words < 15 and ch_num == 1:
-                    # Likely a title page or copyright notice
-                    continue
-
                 # Determine Chapter Title
-                ch_title = parser.headings[0] if parser.headings else f"Chapter {ch_num}"
-                # Clean up heading if it's very long
-                if len(ch_title) > 90:
+                ch_title = parser.headings[0] if parser.headings else ""
+                if not ch_title and parser.paragraphs:
+                    # Check first paragraph for explicit chapter marker
+                    first_p = parser.paragraphs[0].strip()
+                    m_ch = re.match(r'^(?:(?:Chapter|Ch\.|Volume|Vol\.|Book|Part|Act)\s+[\dIVXLCDM]+.*)$', first_p, re.IGNORECASE)
+                    if m_ch and len(first_p) <= 85:
+                        ch_title = first_p
+                if not ch_title or len(ch_title) > 90:
                     ch_title = f"Chapter {ch_num}"
+
+                # Skip frontmatter/divider pages (< 80 words or ignored title)
+                if total_words < 80 or is_ignored_title(ch_title, title):
+                    if ch_num <= 3 or total_words < 40:
+                        continue
 
                 divided_content = split_chapter_paragraphs(parser.paragraphs, max_chars=480)
                 chapters.append({
@@ -197,7 +241,7 @@ def extract_epub_chapters(epub_path: str):
 
         # Fallback: if no chapters were parsed via spine, parse any HTML files in the zip
         if not chapters:
-            html_files = sorted([n for n in namelist if n.endswith(('.xhtml', '.html', '.htm'))])
+            html_files = sorted([n for n in namelist if n.endswith(('.xhtml', '.html', '.htm'))], key=natural_sort_key)
             for hf in html_files:
                 try:
                     html_bytes = zf.read(hf)
@@ -214,8 +258,8 @@ def extract_epub_chapters(epub_path: str):
                 except Exception:
                     pass
 
-        # Strip any leading stub chapters (cover / title / dedication pages with < 80 words)
-        while chapters and len(chapters) > 1 and chapters[0].get("word_count", 0) < 80:
+        # Strip any leading stub chapters (cover / title / dedication pages with < 100 words)
+        while chapters and len(chapters) > 1 and (chapters[0].get("word_count", 0) < 100 or is_ignored_title(chapters[0].get("title", ""), title)):
             print(f"[EPUB Parser] Dropped frontmatter stub chapter '{chapters[0]['title']}' ({chapters[0].get('word_count', 0)} words)")
             chapters.pop(0)
 

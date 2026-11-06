@@ -6,29 +6,55 @@ import base64
 from typing import List, Dict, Tuple, Optional
 from PIL import Image
 
+NUMBER_WORDS = r'(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|hundred)'
+
 CHAPTER_PATTERNS = [
     # Bracketed numbers: [ 1 ], [ 01 ], [1], [ Chapter 1 ]
     re.compile(r'^\s*\[\s*(?:chapter\s+)?(\d+|[ivxlcdm]+)\s*\](?:\s*(.*))?$', re.IGNORECASE),
     # Standard: Chapter 1: The Beginning / Chapter 1 - The Beginning / Ch. 1 / Chapter 1
     re.compile(r'^\s*(?:chapter|ch\.)\s+(\d+|[ivxlcdm]+)(?:[\s:\-–—\.]+(.*))?$', re.IGNORECASE),
-    # Words: Chapter One / Chapter Ninety-Eight
+    # Numbered titles with dot/dash: 1. Starting Somewhere / 4. Starting Somewhere / 1 - The Beginning
+    re.compile(r'^\s*(\d{1,4})\.?\s+([A-Za-z“\"\'‘].*)$'),
+    # Volume and Chapter combined: Volume 1 Chapter 1 / Vol 1, Ch 2
+    re.compile(r'^\s*(?:vol(?:ume)?\.?\s*(\d+|[ivxlcdm]+)[,:\s\-–—]+)?(?:ch(?:apter)?\.?\s*(\d+|[ivxlcdm]+))(?:\s*[:\-–—\.]\s*(.*))?$', re.IGNORECASE),
+    # Standalone Volume / Book / Arc / Part division: Volume 1 / Book 2 - The Empire / Part 1 / Arc 3
+    re.compile(r'^\s*(?:volume|vol\.|book|arc|part|act)\s+(\d+|[ivxlcdm]+)(?:\s*[:\-–—\.]\s*(.*))?$', re.IGNORECASE),
+    # Words: Chapter One / Chapter Ninety-Eight / Chapter 45
     re.compile(r'^\s*(?:chapter)\s+([a-z\-\s]+)(?:[\s:\-–—\.]+(.*))?$', re.IGNORECASE),
     # Standalone number words or headings on line
-    re.compile(r'^\s*(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|prologue|epilogue|interlude|introduction|preface)\s*$', re.IGNORECASE),
-    # Volume 1 Chapter 1 / Act 1 / Part 1 / Book 1
-    re.compile(r'^\s*(?:volume\s+\d+\s+)?(?:act|chapter|part|book)\s+(\d+|[ivxlcdm]+)(?:[\s:\-–—\.]+(.*))?$', re.IGNORECASE),
+    re.compile(rf'^\s*(?:chapter\s+)?({NUMBER_WORDS}|prologue|epilogue|interlude|introduction|preface)(?:\s*[:\-–—\.]\s*(.*))?$', re.IGNORECASE),
+    # Roman numerals with title: I. The Beginning / IV - Retribution
+    re.compile(r'^\s*(?:chapter\s+)?([IVXLCDM]{1,8})\.?\s*(?:[:\-–—\.]\s*(.+))?$', re.IGNORECASE),
 ]
 
 PAGE_NUMBER_PATTERN = re.compile(r'^(?:page\s+)?[-–—]?\s*\d+\s*[-–—]?$', re.IGNORECASE)
 
 IGNORE_TITLES = {
     "cover", "title page", "title", "copyright", "also in series",
-    "contents", "table of contents", "dedication", "acknowledgments",
+    "contents", "table of contents", "toc", "dedication", "acknowledgments",
     "acknowledgements", "about the author", "author's note",
     "thank you for reading", "groups", "litrpg", "about the publisher",
     "newsletter", "patreon", "discord", "other books", "preview of",
-    "sneak peek", "review", "connect with", "glossary", "advertisement"
+    "sneak peek", "review", "connect with", "glossary", "advertisement",
+    "about this book", "more books by", "also by", "praise for", "epigraph",
+    "frontmatter", "backmatter", "publisher notes", "publisher's note",
+    "disclaimer", "map", "dramatis personae", "cast of characters"
 }
+
+def is_toc_page_lines(lines: List[str]) -> bool:
+    """Detects whether a set of lines belongs to an in-text Table of Contents page."""
+    if not lines:
+        return False
+    first_few = " ".join(lines[:4]).lower()
+    if any(k in first_few for k in ["table of contents", "contents", "index"]):
+        return True
+    match_count = 0
+    for l in lines:
+        if len(l) <= 85 and any(pat.match(l) for pat in CHAPTER_PATTERNS):
+            match_count += 1
+            if match_count >= 3:
+                return True
+    return False
 
 def is_ignored_title(title: str, novel_title: str) -> bool:
     t = title.strip().lower()
@@ -392,7 +418,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, str, List[Dict[str, any]]
             full_str = " ".join(paragraphs).lower()
             if any(k in full_str for k in ["subscribepage.com", "discord server", "facebook | instagram", "amazon product page"]) and word_count < 250:
                 continue
-            if word_count < 40:
+            if word_count < 80 or is_ignored_title(bm_title, title):
                 continue
 
             raw_chapters.append({
@@ -408,7 +434,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, str, List[Dict[str, any]]
             final_chapters.append(ch)
 
         # Strip any leading stub chapters (cover / title / dedication pages with < 80 words)
-        while final_chapters and len(final_chapters) > 1 and final_chapters[0]["word_count"] < 80:
+        while final_chapters and len(final_chapters) > 1 and (final_chapters[0]["word_count"] < 100 or is_ignored_title(final_chapters[0]["title"], title)):
             print(f"[PDF Parser] Dropped frontmatter stub chapter '{final_chapters[0]['title']}' ({final_chapters[0]['word_count']} words)")
             final_chapters.pop(0)
 
@@ -476,7 +502,7 @@ def extract_pdf_chapters(file_path: str) -> Tuple[str, str, List[Dict[str, any]]
         final_chapters.append(ch)
 
     # Strip any leading stub chapters (cover / title / dedication pages with < 80 words)
-    while final_chapters and len(final_chapters) > 1 and final_chapters[0]["word_count"] < 80:
+    while final_chapters and len(final_chapters) > 1 and (final_chapters[0]["word_count"] < 100 or is_ignored_title(final_chapters[0]["title"], title)):
         print(f"[PDF Parser] Dropped frontmatter stub chapter '{final_chapters[0]['title']}' ({final_chapters[0]['word_count']} words)")
         final_chapters.pop(0)
 
