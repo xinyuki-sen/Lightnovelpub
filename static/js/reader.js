@@ -1400,6 +1400,15 @@ function initReader() {
 
         });
 
+        // Version-gated audio cache migration: flush any old compounded-speed audio blobs
+        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v53') {
+          try {
+            novelDb.audioCache.clear().then(() => {
+              localStorage.setItem('novel_reader_audio_cache_version', 'v53');
+            }).catch(() => {});
+          } catch (e) {}
+        }
+
         // Client-Side Authoritative Hydration: Load chapter & full TOC from Dexie
         if (novelDb && novelSlug) {
           async function loadLocalChapters() {
@@ -2164,7 +2173,10 @@ function initReader() {
 
     // Saved audio & display states
 
-    const savedRate = parseFloat(localStorage.getItem('novel_reader_audio_rate') || '1.0');
+    let savedRate = parseFloat(localStorage.getItem('novel_reader_audio_rate') || '1.0');
+    if (isNaN(savedRate) || savedRate < 0.5 || savedRate > 2.5) {
+      savedRate = 1.0;
+    }
 
     const savedPitch = parseFloat(localStorage.getItem('novel_reader_audio_pitch') || '1.0');
 
@@ -2179,6 +2191,8 @@ function initReader() {
     const savedAutoNext = localStorage.getItem('novel_reader_autonext') !== 'false';
 
     const savedAutoScroll = localStorage.getItem('novel_reader_autoscroll') !== 'false';
+
+    const savedEngineMode = localStorage.getItem('novel_reader_engine_mode') || 'infinite';
 
 
 
@@ -2254,6 +2268,43 @@ function initReader() {
 
       } catch (e) { }
 
+      stopSpeechWatchdog();
+
+    }
+
+    // Novel Phoenix Engine: 1500ms Android Watchdog & iOS Audio Warmer
+    let speechWatchdogInterval = null;
+    function startSpeechWatchdog() {
+      stopSpeechWatchdog();
+      speechWatchdogInterval = setInterval(() => {
+        if (!audioState.isPlaying || audioState.isPaused || !isSpeechSupported) return;
+        if (synth && synth.paused) {
+          try { synth.resume(); } catch (e) {}
+          return;
+        }
+        if (synth && !synth.speaking && !synth.pending && window.__activeNovelUtterance) {
+          // Android dropped the audio thread without firing onend -> revive immediately!
+          speakParagraph(audioState.currentIndex, true);
+        }
+      }, 1500);
+    }
+
+    function stopSpeechWatchdog() {
+      if (speechWatchdogInterval) {
+        clearInterval(speechWatchdogInterval);
+        speechWatchdogInterval = null;
+      }
+    }
+
+    function keepEngineWarm() {
+      const isApple = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent || '');
+      if (!isApple || !isSpeechSupported || !synth) return;
+      try {
+        const dummy = new SpeechSynthesisUtterance(' ');
+        dummy.volume = 0;
+        dummy.rate = 2;
+        synth.speak(dummy);
+      } catch (e) {}
     }
 
 
@@ -2347,6 +2398,8 @@ function initReader() {
       autoNext: savedAutoNext,
 
       autoScroll: savedAutoScroll,
+
+      engineMode: savedEngineMode,
 
       wakeLock: null,
 
@@ -2804,21 +2857,19 @@ function initReader() {
 
 
     function setAudioRate(newRate) {
-
-      audioState.rate = newRate;
-
-      updateSpeedDisplays(newRate);
-
-      localStorage.setItem('novel_reader_audio_rate', String(newRate));
-
-      if (activeHtml5Audio) {
-
-        activeHtml5Audio.playbackRate = newRate;
-
+      const safeRate = Math.min(2.5, Math.max(0.5, Math.round(newRate * 100) / 100));
+      audioState.rate = safeRate;
+      updateSpeedDisplays(safeRate);
+      localStorage.setItem('novel_reader_audio_rate', String(safeRate));
+      const master = getMasterAudio();
+      if (master) {
+        master.defaultPlaybackRate = safeRate;
+        master.playbackRate = safeRate;
       }
-
-      clearPrefetchedAudio();
-
+      if (activeHtml5Audio) {
+        activeHtml5Audio.defaultPlaybackRate = safeRate;
+        activeHtml5Audio.playbackRate = safeRate;
+      }
     }
 
 
@@ -2844,6 +2895,31 @@ function initReader() {
     }
 
 
+
+    // Narration Engine Tabs (Studio Neural vs Infinite Local)
+    const npEngineNeural = document.getElementById('np-engine-neural');
+    const npEngineInfinite = document.getElementById('np-engine-infinite');
+
+    function setEngineMode(mode) {
+      audioState.engineMode = mode;
+      localStorage.setItem('novel_reader_engine_mode', mode);
+
+      if (npEngineNeural) npEngineNeural.classList.toggle('active', mode === 'neural');
+      if (npEngineInfinite) npEngineInfinite.classList.toggle('active', mode === 'infinite');
+
+      if (audioState.isPlaying && !audioState.isPaused) {
+        stopSpeech();
+        speakParagraph(audioState.currentIndex, false);
+      }
+    }
+
+    if (npEngineNeural) {
+      npEngineNeural.addEventListener('click', () => setEngineMode('neural'));
+    }
+    if (npEngineInfinite) {
+      npEngineInfinite.addEventListener('click', () => setEngineMode('infinite'));
+    }
+    setEngineMode(savedEngineMode);
 
     // Highlight Tabs
 
@@ -3576,6 +3652,8 @@ function initReader() {
 
       }
 
+      stopSpeechWatchdog();
+
     }
 
 
@@ -3916,7 +3994,7 @@ function initReader() {
 
       if (prefetchInFlight.has(idx)) return null;
 
-
+      if (audioState.engineMode === 'infinite') return null;
 
       const currentVoice = audioState.selectedVoice || NEURAL_VOICES[0];
 
@@ -3984,9 +4062,9 @@ function initReader() {
 
             voice: currentVoice.edgeVoice || 'en-US-ChristopherNeural',
 
-            rate: audioState.rate || 1.0,
+            rate: 1.0,
 
-            pitch: audioState.pitch || 1.0
+            pitch: 1.0
 
           })
 
@@ -4623,7 +4701,16 @@ function initReader() {
 
       updatePlayStateUI(true);
 
-
+      // NOVEL PHOENIX INFINITE LOCAL ENGINE:
+      // When in 'infinite' mode, synthesize 100% on-device! Zero network roundtrips!
+      if (audioState.engineMode === 'infinite') {
+        startSpeechWatchdog();
+        keepEngineWarm();
+        requestWakeLock();
+        startAudioPipeline();
+        speakParagraphWebSpeech(index, textToSpeak, targetNode, currentEpoch);
+        return;
+      }
 
       const currentVoice = audioState.selectedVoice || NEURAL_VOICES[0];
 
@@ -4683,9 +4770,9 @@ function initReader() {
 
                 voice: currentVoice.edgeVoice || 'en-US-ChristopherNeural',
 
-                rate: isSystemCard ? (audioState.rate || 1.0) * 1.04 : (targetNode.classList.contains('reader-thought') ? (audioState.rate || 1.0) * 0.96 : (audioState.rate || 1.0)),
+                rate: 1.0,
 
-                pitch: isSystemCard ? Math.min(1.4, (audioState.pitch || 1.0) * 1.15) : (targetNode.classList.contains('reader-thought') ? Math.max(0.85, (audioState.pitch || 1.0) * 0.94) : (audioState.pitch || 1.0))
+                pitch: 1.0
 
               })
 
@@ -4766,21 +4853,26 @@ function initReader() {
             window.__novelMasterAudio.preload = 'auto';
           }
           activeHtml5Audio = window.__novelMasterAudio;
+          const currentRate = audioState.rate || 1.0;
+          activeHtml5Audio.defaultPlaybackRate = currentRate;
           activeHtml5Audio.src = activeAudioUrl;
+          activeHtml5Audio.playbackRate = currentRate;
 
-          activeHtml5Audio.playbackRate = audioState.rate || 1.0;
+          activeHtml5Audio.onloadedmetadata = () => {
+            activeHtml5Audio.defaultPlaybackRate = audioState.rate || 1.0;
+            activeHtml5Audio.playbackRate = audioState.rate || 1.0;
+          };
 
           const currentPlayVol = audioState.volume !== undefined ? audioState.volume : 1.0;
           activeHtml5Audio.volume = Math.max(0, Math.min(1.0, currentPlayVol));
           applyAudioGraphVolume(currentPlayVol);
 
-
-
           const playStartTime = Date.now();
 
-
-
           activeHtml5Audio.onplay = () => {
+            if (currentEpoch !== audioPlaybackEpoch) return;
+            activeHtml5Audio.defaultPlaybackRate = audioState.rate || 1.0;
+            activeHtml5Audio.playbackRate = audioState.rate || 1.0;
 
             if (currentEpoch !== audioPlaybackEpoch) return;
 
@@ -5523,6 +5615,7 @@ function initReader() {
         return;
       }
       if (navigator.onLine === false) return;
+      if (audioState.engineMode === 'infinite') return;
 
       const currentVoice = audioState.selectedVoice || NEURAL_VOICES[0];
       if (!currentVoice || !currentVoice.isNeural) return;
@@ -5572,6 +5665,8 @@ function initReader() {
       if (prefetchedAudioMap.has(idx)) return prefetchedAudioMap.get(idx);
       if (prefetchInFlight.has(idx)) return null;
 
+      if (audioState.engineMode === 'infinite') return null;
+
       const currentVoice = audioState.selectedVoice || NEURAL_VOICES[0];
       if (!currentVoice || !currentVoice.isNeural) return null;
 
@@ -5608,8 +5703,8 @@ function initReader() {
           body: JSON.stringify({
             text: textToPrefetch,
             voice: currentVoice.edgeVoice || 'en-US-ChristopherNeural',
-            rate: audioState.rate || 1.0,
-            pitch: audioState.pitch || 1.0
+            rate: 1.0,
+            pitch: 1.0
           })
         });
 
@@ -5744,9 +5839,18 @@ function initReader() {
     // =========================================================================
     function sanitizeSpeechText(rawText, targetNode) {
       if (!rawText) return '';
+
+      // Novel Phoenix Symbol Cleaner: Strip decorative scene breaks (***, ~~~, ◆◆◆, ★☆★, ════, etc.)
+      const decorativeLineRegex = /^[\s\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\-—–\.\:\/\u2500-\u257F═]{2,}$/gm;
+      let cleaned = rawText.replace(decorativeLineRegex, ' ');
+      // Replace inline decorative symbol clusters with a clean pause comma
+      cleaned = cleaned.replace(/(\s*[\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\u2500-\u257F═]{2,}\s*)/g, ', ');
+      cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+      if (!cleaned) return '';
+
       const bypassToggle = document.getElementById('np-toggle-bypass-stats');
       const isBypassEnabled = bypassToggle ? bypassToggle.checked : true;
-      if (!isBypassEnabled) return rawText;
+      if (!isBypassEnabled) return cleaned;
 
       const isSystemNode = targetNode && (
         targetNode.classList.contains('reader-system-card') ||
@@ -5812,7 +5916,7 @@ function initReader() {
         return 'System notification: Status window updated.';
       }
 
-      return rawText;
+      return cleaned;
     }
 
     // =========================================================================

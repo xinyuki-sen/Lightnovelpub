@@ -435,12 +435,11 @@ async def generate_tts(req: TTSRequest):
     if len(text) > 3600:
         text = text[:3600]
 
-    rate_percent = int((req.rate - 1.0) * 100)
-    rate_str = f"{rate_percent:+d}%"
-
-    pitch_val = req.pitch if req.pitch is not None else 1.0
-    pitch_hz = int((pitch_val - 1.0) * 50)
-    pitch_str = f"{pitch_hz:+d}Hz"
+    # Master studio audio is generated at pure 1.0x baseline reference (+0%) and neutral pitch (+0Hz).
+    # Real-time client-side HTML5 playbackRate dynamically handles speed smoothly and predictably,
+    # completely eliminating compound-speed exponential chipmunk bugs and cache invalidation.
+    rate_str = "+0%"
+    pitch_str = "+0Hz"
 
     raw_vol = req.volume.strip() if req.volume else "+20%"
     if not raw_vol.endswith("%"):

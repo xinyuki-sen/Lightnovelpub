@@ -4,16 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#09090b">
-  <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v=51">
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png?v=51">
-  <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png?v=51">
-  <link rel="icon" type="image/png" sizes="192x192" href="/static/img/icon-192.png?v=51">
-  <link rel="icon" type="image/png" sizes="512x512" href="/static/img/icon-512.png?v=51">
-  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v=51">
-  <link rel="apple-touch-icon" href="/static/img/logo.png?v=51">
-  <link rel="manifest" href="/static/manifest.json?v=51">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v=53">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png?v=53">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png?v=53">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/img/icon-192.png?v=53">
+  <link rel="icon" type="image/png" sizes="512x512" href="/static/img/icon-512.png?v=53">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v=53">
+  <link rel="apple-touch-icon" href="/static/img/logo.png?v=53">
+  <link rel="manifest" href="/static/manifest.json?v=53">
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=51">
+  <link rel="stylesheet" href="/static/css/style.css?v=53">
 </head>
 <body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-total-chapters="{{ novel.total_chapters or 0 }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
@@ -336,6 +336,19 @@
     <div class="np-audio-settings-body open" id="np-audio-settings-panel">
       <!-- TAB 1: Voice & Sound -->
       <div class="np-tab-pane active" id="np-tab-pane-audio">
+        <!-- Row 0: Audio Engine Mode Toggle (Novel Phoenix vs Studio Neural) -->
+        <div class="np-setting-field" style="margin-bottom: 0.65rem;">
+          <label class="np-field-label">NARRATION ENGINE</label>
+          <div class="np-segmented-tabs">
+            <button type="button" class="np-seg-tab active" data-engine="neural" id="np-engine-neural" title="Studio AI Voice + 140% Volume Boost + Screen-off Playback">
+              <span>🎙️ Studio Neural</span>
+            </button>
+            <button type="button" class="np-seg-tab" data-engine="infinite" id="np-engine-infinite" title="Novel Phoenix 100% On-Device Engine (Zero Network Lag, Never Stops)">
+              <span>⚡ Infinite Local</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Row 1: Language & Voice -->
         <div class="np-settings-grid-2">
           <div class="np-setting-field">
@@ -638,7 +651,7 @@
     </div>
   </div>
 
-  <script src="/static/js/dexie.min.js?v=51"></script>
-  <script src="/static/js/reader.js?v=51"></script>
+  <script src="/static/js/dexie.min.js?v=53"></script>
+  <script src="/static/js/reader.js?v=53"></script>
 </body>
 </html>
