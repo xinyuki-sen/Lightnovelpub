@@ -975,6 +975,26 @@ function initReader() {
       let nextNum = parseInt(nextCh || '0', 10);
       const totalChapters = parseInt(document.body.getAttribute('data-total-chapters') || '0', 10);
 
+      // Robust fallback against chapter dropdown options
+      const chDropdown = document.getElementById('chapter-select-dropdown');
+      if (chDropdown && chDropdown.options && chDropdown.options.length > 1) {
+        const chNums = Array.from(chDropdown.options)
+          .map(o => {
+            const m = (o.value || '').match(/\/chapter\/(\d+)/);
+            return m ? parseInt(m[1], 10) : 0;
+          })
+          .filter(n => n > 0);
+        const curIdx = chNums.indexOf(Number(currentChapterNum));
+        if (curIdx !== -1) {
+          if (!prevNum || prevNum <= 0) {
+            prevNum = curIdx > 0 ? chNums[curIdx - 1] : 0;
+          }
+          if (!nextNum || nextNum <= 0) {
+            nextNum = curIdx < chNums.length - 1 ? chNums[curIdx + 1] : 0;
+          }
+        }
+      }
+
       if ((!prevNum || prevNum <= 0) && currentChapterNum > 1) {
         prevNum = currentChapterNum - 1;
       }
@@ -1070,6 +1090,9 @@ function initReader() {
         }
 
         document.body.setAttribute('data-chapter-num', String(data.chapter_number));
+        if (data.total_chapters && data.total_chapters > 0) {
+          document.body.setAttribute('data-total-chapters', String(data.total_chapters));
+        }
         document.body.setAttribute('data-next-num', nextNum && nextNum > 0 ? String(nextNum) : '');
         document.body.setAttribute('data-prev-num', prevNum && prevNum > 0 ? String(prevNum) : '');
         nextChapterUrl = nextNum && nextNum > 0 ? `/novel/${novelSlug}/chapter/${nextNum}` : '';
@@ -1188,6 +1211,19 @@ function initReader() {
         }
         let prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
         if (!prevNum || isNaN(prevNum) || prevNum <= 0) {
+          const chDropdown = document.getElementById('chapter-select-dropdown');
+          if (chDropdown && chDropdown.options && chDropdown.options.length > 1) {
+            const chNums = Array.from(chDropdown.options)
+              .map(o => {
+                const m = (o.value || '').match(/\/chapter\/(\d+)/);
+                return m ? parseInt(m[1], 10) : 0;
+              })
+              .filter(n => n > 0);
+            const curIdx = chNums.indexOf(Number(currentChapterNum));
+            if (curIdx > 0) prevNum = chNums[curIdx - 1];
+          }
+        }
+        if (!prevNum || isNaN(prevNum) || prevNum <= 0) {
           prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
         }
         if (prevNum > 0) {
@@ -1206,6 +1242,21 @@ function initReader() {
         }
         const totalChapters = parseInt(document.body.getAttribute('data-total-chapters') || '0', 10);
         let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+        if (!nextNum || isNaN(nextNum) || nextNum <= 0) {
+          const chDropdown = document.getElementById('chapter-select-dropdown');
+          if (chDropdown && chDropdown.options && chDropdown.options.length > 1) {
+            const chNums = Array.from(chDropdown.options)
+              .map(o => {
+                const m = (o.value || '').match(/\/chapter\/(\d+)/);
+                return m ? parseInt(m[1], 10) : 0;
+              })
+              .filter(n => n > 0);
+            const curIdx = chNums.indexOf(Number(currentChapterNum));
+            if (curIdx !== -1 && curIdx < chNums.length - 1) {
+              nextNum = chNums[curIdx + 1];
+            }
+          }
+        }
         if (!nextNum || isNaN(nextNum) || nextNum <= 0) {
           if (totalChapters === 0 || currentChapterNum < totalChapters) {
             nextNum = currentChapterNum + 1;
@@ -1364,6 +1415,9 @@ function initReader() {
 
           loadLocalChapters().then(allLocalChs => {
             const chDropdown = document.getElementById('chapter-select-dropdown');
+            const serverTotal = parseInt(document.body.getAttribute('data-total-chapters') || '0', 10);
+            const serverOptionsCount = chDropdown && chDropdown.options ? chDropdown.options.length : 0;
+
             if (allLocalChs && allLocalChs.length > 0) {
               allLocalChs.sort((a, b) => Number(a.chapterNumber) - Number(b.chapterNumber));
               // Prune leading frontmatter stubs (< 80 words) from local cache if substantive chapters exist
@@ -1375,8 +1429,8 @@ function initReader() {
                 }
               }
 
-              // 1. Populate Table of Contents dropdown selector
-              if (chDropdown) {
+              // Only populate dropdown from Dexie if server did NOT provide a full chapter list (e.g. offline custom novel)
+              if (chDropdown && serverOptionsCount <= 1) {
                 chDropdown.innerHTML = '';
                 allLocalChs.forEach(c => {
                   const opt = document.createElement('option');
@@ -1386,26 +1440,63 @@ function initReader() {
                   if (cNum === Number(currentChapterNum)) opt.selected = true;
                   chDropdown.appendChild(opt);
                 });
+              }
+
+              // Always select current chapter in dropdown
+              if (chDropdown) {
                 chDropdown.value = `/novel/${novelSlug}/chapter/${currentChapterNum}`;
               }
 
-              // 2. Resolve Previous & Next Chapter targets with resilient type casting
-              const curIdx = allLocalChs.findIndex(c => Number(c.chapterNumber) === Number(currentChapterNum));
-              let prevNum = 0;
-              let nextNum = 0;
-              if (curIdx !== -1) {
-                prevNum = curIdx > 0 ? Number(allLocalChs[curIdx - 1].chapterNumber) : 0;
-                nextNum = curIdx < allLocalChs.length - 1 ? Number(allLocalChs[curIdx + 1].chapterNumber) : 0;
+              // Determine true total chapters (never downgrade server total with partial local cache)
+              const trueTotal = Math.max(serverTotal, allLocalChs ? allLocalChs.length : 0);
+              if (trueTotal > 0) {
+                document.body.setAttribute('data-total-chapters', String(trueTotal));
+              }
+
+              // Resolve Previous & Next Chapter targets reliably
+              let prevNum = parseInt(document.body.getAttribute('data-prev-num') || '0', 10);
+              let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
+
+              // If chapter dropdown has options, use them as authoritative source for sequence
+              if (chDropdown && chDropdown.options && chDropdown.options.length > 1) {
+                const chNums = Array.from(chDropdown.options)
+                  .map(o => {
+                    const m = (o.value || '').match(/\/chapter\/(\d+)/);
+                    return m ? parseInt(m[1], 10) : 0;
+                  })
+                  .filter(n => n > 0);
+
+                const curIdx = chNums.indexOf(Number(currentChapterNum));
+                if (curIdx !== -1) {
+                  prevNum = curIdx > 0 ? chNums[curIdx - 1] : 0;
+                  nextNum = curIdx < chNums.length - 1 ? chNums[curIdx + 1] : 0;
+                }
               } else {
+                const curIdx = allLocalChs.findIndex(c => Number(c.chapterNumber) === Number(currentChapterNum));
+                if (curIdx !== -1) {
+                  prevNum = curIdx > 0 ? Number(allLocalChs[curIdx - 1].chapterNumber) : 0;
+                  nextNum = curIdx < allLocalChs.length - 1 ? Number(allLocalChs[curIdx + 1].chapterNumber) : 0;
+                }
+              }
+
+              // Fallback if not resolved from dropdown
+              if (!prevNum || prevNum <= 0) {
                 prevNum = currentChapterNum > 1 ? currentChapterNum - 1 : 0;
-                nextNum = currentChapterNum + 1;
+              }
+              if (!nextNum || nextNum <= 0) {
+                if (trueTotal === 0 || currentChapterNum < trueTotal) {
+                  nextNum = currentChapterNum + 1;
+                } else {
+                  nextNum = 0;
+                }
               }
 
               document.body.setAttribute('data-prev-num', prevNum > 0 ? String(prevNum) : '');
               document.body.setAttribute('data-next-num', nextNum > 0 ? String(nextNum) : '');
               document.body.setAttribute('data-prev-url', prevNum > 0 ? `/novel/${novelSlug}/chapter/${prevNum}` : '');
               document.body.setAttribute('data-next-url', nextNum > 0 ? `/novel/${novelSlug}/chapter/${nextNum}` : '');
-              document.body.setAttribute('data-total-chapters', String(allLocalChs.length));
+              nextChapterUrl = nextNum > 0 ? `/novel/${novelSlug}/chapter/${nextNum}` : '';
+
               updateNavButtons(prevNum, nextNum);
 
               // 3. Populate Chapter Content if not rendered by server or if server rendered fallback
