@@ -881,7 +881,7 @@ function initReader() {
             cached = await novelDb.chapters.get([novelSlug.toLowerCase(), num]).catch(() => null);
           }
           if (!cached) {
-            cached = await novelDb.chapters.filter(c => 
+            cached = await novelDb.chapters.filter(c =>
               c.novelSlug && (
                 c.novelSlug.toLowerCase() === novelSlug.toLowerCase() ||
                 c.novelSlug.toLowerCase().includes(novelSlug.toLowerCase()) ||
@@ -1038,14 +1038,20 @@ function initReader() {
       if (Number(targetChapterNum) === Number(currentChapterNum)) return;
       isChapterLoading = true;
 
+      const wasAudioActive = continueAudio || (audioState && audioState.isPlaying && !audioState.isPaused);
+
+      // Abort all in-flight network TTS requests and silence departing chapter immediately
+      stopSpeech();
+      clearPrefetchedAudio();
+
       // Retain Android media playback focus during async transitions
-      if (continueAudio || (audioState && audioState.isPlaying && !audioState.isPaused)) {
+      if (wasAudioActive) {
         try {
           const pipe = getSilentAudioPipe();
           if (pipe && pipe.paused) {
-            pipe.play().catch(() => {});
+            pipe.play().catch(() => { });
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const progBar = document.getElementById('reader-progress-bar');
@@ -1180,6 +1186,7 @@ function initReader() {
             speakParagraph(0, false);
           }, 120);
         }
+        pruneAudioCache(novelSlug, currentChapterNum);
 
         prefetchAdjacentChapters(data.chapter_number);
       } catch (err) {
@@ -1400,13 +1407,13 @@ function initReader() {
 
         });
 
-        // Version-gated audio cache migration: flush any old compounded-speed audio blobs
-        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v53') {
+        // Version-gated audio cache migration: flush any cross-chapter or legacy audio blobs
+        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v54') {
           try {
             novelDb.audioCache.clear().then(() => {
-              localStorage.setItem('novel_reader_audio_cache_version', 'v53');
-            }).catch(() => {});
-          } catch (e) {}
+              localStorage.setItem('novel_reader_audio_cache_version', 'v54');
+            }).catch(() => { });
+          } catch (e) { }
         }
 
         // Client-Side Authoritative Hydration: Load chapter & full TOC from Dexie
@@ -1415,7 +1422,7 @@ function initReader() {
             let chs = await novelDb.chapters.filter(c => c.novelSlug && c.novelSlug.toLowerCase() === novelSlug.toLowerCase()).toArray();
             if (!chs || chs.length === 0) {
               chs = await novelDb.chapters.filter(c => c.novelSlug && (
-                c.novelSlug.toLowerCase().includes(novelSlug.toLowerCase()) || 
+                c.novelSlug.toLowerCase().includes(novelSlug.toLowerCase()) ||
                 novelSlug.toLowerCase().includes(c.novelSlug.toLowerCase())
               )).toArray();
             }
@@ -1434,7 +1441,7 @@ function initReader() {
               if (hasSubstantive) {
                 while (allLocalChs.length > 1 && ((allLocalChs[0].word_count && allLocalChs[0].word_count < 80) || (!allLocalChs[0].word_count && (!allLocalChs[0].paragraphs || allLocalChs[0].paragraphs.join(' ').split(/\s+/).length < 80)))) {
                   const dropped = allLocalChs.shift();
-                  try { novelDb.chapters.delete([novelSlug, dropped.chapterNumber]); } catch (e) {}
+                  try { novelDb.chapters.delete([novelSlug, dropped.chapterNumber]); } catch (e) { }
                 }
               }
 
@@ -1524,7 +1531,7 @@ function initReader() {
                   } else {
                     const nextTextChapter = allLocalChs.find(c => Number(c.chapterNumber) > Number(currentChapterNum) && ((c.paragraphs && c.paragraphs.length > 0) || (c.content && c.content.trim().length > 30) || (c.word_count && c.word_count > 30)));
                     const nextChTarget = nextTextChapter ? Number(nextTextChapter.chapterNumber) : (currentChapterNum + 1);
-                    
+
                     if (Number(currentChapterNum) <= 3 && nextChTarget > currentChapterNum) {
                       console.log("Auto-skipping 0-word stub Chapter 1 to Chapter", nextChTarget);
                       navigateToChapter(nextChTarget, audioState && audioState.isPlaying && !audioState.isPaused);
@@ -2067,28 +2074,28 @@ function initReader() {
       try {
         if (!audioGraphInitialized) initAudioGraph();
         if (audioCtx && audioCtx.state === 'suspended') {
-          audioCtx.resume().catch(() => {});
+          audioCtx.resume().catch(() => { });
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     function applyAudioGraphVolume(vol) {
       if (audioGraphMasterGain && audioCtx) {
         try {
           if (audioCtx.state === 'suspended') {
-            audioCtx.resume().catch(() => {});
+            audioCtx.resume().catch(() => { });
           }
           audioGraphMasterGain.gain.setValueAtTime(vol, audioCtx.currentTime);
           if (activeHtml5Audio) {
             activeHtml5Audio.volume = 1.0;
           }
           return;
-        } catch (e) {}
+        } catch (e) { }
       }
       if (activeHtml5Audio) {
         try {
           activeHtml5Audio.volume = Math.max(0, Math.min(1.0, vol));
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -2272,14 +2279,18 @@ function initReader() {
 
     }
 
-    // Novel Phoenix Engine: 1500ms Android Watchdog & iOS Audio Warmer
+    // Novel Phoenix Engine: 1500ms Android Watchdog & iOS Audio Warmer (Strictly Infinite Local mode ONLY)
     let speechWatchdogInterval = null;
     function startSpeechWatchdog() {
       stopSpeechWatchdog();
+      if (!audioState || audioState.engineMode !== 'infinite') return;
       speechWatchdogInterval = setInterval(() => {
-        if (!audioState.isPlaying || audioState.isPaused || !isSpeechSupported) return;
+        if (!audioState.isPlaying || audioState.isPaused || !isSpeechSupported || audioState.engineMode !== 'infinite') {
+          stopSpeechWatchdog();
+          return;
+        }
         if (synth && synth.paused) {
-          try { synth.resume(); } catch (e) {}
+          try { synth.resume(); } catch (e) { }
           return;
         }
         if (synth && !synth.speaking && !synth.pending && window.__activeNovelUtterance) {
@@ -2304,7 +2315,7 @@ function initReader() {
         dummy.volume = 0;
         dummy.rate = 2;
         synth.speak(dummy);
-      } catch (e) {}
+      } catch (e) { }
     }
 
 
@@ -3966,12 +3977,23 @@ function initReader() {
 
     const prefetchInFlight = new Set();
 
+    let chapterAbortController = new AbortController();
 
+    function getAudioKey(chNum, idx) {
+      return `${chNum}:${idx}`;
+    }
 
     function clearPrefetchedAudio() {
-
+      if (chapterAbortController) {
+        chapterAbortController.abort();
+        chapterAbortController = new AbortController();
+      }
+      if (runwayAbortController) {
+        runwayAbortController.abort();
+        runwayAbortController = null;
+      }
       prefetchedAudioMap.clear();
-
+      prefetchInFlight.clear();
     }
 
 
@@ -3979,161 +4001,95 @@ function initReader() {
 
     function prefetchLookaheadRunway(currentIndex) {
       if (!paragraphNodes) return;
+      const ch = currentChapterNum;
       [currentIndex + 1, currentIndex + 2, currentIndex + 3].forEach(targetIdx => {
-        if (targetIdx < paragraphNodes.length && !prefetchedAudioMap.has(targetIdx) && !prefetchInFlight.has(targetIdx)) {
+        const key = getAudioKey(ch, targetIdx);
+        if (targetIdx < paragraphNodes.length && !prefetchedAudioMap.has(key) && !prefetchInFlight.has(key)) {
           prefetchParagraphAudio(targetIdx);
         }
       });
     }
 
     async function prefetchParagraphAudio(idx) {
-
       if (!paragraphNodes || idx < 0 || idx >= paragraphNodes.length) return null;
+      const targetChapter = currentChapterNum;
+      const startEpoch = audioPlaybackEpoch;
+      const key = getAudioKey(targetChapter, idx);
 
-      if (prefetchedAudioMap.has(idx)) return prefetchedAudioMap.get(idx);
-
-      if (prefetchInFlight.has(idx)) return null;
-
+      if (prefetchedAudioMap.has(key)) return prefetchedAudioMap.get(key);
+      if (prefetchInFlight.has(key)) return null;
       if (audioState.engineMode === 'infinite') return null;
 
       const currentVoice = audioState.selectedVoice || NEURAL_VOICES[0];
-
       if (!currentVoice || !currentVoice.isNeural) return null;
 
-
-
       // 1. Check Dexie cache first (0 network latency)
-
       if (novelDb) {
-
         try {
-
-          const cached = await novelDb.audioCache.get([novelSlug, currentChapterNum, idx]);
-
+          const cached = await novelDb.audioCache.get([novelSlug, targetChapter, idx]);
           if (cached && (cached.audioBlob || cached.blob)) {
-
+            if (targetChapter !== currentChapterNum || startEpoch !== audioPlaybackEpoch) return null;
             const entry = {
-
               blob: cached.audioBlob || cached.blob,
-
               boundaries: cached.boundaries || null
-
             };
-
-            prefetchedAudioMap.set(idx, entry);
-
+            prefetchedAudioMap.set(key, entry);
             return entry;
-
           }
-
         } catch (e) { }
-
       }
-
-
 
       if (navigator.onLine === false) return null;
-
-
-
       const targetNode = paragraphNodes[idx];
-
       if (!targetNode) return null;
-
       const textToPrefetch = sanitizeSpeechText(targetNode.textContent.trim(), targetNode);
-
       if (!textToPrefetch) return null;
 
-
-
-      prefetchInFlight.add(idx);
-
+      prefetchInFlight.add(key);
       try {
-
+        const signal = chapterAbortController ? chapterAbortController.signal : null;
         const res = await fetch('/api/tts', {
-
           method: 'POST',
-
           headers: { 'Content-Type': 'application/json' },
-
+          signal: signal,
           body: JSON.stringify({
-
             text: textToPrefetch,
-
             voice: currentVoice.edgeVoice || 'en-US-ChristopherNeural',
-
             rate: 1.0,
-
             pitch: 1.0
-
           })
-
         });
 
-
+        if (targetChapter !== currentChapterNum || startEpoch !== audioPlaybackEpoch || (signal && signal.aborted)) return null;
 
         if (res.ok) {
-
           const b64Wb = res.headers.get('x-word-boundaries');
-
           const boundaries = parseWordBoundaries(b64Wb);
-
           const blob = await res.blob();
-
+          if (targetChapter !== currentChapterNum || startEpoch !== audioPlaybackEpoch) return null;
           if (blob && blob.size > 512) {
-
             const entry = { blob, boundaries };
-
-            prefetchedAudioMap.set(idx, entry);
-
-
+            prefetchedAudioMap.set(key, entry);
 
             // Persist into Dexie for offline library reading
-
             if (novelDb) {
-
               novelDb.audioCache.put({
-
                 novelSlug: novelSlug,
-
-                chapterNumber: currentChapterNum,
-
+                chapterNumber: targetChapter,
                 paraIndex: idx,
-
                 audioBlob: blob,
-
                 boundaries: boundaries,
-
                 created_at: Date.now()
-
               }).catch(() => { });
-
             }
-
             return entry;
-
-          } else {
-
-            console.warn(`Quarantined anomalous 0-byte or truncated audio chunk on paragraph ${idx} (size: ${blob ? blob.size : 0} bytes)`);
-
-            return null;
-
           }
-
         }
-
-      } catch (prefetchErr) {
-
-        // Non-blocking prefetch failure
-
+      } catch (e) {
       } finally {
-
-        prefetchInFlight.delete(idx);
-
+        prefetchInFlight.delete(key);
       }
-
       return null;
-
     }
 
 
@@ -4290,46 +4246,40 @@ function initReader() {
 
 
 
+      let speechHasStarted = false;
       utterance.onstart = () => {
-
+        speechHasStarted = true;
         audioState.isPlaying = true;
-
         audioState.isPaused = false;
-
         updatePlayStateUI(true);
-
         updateMediaSession();
-
       };
 
-
-
       utterance.onend = () => {
-
         clearCurrentWordHighlight();
-
         window.__activeNovelUtterance = null;
-
         if (currentEpoch !== null && currentEpoch !== audioPlaybackEpoch) return;
 
-        if (audioState.isPlaying && !audioState.isPaused) {
-
-          // 35ms safety delay on Android to avoid dropping IPC audio track
-
+        // Anti-Cascade Guard: If speech never started on a non-trivial paragraph, Android dropped the utterance
+        if (!speechHasStarted && textToSpeak.length > 25) {
+          console.warn(`Utterance ended without starting on paragraph ${index}. Stopping skip cascade.`);
           setTimeout(() => {
-
-            if (currentEpoch !== null && currentEpoch !== audioPlaybackEpoch) return;
-
-            if (audioState.isPlaying && !audioState.isPaused) {
-
-              speakParagraph(index + 1, true);
-
+            if (audioState.isPlaying && !audioState.isPaused && audioState.currentIndex === index) {
+              speakParagraph(index, true);
             }
-
-          }, 35);
-
+          }, 400);
+          return;
         }
 
+        if (audioState.isPlaying && !audioState.isPaused) {
+          // 35ms safety delay on Android to avoid dropping IPC audio track
+          setTimeout(() => {
+            if (currentEpoch !== null && currentEpoch !== audioPlaybackEpoch) return;
+            if (audioState.isPlaying && !audioState.isPaused) {
+              speakParagraph(index + 1, true);
+            }
+          }, 35);
+        }
       };
 
 
@@ -4581,7 +4531,7 @@ function initReader() {
                 totalChapters = custom.total_chapters;
                 document.body.setAttribute('data-total-chapters', String(totalChapters));
               }
-            } catch (e) {}
+            } catch (e) { }
           }
 
           // Check if nextNum exists in chapter dropdown options
@@ -4719,112 +4669,69 @@ function initReader() {
       // TIER 1: Neural Edge-TTS with Gapless Pre-buffer (Standard HTML5 Audio with Android lock-screen)
 
       if (currentVoice && currentVoice.isNeural) {
-
-        let audioEntry = prefetchedAudioMap.get(index) || null;
-
-
+        const chapterAtStart = currentChapterNum;
+        const key = getAudioKey(chapterAtStart, index);
+        let audioEntry = prefetchedAudioMap.get(key) || null;
 
         // 1. Check Dexie if not in memory map
-
         if (!audioEntry && novelDb) {
-
           try {
-
-            const cached = await novelDb.audioCache.get([novelSlug, currentChapterNum, index]);
-
+            const cached = await novelDb.audioCache.get([novelSlug, chapterAtStart, index]);
             if (cached && (cached.audioBlob || cached.blob)) {
-
-              audioEntry = {
-
-                blob: cached.audioBlob || cached.blob,
-
-                boundaries: cached.boundaries || null
-
-              };
-
-              prefetchedAudioMap.set(index, audioEntry);
-
+              if (currentEpoch === audioPlaybackEpoch && chapterAtStart === currentChapterNum) {
+                audioEntry = {
+                  blob: cached.audioBlob || cached.blob,
+                  boundaries: cached.boundaries || null
+                };
+                prefetchedAudioMap.set(key, audioEntry);
+              }
             }
-
           } catch (e) { }
-
         }
-
-
 
         // 2. Fetch directly if not yet prefetched
-
         if (!audioEntry && navigator.onLine !== false) {
-
           try {
-
+            const signal = chapterAbortController ? chapterAbortController.signal : null;
             const res = await fetch('/api/tts', {
-
               method: 'POST',
-
               headers: { 'Content-Type': 'application/json' },
-
+              signal: signal,
               body: JSON.stringify({
-
                 text: textToSpeak,
-
                 voice: currentVoice.edgeVoice || 'en-US-ChristopherNeural',
-
                 rate: 1.0,
-
                 pitch: 1.0
-
               })
-
             });
 
-            if (currentEpoch !== audioPlaybackEpoch) return; // Stale request cancelled
+            if (currentEpoch !== audioPlaybackEpoch || chapterAtStart !== currentChapterNum || (signal && signal.aborted)) return;
 
             if (res.ok) {
-
               const b64Wb = res.headers.get('x-word-boundaries');
-
               const boundaries = parseWordBoundaries(b64Wb);
-
               const blob = await res.blob();
-
+              if (currentEpoch !== audioPlaybackEpoch || chapterAtStart !== currentChapterNum) return;
               audioEntry = { blob, boundaries };
-
-              prefetchedAudioMap.set(index, audioEntry);
+              prefetchedAudioMap.set(key, audioEntry);
 
               if (novelDb) {
-
                 novelDb.audioCache.put({
-
                   novelSlug: novelSlug,
-
-                  chapterNumber: currentChapterNum,
-
+                  chapterNumber: chapterAtStart,
                   paraIndex: index,
-
                   audioBlob: blob,
-
                   boundaries: boundaries,
-
                   created_at: Date.now()
-
                 }).catch(() => { });
-
               }
-
             }
-
           } catch (fetchErr) {
-
             console.warn("Neural audio fetch note:", fetchErr);
-
           }
-
         }
 
-
-
-        if (currentEpoch !== audioPlaybackEpoch) return;
+        if (currentEpoch !== audioPlaybackEpoch || chapterAtStart !== currentChapterNum) return;
 
 
 
@@ -5621,10 +5528,12 @@ function initReader() {
       if (!currentVoice || !currentVoice.isNeural) return;
 
       // Target: 10 paragraphs ahead runway
+      const targetChapter = currentChapterNum;
       const targetEnd = Math.min(paragraphNodes.length - 1, currentIndex + 10);
       const missingIndices = [];
       for (let i = currentIndex + 1; i <= targetEnd; i++) {
-        if (!prefetchedAudioMap.has(i) && !prefetchInFlight.has(i)) {
+        const key = getAudioKey(targetChapter, i);
+        if (!prefetchedAudioMap.has(key) && !prefetchInFlight.has(key)) {
           missingIndices.push(i);
         }
       }
@@ -5646,7 +5555,7 @@ function initReader() {
         // Parallel batch burst: 3 chunks per sub-batch over HTTP/2
         const batchSize = 3;
         for (let i = 0; i < missingIndices.length; i += batchSize) {
-          if (signal.aborted || audioPlaybackEpoch !== currentEpoch || !audioState.isPlaying || audioState.isPaused) break;
+          if (signal.aborted || audioPlaybackEpoch !== currentEpoch || targetChapter !== currentChapterNum || !audioState.isPlaying || audioState.isPaused) break;
           const slice = missingIndices.slice(i, i + batchSize);
           await Promise.allSettled(slice.map(idx => prefetchParagraphAudioWithSignal(idx, signal, currentEpoch)));
         }
@@ -5662,8 +5571,11 @@ function initReader() {
 
     async function prefetchParagraphAudioWithSignal(idx, signal, epoch) {
       if (!paragraphNodes || idx < 0 || idx >= paragraphNodes.length) return null;
-      if (prefetchedAudioMap.has(idx)) return prefetchedAudioMap.get(idx);
-      if (prefetchInFlight.has(idx)) return null;
+      const targetChapter = currentChapterNum;
+      const key = getAudioKey(targetChapter, idx);
+
+      if (prefetchedAudioMap.has(key)) return prefetchedAudioMap.get(key);
+      if (prefetchInFlight.has(key)) return null;
 
       if (audioState.engineMode === 'infinite') return null;
 
@@ -5673,20 +5585,21 @@ function initReader() {
       // Check Dexie first
       if (novelDb) {
         try {
-          const cached = await novelDb.audioCache.get([novelSlug, currentChapterNum, idx]);
+          const cached = await novelDb.audioCache.get([novelSlug, targetChapter, idx]);
           if (cached && (cached.audioBlob || cached.blob)) {
+            if (epoch !== audioPlaybackEpoch || targetChapter !== currentChapterNum) return null;
             const entry = {
               blob: cached.audioBlob || cached.blob,
               boundaries: cached.boundaries || null
             };
-            prefetchedAudioMap.set(idx, entry);
+            prefetchedAudioMap.set(key, entry);
             return entry;
           }
         } catch (e) { }
       }
 
       if (signal && signal.aborted) return null;
-      if (epoch !== audioPlaybackEpoch) return null;
+      if (epoch !== audioPlaybackEpoch || targetChapter !== currentChapterNum) return null;
       if (navigator.onLine === false) return null;
 
       const targetNode = paragraphNodes[idx];
@@ -5694,7 +5607,7 @@ function initReader() {
       const textToPrefetch = sanitizeSpeechText(targetNode.textContent.trim(), targetNode);
       if (!textToPrefetch) return null;
 
-      prefetchInFlight.add(idx);
+      prefetchInFlight.add(key);
       try {
         const res = await fetch('/api/tts', {
           method: 'POST',
@@ -5708,20 +5621,21 @@ function initReader() {
           })
         });
 
-        if (epoch !== audioPlaybackEpoch || (signal && signal.aborted)) return null;
+        if (epoch !== audioPlaybackEpoch || targetChapter !== currentChapterNum || (signal && signal.aborted)) return null;
 
         if (res.ok) {
           const b64Wb = res.headers.get('x-word-boundaries');
           const boundaries = parseWordBoundaries(b64Wb);
           const blob = await res.blob();
+          if (epoch !== audioPlaybackEpoch || targetChapter !== currentChapterNum) return null;
           if (blob && blob.size > 512) {
             const entry = { blob, boundaries };
-            prefetchedAudioMap.set(idx, entry);
+            prefetchedAudioMap.set(key, entry);
 
             if (novelDb) {
               novelDb.audioCache.put({
                 novelSlug: novelSlug,
-                chapterNumber: currentChapterNum,
+                chapterNumber: targetChapter,
                 paraIndex: idx,
                 audioBlob: blob,
                 boundaries: boundaries,
@@ -5734,7 +5648,7 @@ function initReader() {
       } catch (e) {
         // Aborted or network offline
       } finally {
-        prefetchInFlight.delete(idx);
+        prefetchInFlight.delete(key);
       }
       return null;
     }
@@ -5742,8 +5656,10 @@ function initReader() {
     function countRunwayBuffered(currentIndex) {
       if (!paragraphNodes) return 0;
       let count = 0;
+      const ch = currentChapterNum;
       for (let i = currentIndex + 1; i < paragraphNodes.length; i++) {
-        if (prefetchedAudioMap.has(i)) {
+        const key = getAudioKey(ch, i);
+        if (prefetchedAudioMap.has(key)) {
           count++;
         } else {
           break;
@@ -5817,7 +5733,7 @@ function initReader() {
 
               // Re-engage live word highlight tracking
               if (activeHtml5Audio && !activeHtml5Audio.paused) {
-                const audioEntry = prefetchedAudioMap.get(activeIdx);
+                const audioEntry = prefetchedAudioMap.get(getAudioKey(currentChapterNum, activeIdx));
                 startHighlightTracker(activeHtml5Audio, targetNode, audioEntry?.boundaries || null);
               }
             }
