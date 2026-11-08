@@ -891,21 +891,32 @@ function initReader() {
           }
 
           if (cached) {
-            const paras = cached.paragraphs || (cached.content ? cached.content.split('\n\n') : []);
-            const formatted = {
-              slug: novelSlug,
-              novel_title: document.body.getAttribute('data-novel-title') || novelSlug,
-              chapter_number: num,
-              title: cached.title || `Chapter ${num}`,
-              paragraphs: paras,
-              word_count: cached.word_count || paras.reduce((acc, p) => acc + p.split(/\s+/).length, 0),
-              read_time_mins: cached.read_time_mins || Math.max(1, Math.round((cached.word_count || 1000) / 220)),
-              prev_chapter: cached.prev_chapter,
-              next_chapter: cached.next_chapter,
-              total_chapters: 0
-            };
-            chapterCache.set(num, formatted);
-            return formatted;
+            let paras = Array.isArray(cached.paragraphs) && cached.paragraphs.length > 0 ? cached.paragraphs : null;
+            if (!paras && cached.content && !cached.content.includes('empty-chapter-notice-card') && !cached.content.includes('Loading chapter from local cache')) {
+              paras = cached.content.split('\n\n').map(p => p.trim()).filter(Boolean);
+            }
+
+            // Only trust cached chapter if it contains valid paragraphs
+            if (paras && paras.length > 0) {
+              const formatted = {
+                slug: novelSlug,
+                novel_title: document.body.getAttribute('data-novel-title') || novelSlug,
+                chapter_number: num,
+                title: cached.title || `Chapter ${num}`,
+                paragraphs: paras,
+                word_count: cached.word_count || paras.reduce((acc, p) => acc + p.split(/\s+/).length, 0),
+                read_time_mins: cached.read_time_mins || Math.max(1, Math.round((cached.word_count || 1000) / 220)),
+                prev_chapter: cached.prev_chapter,
+                next_chapter: cached.next_chapter,
+                total_chapters: 0
+              };
+              chapterCache.set(num, formatted);
+              return formatted;
+            } else {
+              // Corrupted or 0-word stub found in Dexie: purge it and fetch authoritative data from server
+              console.warn(`Dexie cache for Chapter ${num} had 0 paragraphs or empty notice. Purging corrupted entry and fetching from server.`);
+              novelDb.chapters.delete([novelSlug, num]).catch(() => { });
+            }
           }
         } catch (dbErr) {
           console.warn("Dexie chapter lookup error:", dbErr);
@@ -1411,10 +1422,10 @@ function initReader() {
         });
 
         // Version-gated audio cache migration: flush any cross-chapter or legacy audio blobs
-        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v55') {
+        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v56') {
           try {
             novelDb.audioCache.clear().then(() => {
-              localStorage.setItem('novel_reader_audio_cache_version', 'v55');
+              localStorage.setItem('novel_reader_audio_cache_version', 'v56');
             }).catch(() => { });
           } catch (e) { }
         }
@@ -1439,14 +1450,7 @@ function initReader() {
 
             if (allLocalChs && allLocalChs.length > 0) {
               allLocalChs.sort((a, b) => Number(a.chapterNumber) - Number(b.chapterNumber));
-              // Prune leading frontmatter stubs (< 80 words) from local cache if substantive chapters exist
-              const hasSubstantive = allLocalChs.some(c => (c.word_count && c.word_count > 300) || (c.paragraphs && c.paragraphs.length > 5));
-              if (hasSubstantive) {
-                while (allLocalChs.length > 1 && ((allLocalChs[0].word_count && allLocalChs[0].word_count < 80) || (!allLocalChs[0].word_count && (!allLocalChs[0].paragraphs || allLocalChs[0].paragraphs.join(' ').split(/\s+/).length < 80)))) {
-                  const dropped = allLocalChs.shift();
-                  try { novelDb.chapters.delete([novelSlug, dropped.chapterNumber]); } catch (e) { }
-                }
-              }
+
 
               // Only populate dropdown from Dexie if server did NOT provide a full chapter list (e.g. offline custom novel)
               if (chDropdown && serverOptionsCount <= 1) {
@@ -1616,28 +1620,23 @@ function initReader() {
 
 
 
-        // Automatically cache current chapter into IndexedDB for 100% offline access
-
+        // Automatically cache current chapter into IndexedDB for offline access (only genuine paragraphs, never raw HTML or empty stubs)
         const chapterHeadline = document.querySelector('.chapter-headline-title')?.textContent?.trim() || `Chapter ${currentChapterNum}`;
+        const hasEmptyNotice = document.querySelector('#chapter-content .empty-chapter-notice-card');
+        const pEls = Array.from(document.querySelectorAll('#chapter-content p, #chapter-content .reader-system-card .system-card-body'));
+        const cleanParas = pEls.map(el => el.textContent.trim()).filter(Boolean);
 
-        const chapterContentHtml = document.getElementById('chapter-content')?.innerHTML || '';
-
-        if (novelSlug && chapterContentHtml) {
-
+        if (novelSlug && cleanParas.length > 0 && !hasEmptyNotice) {
+          const totalWords = cleanParas.reduce((acc, p) => acc + p.split(/\s+/).filter(Boolean).length, 0);
           novelDb.chapters.put({
-
             novelSlug: novelSlug,
-
             chapterNumber: currentChapterNum,
-
             title: chapterHeadline,
-
-            content: chapterContentHtml,
-
+            content: cleanParas.join('\n\n'),
+            paragraphs: cleanParas,
+            word_count: totalWords,
             updated_at: Date.now()
-
           }).catch(err => console.warn('Dexie chapter cache note:', err));
-
         }
 
       } catch (e) {
@@ -1657,41 +1656,38 @@ function initReader() {
     // Active paragraph detection with focal reading-line offset (28% from top)
 
     function getActiveParagraphIndex() {
-
       if (!paragraphNodes || paragraphNodes.length === 0) return 0;
-
       const focalY = window.innerHeight * 0.28;
+      const total = paragraphNodes.length;
 
-      let closestIdx = 0;
-
-      let minDistance = Infinity;
-
-
-
-      for (let i = 0; i < paragraphNodes.length; i++) {
-
-        const rect = paragraphNodes[i].getBoundingClientRect();
-
-        if (rect.top <= focalY && rect.bottom >= focalY) {
-
-          return i;
-
+      if (total <= 20) {
+        for (let i = 0; i < total; i++) {
+          const rect = paragraphNodes[i].getBoundingClientRect();
+          if (rect.top <= focalY && rect.bottom >= focalY) return i;
+          if (rect.top > focalY) return Math.max(0, i - 1);
         }
-
-        const dist = Math.abs(rect.top - focalY);
-
-        if (dist < minDistance) {
-
-          minDistance = dist;
-
-          closestIdx = i;
-
-        }
-
+        return total - 1;
       }
 
-      return closestIdx;
+      // High-speed binary search: O(log N) layout inspection
+      let low = 0;
+      let high = total - 1;
+      let bestIdx = 0;
 
+      while (low <= high) {
+        const mid = (low + high) >> 1;
+        const rect = paragraphNodes[mid].getBoundingClientRect();
+        if (rect.top <= focalY && rect.bottom >= focalY) {
+          return mid;
+        }
+        if (rect.top < focalY) {
+          bestIdx = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+      return Math.min(total - 1, Math.max(0, bestIdx));
     }
 
 
@@ -3601,23 +3597,12 @@ function initReader() {
 
 
     function restoreParagraphDOM() {
-
       stopHighlightTracker();
-
       clearCurrentWordHighlight();
-
-      paragraphNodes.forEach(p => {
-
-        p.classList.remove('listen-active-paragraph');
-
-        p.querySelectorAll('.np-word-token').forEach(span => {
-
-          span.classList.remove('np-spoken-word', 'np-spoken-word-done');
-
-        });
-
+      document.querySelectorAll('.listen-active-paragraph').forEach(p => p.classList.remove('listen-active-paragraph'));
+      document.querySelectorAll('.np-spoken-word, .np-spoken-word-done').forEach(span => {
+        span.classList.remove('np-spoken-word', 'np-spoken-word-done');
       });
-
     }
 
 
@@ -4229,16 +4214,15 @@ function initReader() {
 
 
 
-            if (audioState.autoScroll) {
-
+            if (audioState.autoScroll && !isTouchDragging && (Date.now() - lastTouchScrollTime > 1500)) {
               const rect = matchedSpan.getBoundingClientRect();
-
               if (rect.top < 90 || rect.bottom > window.innerHeight - 140) {
-
-                matchedSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
+                const now = Date.now();
+                if (!matchedSpan.__lastScrollTime || now - matchedSpan.__lastScrollTime > 800) {
+                  matchedSpan.__lastScrollTime = now;
+                  matchedSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
               }
-
             }
 
           }
@@ -4384,92 +4368,53 @@ function initReader() {
 
 
 
-      const wordSpans = targetNode.querySelectorAll('.np-word-token');
-
+      const wordSpans = targetNode.__cachedWordSpans || (targetNode.__cachedWordSpans = Array.from(targetNode.querySelectorAll('.np-word-token')));
       if (wordSpans.length === 0) return;
 
-
-
       const currentTime = audio.currentTime || 0;
-
       const activeBoundaries = boundaries || activeParagraphBoundaries;
-
       let targetSpan = null;
 
-
-
       if (activeBoundaries && activeBoundaries.length > 0) {
-
         let activeIdx = -1;
-
         for (let i = 0; i < activeBoundaries.length; i++) {
-
           const b = activeBoundaries[i];
-
           if (currentTime >= b.start - 0.03 && currentTime < b.end + 0.05) {
-
             activeIdx = i;
-
             break;
-
           }
-
         }
-
-
 
         if (activeIdx >= 0) {
-
           targetSpan = wordSpans[Math.min(activeIdx, wordSpans.length - 1)];
-
         } else {
-
           // In speech pause (between sentences / commas): clear highlight per user mandate
-
           targetSpan = null;
-
         }
-
       } else {
-
         // High-precision weighted syllable & punctuation fallback
-
         const activeIdx = estimateActiveWordIdx(currentTime, audio.duration || 1, wordSpans);
-
         targetSpan = activeIdx >= 0 && activeIdx < wordSpans.length ? wordSpans[activeIdx] : null;
-
       }
 
-
-
       if (activeSpokenWordSpan !== targetSpan) {
-
         if (activeSpokenWordSpan) {
-
           activeSpokenWordSpan.classList.remove('np-spoken-word');
-
         }
-
         if (targetSpan) {
-
           targetSpan.classList.add('np-spoken-word');
-
-          if (audioState.autoScroll) {
-
+          if (audioState.autoScroll && !isTouchDragging && (Date.now() - lastTouchScrollTime > 1500)) {
             const rect = targetSpan.getBoundingClientRect();
-
             if (rect.top < 90 || rect.bottom > window.innerHeight - 140) {
-
-              targetSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
+              const now = Date.now();
+              if (!targetSpan.__lastScrollTime || now - targetSpan.__lastScrollTime > 800) {
+                targetSpan.__lastScrollTime = now;
+                targetSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
             }
-
           }
-
         }
-
         activeSpokenWordSpan = targetSpan;
-
       }
 
     }
@@ -4650,10 +4595,8 @@ function initReader() {
 
 
 
-      if (audioState.autoScroll && document.visibilityState !== 'hidden') {
-
+      if (audioState.autoScroll && document.visibilityState !== 'hidden' && !isTouchDragging && (Date.now() - lastTouchScrollTime > 1500)) {
         targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
       }
 
 
@@ -5715,7 +5658,7 @@ function initReader() {
               targetNode.classList.add('listen-active-paragraph');
 
               // Smooth center viewport scroll
-              if (audioState.autoScroll) {
+              if (audioState.autoScroll && !isTouchDragging && (Date.now() - lastTouchScrollTime > 1500)) {
                 targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }
 

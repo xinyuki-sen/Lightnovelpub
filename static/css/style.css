@@ -4353,14 +4353,11 @@ body.system-hud-disabled .reader-system-card .system-card-header {
 /* ELITE ANDROID SUPERPOWERS: 120HZ LOCK, SUB-1 NIT & MINIMALIST EDGE HUD    */
 /* ========================================================================= */
 
-/* 120Hz Hardware Compositor Lock (Zero-Reflow 120fps Touch Canvas) */
+/* 120Hz Hardware Compositor Optimization (Safe Mobile Rendering Without Layer Thrashing) */
 .reader-article-canvas p,
 .reader-system-card {
-  contain: content;
-  content-visibility: auto;
-  contain-intrinsic-size: 0 75px;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Sub-1 Nit Nocturnal Amber Dimmer (Deep Midnight Eye Strain Guard) */

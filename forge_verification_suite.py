@@ -2,7 +2,7 @@
 Forge Verification Suite for LightnovelPub Audio & Reader Architecture
 Executes an 8-loop exhaustive verification of:
 - Loop 1: Syntax & Compilation (Python + JavaScript)
-- Loop 2: PWA & Cache-Busting Version Coherence (v55 alignment)
+- Loop 2: PWA & Cache-Busting Version Coherence (v56 alignment)
 - Loop 3: Edge-TTS Server API & 1.0x Master Audio Timing Integrity
 - Loop 4: Chapter Reader HTML DOM & Dual-Engine Segmented UI
 - Loop 5: Novel Phoenix Decorative Character & Symbol Cleaner
@@ -64,11 +64,11 @@ for f in js_files:
             log_fail(f"Node syntax check: {f}", res.stderr)
 
 # -----------------------------------------------------------------------------
-# LOOP 2: PWA & Cache-Busting Version Coherence (v55)
+# LOOP 2: PWA & Cache-Busting Version Coherence (v56)
 # -----------------------------------------------------------------------------
-loop_header(2, "PWA & Cache-Busting Coherence (v55)")
+loop_header(2, "PWA & Cache-Busting Coherence (v56)")
 
-EXPECTED_VERSION = "55"
+EXPECTED_VERSION = "56"
 
 # Check static/sw.js
 with open("static/sw.js", "r", encoding="utf-8") as f:
@@ -306,6 +306,27 @@ if "activeHtml5Audio.defaultPlaybackRate = currentRate;" in js_src and "activeHt
     log_pass("HTML5 Audio locks defaultPlaybackRate and playbackRate upon src change")
 else:
     log_fail("HTML5 Audio playbackRate locking check failed")
+
+# Verify Mobile Hardware Compositor Fixes (No Vanishing Letters or Layer Flooding)
+with open("static/css/style.css", "r", encoding="utf-8") as f:
+    css_src = f.read()
+
+if "content-visibility: auto;" not in css_src and "contain-intrinsic-size: 0 75px;" not in css_src:
+    log_pass("style.css verified free of content-visibility: auto (no vanishing text during scroll)")
+else:
+    log_fail("style.css still contains content-visibility: auto or artificial intrinsic sizing")
+
+# Verify Dexie Anti-Poisoning & Auto-Healing Cache Guard
+if "Dexie cache for Chapter ${num} had 0 paragraphs or empty notice" in js_src:
+    log_pass("reader.js automatically purges corrupted 0-word Dexie stubs and heals from server")
+else:
+    log_fail("reader.js missing corrupted Dexie cache auto-healing guard")
+
+# Verify Safe Plain-Text Paragraph Dexie Storage (No Raw HTML Overwrites)
+if "content: cleanParas.join('\\n\\n')" in js_src and "paragraphs: cleanParas" in js_src:
+    log_pass("reader.js stores clean plain-text paragraphs into Dexie (no raw HTML or 0-word stubs)")
+else:
+    log_fail("reader.js missing safe plain-text paragraph Dexie storage")
 
 # -----------------------------------------------------------------------------
 # FINAL REPORT
