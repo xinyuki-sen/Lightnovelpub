@@ -915,6 +915,9 @@ function initReader() {
       // 2. Fetch JSON from high-speed backend API
       try {
         const res = await fetch(`/api/novel/${novelSlug}/chapter/${num}`);
+        if (res.status === 304 && chapterCache.has(num)) {
+          return chapterCache.get(num);
+        }
         if (res.ok) {
           const data = await res.json();
           chapterCache.set(num, data);
@@ -1408,10 +1411,10 @@ function initReader() {
         });
 
         // Version-gated audio cache migration: flush any cross-chapter or legacy audio blobs
-        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v54') {
+        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v55') {
           try {
             novelDb.audioCache.clear().then(() => {
-              localStorage.setItem('novel_reader_audio_cache_version', 'v54');
+              localStorage.setItem('novel_reader_audio_cache_version', 'v55');
             }).catch(() => { });
           } catch (e) { }
         }
@@ -4260,16 +4263,27 @@ function initReader() {
         window.__activeNovelUtterance = null;
         if (currentEpoch !== null && currentEpoch !== audioPlaybackEpoch) return;
 
-        // Anti-Cascade Guard: If speech never started on a non-trivial paragraph, Android dropped the utterance
-        if (!speechHasStarted && textToSpeak.length > 25) {
+        // Anti-Cascade Guard: If speech never started, Android dropped the utterance
+        if (!speechHasStarted && textToSpeak.length > 10) {
           console.warn(`Utterance ended without starting on paragraph ${index}. Stopping skip cascade.`);
-          setTimeout(() => {
-            if (audioState.isPlaying && !audioState.isPaused && audioState.currentIndex === index) {
-              speakParagraph(index, true);
-            }
-          }, 400);
+          if (!audioState._synthDropCount) audioState._synthDropCount = 0;
+          if (audioState._synthDropCount < 2) {
+            audioState._synthDropCount++;
+            setTimeout(() => {
+              if (audioState.isPlaying && !audioState.isPaused && audioState.currentIndex === index) {
+                speakParagraph(index, true);
+              }
+            }, 400);
+          } else {
+            console.warn(`SpeechSynthesis dropped repeatedly on paragraph ${index}. Halting to prevent chapter skipping.`);
+            audioState._synthDropCount = 0;
+            audioState.isPlaying = false;
+            audioState.isPaused = true;
+            updatePlayStateUI(false);
+          }
           return;
         }
+        audioState._synthDropCount = 0;
 
         if (audioState.isPlaying && !audioState.isPaused) {
           // 35ms safety delay on Android to avoid dropping IPC audio track
@@ -4467,15 +4481,16 @@ function initReader() {
     async function speakParagraph(index, isContinuous = false) {
 
       if (!paragraphNodes || paragraphNodes.length === 0) {
-        if (audioState.autoNext) {
-          let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10);
-          if (!nextNum || nextNum <= 0) {
-            nextNum = currentChapterNum + 1;
+        paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p, #chapter-content .reader-system-card'));
+      }
+      if (!paragraphNodes || paragraphNodes.length === 0) {
+        console.warn("speakParagraph: Chapter has no paragraph nodes yet, waiting for DOM...");
+        setTimeout(() => {
+          paragraphNodes = Array.from(document.querySelectorAll('#chapter-content p, #chapter-content .reader-system-card'));
+          if (paragraphNodes && paragraphNodes.length > 0 && audioState.isPlaying && !audioState.isPaused) {
+            speakParagraph(index, isContinuous);
           }
-          if (nextNum > 0) {
-            navigateToChapter(nextNum, true);
-          }
-        }
+        }, 150);
         return;
       }
 
@@ -4855,7 +4870,7 @@ function initReader() {
 
             const elapsedSec = (Date.now() - playStartTime) / 1000;
 
-            if (elapsedSec < 0.4 && textToSpeak.length > 25) {
+            if (elapsedSec < 0.25 || (elapsedSec < 0.5 && textToSpeak.length > 20)) {
 
               console.warn(`Premature onended event after ${elapsedSec}s on paragraph ${index}. Retrying safely.`);
 
@@ -4928,21 +4943,12 @@ function initReader() {
               }, 600 * audioState._neuralRetryCount);
 
             } else {
-
               audioState._neuralRetryCount = 0;
-
-              if (navigator.onLine === false || !currentVoice.isNeural) {
-
-                speakParagraphWebSpeech(index, textToSpeak, targetNode, currentEpoch);
-
-              } else {
-
-                console.warn(`Neural stream interrupted on paragraph ${index}. Falling back seamlessly to Web Speech API.`);
-
-                speakParagraphWebSpeech(index, textToSpeak, targetNode, currentEpoch);
-
-              }
-
+              console.warn(`Neural stream error on paragraph ${index} after retries. Pausing playback safely.`);
+              audioState.isPlaying = false;
+              audioState.isPaused = true;
+              updatePlayStateUI(false);
+              showSleepToast("⚠️ Audio stream paused. Tap Play to resume.");
             }
 
           };
@@ -5020,24 +5026,12 @@ function initReader() {
           }
 
           audioState._neuralRetryCount = 0;
-
-          // Only if device voice was selected or truly offline, fallback to Web Speech for this paragraph
-
-          if (navigator.onLine === false || !currentVoice.isNeural) {
-
-            speakParagraphWebSpeech(index, textToSpeak, targetNode, currentEpoch);
-
-            return;
-
-          } else {
-
-            console.warn(`Neural fetch failed on paragraph ${index}. Falling back seamlessly to Web Speech API.`);
-
-            speakParagraphWebSpeech(index, textToSpeak, targetNode, currentEpoch);
-
-            return;
-
-          }
+          console.warn(`Neural fetch failed on paragraph ${index} after retries. Pausing playback safely.`);
+          audioState.isPlaying = false;
+          audioState.isPaused = true;
+          updatePlayStateUI(false);
+          showSleepToast("⚠️ Audio stream paused. Tap Play to resume.");
+          return;
 
         }
 
@@ -5513,12 +5507,6 @@ function initReader() {
     async function executeRunwayBurst(currentIndex) {
       if (isRunwayBurstInFlight) return;
       if (!paragraphNodes || paragraphNodes.length === 0) {
-        if (audioState.autoNext) {
-          let nextNum = parseInt(document.body.getAttribute('data-next-num') || '0', 10) || (currentChapterNum + 1);
-          if (nextNum > 0) {
-            navigateToChapter(nextNum, true);
-          }
-        }
         return;
       }
       if (navigator.onLine === false) return;

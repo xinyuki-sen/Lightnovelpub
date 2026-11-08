@@ -2,7 +2,7 @@
 Forge Verification Suite for LightnovelPub Audio & Reader Architecture
 Executes an 8-loop exhaustive verification of:
 - Loop 1: Syntax & Compilation (Python + JavaScript)
-- Loop 2: PWA & Cache-Busting Version Coherence (v54 alignment)
+- Loop 2: PWA & Cache-Busting Version Coherence (v55 alignment)
 - Loop 3: Edge-TTS Server API & 1.0x Master Audio Timing Integrity
 - Loop 4: Chapter Reader HTML DOM & Dual-Engine Segmented UI
 - Loop 5: Novel Phoenix Decorative Character & Symbol Cleaner
@@ -64,11 +64,11 @@ for f in js_files:
             log_fail(f"Node syntax check: {f}", res.stderr)
 
 # -----------------------------------------------------------------------------
-# LOOP 2: PWA & Cache-Busting Version Coherence (v54)
+# LOOP 2: PWA & Cache-Busting Version Coherence (v55)
 # -----------------------------------------------------------------------------
-loop_header(2, "PWA & Cache-Busting Coherence (v54)")
+loop_header(2, "PWA & Cache-Busting Coherence (v55)")
 
-EXPECTED_VERSION = "54"
+EXPECTED_VERSION = "55"
 
 # Check static/sw.js
 with open("static/sw.js", "r", encoding="utf-8") as f:
@@ -274,10 +274,33 @@ else:
 # -----------------------------------------------------------------------------
 loop_header(8, "Anti-Cascade Guard & EOF Skip Prevention")
 
-if "let speechHasStarted = false;" in js_src and "!speechHasStarted && textToSpeak.length > 25" in js_src:
+if "let speechHasStarted = false;" in js_src and "!speechHasStarted && textToSpeak.length > 10" in js_src:
     log_pass("speechParagraphWebSpeech contains anti-cascade guard (!speechHasStarted)")
 else:
     log_fail("WebSpeech anti-cascade guard missing")
+
+# Verify executeRunwayBurst has NO navigateToChapter (no prefetch chapter jumps)
+runway_burst_match = re.search(r'async function executeRunwayBurst\(currentIndex\)\s*\{(.*?)\n    \}', js_src, re.DOTALL)
+if runway_burst_match:
+    runway_body = runway_burst_match.group(1)
+    if "navigateToChapter" not in runway_body:
+        log_pass("executeRunwayBurst verified free of navigateToChapter prefetch race conditions")
+    else:
+        log_fail("executeRunwayBurst still contains navigateToChapter")
+else:
+    log_fail("executeRunwayBurst function not matched in reader.js")
+
+# Verify speakParagraph DOM empty guard does not skip chapters
+if "speakParagraph: Chapter has no paragraph nodes yet, waiting for DOM..." in js_src:
+    log_pass("speakParagraph verifies DOM node presence safely without skipping chapters")
+else:
+    log_fail("speakParagraph missing safe DOM wait guard")
+
+# Verify Minimum Playback Duration Lock
+if "elapsedSec < 0.25 || (elapsedSec < 0.5 && textToSpeak.length > 20)" in js_src:
+    log_pass("activeHtml5Audio.onended contains tightened minimum duration lock")
+else:
+    log_fail("activeHtml5Audio.onended missing tightened minimum duration lock")
 
 if "activeHtml5Audio.defaultPlaybackRate = currentRate;" in js_src and "activeHtml5Audio.playbackRate = currentRate;" in js_src:
     log_pass("HTML5 Audio locks defaultPlaybackRate and playbackRate upon src change")
