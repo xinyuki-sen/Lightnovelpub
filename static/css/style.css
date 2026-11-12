@@ -4291,6 +4291,17 @@ a {
 .system-card-stats .system-card-body {
   color: #e0f2fe;
 }
+.system-card-stats .stat-card-row {
+  margin: 0.45rem 0;
+  line-height: 1.65;
+  border-bottom: 1px dashed rgba(6, 182, 212, 0.18);
+  padding-bottom: 0.35rem;
+}
+.system-card-stats .stat-card-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
 
 /* 4. Dungeon Directive / Broadcast (Crimson Violet) */
 .system-card-broadcast {
@@ -4305,6 +4316,194 @@ a {
 }
 .system-card-broadcast .system-card-body {
   color: #fee2e2;
+}
+
+/* 5. Quest Directive (Royal Violet / Amethyst) */
+.system-card-quest {
+  background: linear-gradient(135deg, rgba(28, 12, 38, 0.94), rgba(16, 6, 24, 0.97)) !important;
+  border: 1px solid rgba(168, 85, 247, 0.55) !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 24px rgba(168, 85, 247, 0.18) !important;
+}
+.system-card-quest .system-badge {
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  color: #c084fc !important;
+}
+.system-card-quest .system-card-body {
+  color: #f3e8ff;
+}
+
+/* 6. Skill & Spell Unlock (Electric Sky / Cyan) */
+.system-card-skill {
+  background: linear-gradient(135deg, rgba(6, 26, 40, 0.94), rgba(3, 14, 24, 0.97)) !important;
+  border: 1px solid rgba(14, 165, 233, 0.6) !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 24px rgba(14, 165, 233, 0.18) !important;
+}
+.system-card-skill .system-badge {
+  background: rgba(14, 165, 233, 0.2);
+  border: 1px solid rgba(14, 165, 233, 0.5);
+  color: #38bdf8 !important;
+}
+.system-card-skill .system-card-body {
+  color: #e0f2fe;
+}
+
+/* Collapsible Button on Long System Cards */
+.system-card-collapse-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+.system-card-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+.reader-system-card.system-card-collapsed .system-card-body {
+  max-height: 5.5rem;
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+}
+
+/* Inline Typography & Idiosyncrasy Formatting */
+.reader-bold {
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+.reader-italic {
+  font-style: italic;
+}
+.reader-inline-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.9em;
+  padding: 1px 7px;
+  margin: 0 3px;
+  border-radius: 5px;
+  font-family: 'Space Grotesk', monospace, sans-serif;
+  font-weight: 600;
+  vertical-align: baseline;
+  line-height: 1.35;
+}
+.reader-tag-skill {
+  background: rgba(14, 165, 233, 0.14);
+  border: 1px solid rgba(14, 165, 233, 0.4);
+  color: #38bdf8;
+}
+.reader-tag-stat {
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+/* Thematic Scene Breaks / Chapter Dividers */
+.reader-scene-break {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  margin: 2.25rem auto;
+  width: 100%;
+  max-width: 480px;
+  user-select: none;
+  opacity: 0.65;
+}
+.reader-scene-break .scene-break-rule {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+}
+.reader-scene-break .scene-break-glyph {
+  font-size: 0.8rem;
+  letter-spacing: 0.25em;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: monospace, sans-serif;
+}
+
+/* Multi-Theme Adaptations for System Cards */
+[data-reader-theme="sepia"] .reader-system-card {
+  background: rgba(246, 238, 224, 0.95) !important;
+  border-color: rgba(180, 150, 105, 0.55) !important;
+  box-shadow: 0 6px 20px rgba(90, 70, 45, 0.1) !important;
+}
+[data-reader-theme="sepia"] .reader-system-card .system-card-body {
+  color: #3e2a18 !important;
+}
+[data-reader-theme="sepia"] .reader-system-card.system-card-achievement {
+  background: rgba(254, 243, 199, 0.95) !important;
+  border-color: #d97706 !important;
+}
+[data-reader-theme="sepia"] .reader-system-card.system-card-achievement .system-badge {
+  background: #fde68a !important;
+  color: #92400e !important;
+  border-color: #d97706 !important;
+}
+[data-reader-theme="sepia"] .reader-bold {
+  color: #2b1d0c !important;
+}
+[data-reader-theme="sepia"] .reader-tag-skill {
+  background: rgba(14, 165, 233, 0.12) !important;
+  border-color: rgba(2, 132, 199, 0.45) !important;
+  color: #0369a1 !important;
+}
+[data-reader-theme="sepia"] .reader-tag-stat {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(5, 150, 105, 0.45) !important;
+  color: #047857 !important;
+}
+[data-reader-theme="sepia"] .reader-scene-break .scene-break-rule {
+  background: linear-gradient(90deg, transparent, rgba(120, 80, 40, 0.35), transparent) !important;
+}
+[data-reader-theme="sepia"] .reader-scene-break .scene-break-glyph {
+  color: rgba(120, 80, 40, 0.7) !important;
+}
+
+[data-reader-theme="light"] .reader-system-card {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.07) !important;
+}
+[data-reader-theme="light"] .reader-system-card .system-card-body {
+  color: #1e293b !important;
+}
+[data-reader-theme="light"] .reader-bold {
+  color: #0f172a !important;
+}
+[data-reader-theme="light"] .reader-tag-skill {
+  background: rgba(14, 165, 233, 0.1) !important;
+  border-color: rgba(2, 132, 199, 0.35) !important;
+  color: #0284c7 !important;
+}
+[data-reader-theme="light"] .reader-tag-stat {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border-color: rgba(5, 150, 105, 0.35) !important;
+  color: #059669 !important;
+}
+[data-reader-theme="light"] .reader-scene-break .scene-break-rule {
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.15), transparent) !important;
+}
+[data-reader-theme="light"] .reader-scene-break .scene-break-glyph {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+[data-reader-theme="manga-ink"] .reader-system-card {
+  background: #000000 !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: none !important;
+}
+[data-reader-theme="manga-ink"] .reader-system-card .system-badge {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #ffffff !important;
 }
 
 /* Spoken Dialogue Distinction (Distinguishes MC/character speech) */

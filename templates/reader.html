@@ -217,48 +217,37 @@
       {% endif %}
       {% for para in chapter.paragraphs %}
         {% set p_text = para.strip() %}
-        {% if 'New achievement!' in p_text or p_text.startswith('Reward:') or 'Congratulations!' in p_text or 'Achievement Unlocked:' in p_text or 'Quest Completed:' in p_text or '+1 Stat point' in p_text %}
-          <div class="reader-system-card system-card-achievement" data-para-idx="{{ loop.index0 }}" data-system-type="achievement" title="Click to start audio reading from here">
+        {% set meta = classify_paragraph(p_text) %}
+        {% if meta.type == 'scene_break' %}
+          <div class="reader-scene-break" data-para-idx="{{ loop.index0 }}" data-scene-break="true">
+            <div class="scene-break-rule"></div>
+            <span class="scene-break-glyph">✦ &nbsp; ✦ &nbsp; ✦</span>
+            <div class="scene-break-rule"></div>
+          </div>
+        {% elif meta.card_class %}
+          <div class="reader-system-card {{ meta.card_class }}" data-para-idx="{{ loop.index0 }}" data-system-type="{{ meta.type }}" title="Click to start audio reading from here">
             <div class="system-card-header">
-              <span class="system-badge">✦ ACHIEVEMENT UNLOCKED</span>
+              <span class="system-badge">{{ meta.badge }}</span>
+              {% if meta.type == 'stats' and (p_text|length > 350 or p_text.split('\n')|length > 5) %}
+                <button type="button" class="system-card-collapse-btn" aria-label="Toggle full card">Show Less ▲</button>
+              {% endif %}
             </div>
             <div class="system-card-body">
-              {{ p_text }}
+              {% if meta.type == 'stats' %}
+                {% for row in p_text.split('\n') %}
+                  <div class="stat-card-row">{{ row | format_typography | safe }}</div>
+                {% endfor %}
+              {% else %}
+                {{ p_text | format_typography | safe }}
+              {% endif %}
             </div>
           </div>
-        {% elif 'Crawler #' in p_text or 'Race:' in p_text or 'Class:' in p_text or 'Health(' in p_text or 'Mana(' in p_text or 'Stam(' in p_text or 'Vitality:' in p_text or 'Endurance:' in p_text or 'Strength:' in p_text or 'Agility:' in p_text or 'Perception:' in p_text or 'Level: N/A' in p_text or 'Status:' in p_text %}
-          <div class="reader-system-card system-card-stats" data-para-idx="{{ loop.index0 }}" data-system-type="stats" title="Click to start audio reading from here">
-            <div class="system-card-header">
-              <span class="system-badge">📊 CRAWLER TELEMETRY // STATS</span>
-            </div>
-            <div class="system-card-body">
-              {{ p_text }}
-            </div>
-          </div>
-        {% elif 'Goblin Murder Dozer' in p_text or 'Goblin. Level' in p_text or 'Goblin Engineer' in p_text or 'A tooltip popped up' in p_text or 'A tool-tip' in p_text or 'information box popped up' in p_text or 'Contraption.' in p_text or 'Level 1. A' in p_text or 'Level 2. Small' in p_text or 'Level 3. Engineers' in p_text %}
-          <div class="reader-system-card system-card-tooltip" data-para-idx="{{ loop.index0 }}" data-system-type="tooltip" title="Click to start audio reading from here">
-            <div class="system-card-header">
-              <span class="system-badge">⚡ ENTITY SCAN // TOOLTIP</span>
-            </div>
-            <div class="system-card-body">
-              {{ p_text }}
-            </div>
-          </div>
-        {% elif 'Please pay careful attention' in p_text or 'You have been designated Crawler' in p_text or 'Time to Level Collapse:' in p_text or 'Dungeon Floor' in p_text or 'System initializing' in p_text or p_text.startswith('[System') %}
-          <div class="reader-system-card system-card-broadcast" data-para-idx="{{ loop.index0 }}" data-system-type="broadcast" title="Click to start audio reading from here">
-            <div class="system-card-header">
-              <span class="system-badge">📢 DUNGEON DIRECTIVE</span>
-            </div>
-            <div class="system-card-body">
-              {{ p_text }}
-            </div>
-          </div>
-        {% elif p_text.endswith('I thought.') or p_text.endswith('I thought') or 'thought Carl' in p_text or 'thought Randidly' in p_text or p_text.startswith('*') %}
-          <p class="reader-thought" data-para-idx="{{ loop.index0 }}" data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para }}</p>
-        {% elif p_text.startswith('"') or p_text.startswith('“') or p_text.startswith("'") or p_text.startswith('‘') %}
-          <p class="reader-dialogue" data-para-idx="{{ loop.index0 }}" data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para }}</p>
+        {% elif meta.type == 'thought' %}
+          <p class="reader-thought" data-para-idx="{{ loop.index0 }}" data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para | format_typography | safe }}</p>
+        {% elif meta.type == 'dialogue' %}
+          <p class="reader-dialogue" data-para-idx="{{ loop.index0 }}" data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para | format_typography | safe }}</p>
         {% else %}
-          <p class="reader-narrative" data-para-idx="{{ loop.index0 }}" data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para }}</p>
+          <p class="reader-narrative" data-para-idx="{{ loop.index0 }}" data-para-index="{{ loop.index0 }}" title="Click to start audio reading from here">{{ para | format_typography | safe }}</p>
         {% endif %}
       {% endfor %}
     </div>

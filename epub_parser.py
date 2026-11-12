@@ -44,17 +44,27 @@ class SimpleHTMLTextExtractor(HTMLParser):
         self.in_heading = False
         self.in_para = False
         self.headings = []
+        self.bold_depth = 0
+        self.italic_depth = 0
 
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
         if tag in ('h1', 'h2', 'h3', 'h4', 'title'):
             self.in_heading = True
             self.current_heading = []
-        elif tag in ('p', 'div', 'blockquote', 'li'):
+        elif tag in ('p', 'div', 'blockquote', 'li', 'tr'):
             self.in_para = True
             self.current_para = []
         elif tag == 'br' and self.in_para:
             self.current_para.append(' ')
+        elif tag in ('b', 'strong') and self.in_para:
+            self.bold_depth += 1
+            self.current_para.append('**')
+        elif tag in ('i', 'em') and self.in_para:
+            self.italic_depth += 1
+            self.current_para.append('*')
+        elif tag in ('td', 'th') and self.in_para:
+            self.current_para.append(' | ')
 
     def handle_endtag(self, tag):
         tag = tag.lower()
@@ -64,12 +74,28 @@ class SimpleHTMLTextExtractor(HTMLParser):
             if heading_text:
                 self.headings.append(heading_text)
             self.current_heading = []
-        elif tag in ('p', 'div', 'blockquote', 'li'):
+        elif tag in ('b', 'strong') and self.in_para and self.bold_depth > 0:
+            self.bold_depth -= 1
+            self.current_para.append('**')
+        elif tag in ('i', 'em') and self.in_para and self.italic_depth > 0:
+            self.italic_depth -= 1
+            self.current_para.append('*')
+        elif tag in ('p', 'div', 'blockquote', 'li', 'tr'):
             self.in_para = False
-            para_text = " ".join("".join(self.current_para).split())
+            raw_text = "".join(self.current_para)
+            # Normalize whitespace while preserving markdown emphasis
+            raw_text = re.sub(r'\*\*\s+', ' **', raw_text)
+            raw_text = re.sub(r'\s+\*\*', '** ', raw_text)
+            raw_text = re.sub(r'\*\s+', ' *', raw_text)
+            raw_text = re.sub(r'\s+\*', '* ', raw_text)
+            if raw_text.strip() in ('****', '**', '*', '***'):
+                raw_text = ''
+            para_text = " ".join(raw_text.split())
             if para_text and len(para_text) > 1:
                 self.paragraphs.append(para_text)
             self.current_para = []
+            self.bold_depth = 0
+            self.italic_depth = 0
 
     def handle_data(self, data):
         if self.in_heading:

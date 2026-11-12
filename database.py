@@ -6,6 +6,7 @@ import shutil
 import sqlite3
 import urllib.request
 import base64
+import html
 from typing import List, Dict, Optional, Tuple, Any
 
 ABBREVIATIONS = [
@@ -63,15 +64,203 @@ def tokenize_sentences(text: str) -> List[str]:
 
     return clean
 
+def is_system_or_stat_block(text: str) -> bool:
+    """Detects whether a text chunk is a LitRPG status window, quest, achievement, or table."""
+    t_lower = text.lower()
+    # 1. Progression & Achievement triggers
+    triggers = [
+        'new achievement!', 'reward:', 'congratulations!', 'achievement unlocked:',
+        'quest completed:', 'quest failed:', 'new quest:', '+1 stat point', 'level up!',
+        'world announcement', 'skill acquired', 'skill learned', 'title acquired',
+        'evolution available'
+    ]
+    if any(k in t_lower for k in triggers):
+        return True
+
+    # 2. Bracket-enclosed System or Quest alerts: [System: ...], 【Status Window】, etc.
+    if (text.startswith(('[', '【', '《', '〔', '『')) and text.endswith((']', '】', '》', '〕', '』'))) or \
+       re.search(r'\[\s*(?:System|Notice|Alert|Warning|Quest|Skill|Title|Status|Achievement|Reward)', text, re.I):
+        return True
+
+    # 3. Dense attribute key-value pairs (HP, MP, STR, AGI, INT, etc. - requires >= 2 attributes)
+    stat_matches = STAT_KEY_REGEX.findall(text)
+    if len(stat_matches) >= 2:
+        return True
+
+    # 4. ASCII / Markdown table blocks
+    if text.count('|') >= 4 or (text.count('+') >= 4 and '-' in text):
+        return True
+
+    return False
+
+STAT_KEY_REGEX = re.compile(
+    r'\b(?:Name|Level|Race|Alignment|Titles?|Class|Rank|Profession|Affinity|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]',
+    re.I
+)
+
+def format_stat_block_rows(text: str) -> str:
+    """
+    Intelligently inserts newline row boundaries before major LitRPG attribute clusters
+    if the stat block was provided as a single un-formatted line.
+    """
+    if not text or '\n' in text:
+        return text
+
+    BREAK_KEYS = [
+        r'Level\s*[:：]',
+        r'Class\s*[:：]',
+        r'Titles?\s*[:：]',
+        r'Rank\s*[:：]',
+        r'Health\s*[:：]',
+        r'HP\s*[:：]',
+        r'Strength\s*[:：]',
+        r'STR\s*[:：]',
+        r'Vitality\s*[:：]',
+        r'VIT\s*[:：]',
+        r'Luck\s*[:：]',
+        r'LUK\s*[:：]'
+    ]
+    pattern = r'(?<=\S)\s+(?=(?:' + '|'.join(BREAK_KEYS) + r'))'
+    return re.sub(pattern, '\n', text)
+
+def segregate_mixed_paragraph(text: str) -> List[str]:
+    """
+    Splits any paragraph containing a LitRPG stat block mixed with narrative lead-in or trailing prose.
+    Guarantees pure status telemetry is segregated from novel story prose.
+    """
+    text = (text or '').strip()
+    if not text:
+        return []
+    matches = list(STAT_KEY_REGEX.finditer(text))
+    if len(matches) < 2:
+        return [text]
+
+    first_m = matches[0]
+    last_m = matches[-1]
+
+    lead_in = text[:first_m.start()].strip()
+    rest = text[last_m.end():]
+
+    val_m = re.match(r'^\s*([^\.\!\?\n]+?)(?=\s+[A-Z][a-z]+|\s*[\.\!\?]\s+[A-Z]|$)', rest)
+    if val_m:
+        val_end = last_m.end() + val_m.end()
+    else:
+        fallback_m = re.match(r'^\s*(\S+)', rest)
+        val_end = last_m.end() + (fallback_m.end() if fallback_m else 0)
+
+    stat_block = text[first_m.start():val_end].strip()
+    stat_block = format_stat_block_rows(stat_block)
+
+    trailing_prose = text[val_end:].strip()
+    trailing_prose = re.sub(r'^[,\.\s]+', '', trailing_prose).strip()
+
+    res = []
+    if lead_in and len(lead_in) > 3:
+        res.append(lead_in)
+    if stat_block:
+        res.append(stat_block)
+    if trailing_prose and len(trailing_prose) > 3:
+        res.append(trailing_prose)
+    return res if res else [text]
+
+def classify_paragraph(text: str) -> dict:
+    """
+    Canonical LitRPG paragraph classifier used by both Python SSR and verification loops.
+    """
+    text = (text or '').strip()
+    if not text:
+        return {'type': 'empty'}
+
+    # 1. Scene break / divider
+    if (len(text) >= 3 and len(text) <= 30 and (text in ('***', '---', '~~~') or text.startswith(('◆◆◆', '===', '***')))) or \
+       re.match(r'^[\s\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\-—–\.\:\/\u2500-\u257F═]{2,}$', text) or \
+       re.match(r'^(\*\s*){3,}$', text) or \
+       re.match(r'^(─|\-|=|_|~|\*){3,}$', text):
+        return {'type': 'scene_break'}
+
+    # 2. Golden Achievement / Title
+    if text.startswith(('[Achievement', '【Achievement', '[Title', '【Title', 'New achievement!', 'Reward:', 'Congratulations!', 'Achievement Unlocked:', '+1 Stat point', 'Level Up!')) or \
+       re.search(r'\b(?:Achievement Unlocked|Title Acquired|Title Bestowed)\s*[:：]', text, re.I) or \
+       re.search(r'【(?:成就|称号)[^】]*】', text):
+        badge = '👑 TITLE BESTOWED' if re.search(r'(?:title\s*(?:acquired|gained|bestowed)|【称号)', text, re.I) else '✦ ACHIEVEMENT UNLOCKED'
+        return {'type': 'achievement', 'card_class': 'system-card-achievement', 'badge': badge}
+
+    # 3. Quest Directive / Objectives
+    if text.startswith(('[Quest', '【Quest', '[Mission', '【Mission', 'Quest:', 'Quest Alert:', 'Quest Log:', 'Quest Completed:', 'Quest Failed:', 'New Quest:')) or \
+       re.search(r'^(?:\[|【)\s*(?:Main|Side|Emergency|Daily|Hidden|Scenario|Special)?\s*(?:Quest|Mission|Objective|Task)', text, re.I):
+        badge = '📜 QUEST COMPLETED' if 'completed' in text.lower() else ('⚠️ QUEST FAILED' if 'failed' in text.lower() else '📜 QUEST DIRECTIVE')
+        return {'type': 'quest', 'card_class': 'system-card-quest', 'badge': badge}
+
+    # 4. Status Screen / Stat Attributes
+    if is_system_or_stat_block(text):
+        return {'type': 'stats', 'card_class': 'system-card-stats', 'badge': '📊 STATUS SCREEN // ATTRIBUTES'}
+
+    # 5. Skill / Spell / Entity Scan Tooltip
+    if text.startswith(('[Skill', '【Skill', '[Spell', '【Spell', 'Skill Acquired:', 'Spell Acquired:', 'Skill Learned:')) or \
+       re.search(r'^(?:\[|【)\s*(?:Skill|Spell|Ability|Technique)', text, re.I):
+        return {'type': 'skill', 'card_class': 'system-card-skill', 'badge': '⚡ SKILL & ABILITY'}
+
+    if text.startswith(('[Item', '【Item', '[Appraisal', '【Appraisal', 'Item Appraisal:', 'Rank: S', 'Rank: A')) or \
+       re.search(r'^(?:\[|【)\s*(?:Item|Appraisal|Scan|Artifact|Relic|Equipment|Entity|Monster)', text, re.I):
+        return {'type': 'tooltip', 'card_class': 'system-card-tooltip', 'badge': '💎 ENTITY SCAN // TOOLTIP'}
+
+    # 6. World Announcement / System Broadcast
+    if text.startswith(('[System', '【System', '【Notice', '[World Announcement', 'Time to Level Collapse:')) or \
+       re.search(r'^(?:\[|【)\s*(?:World Announcement|System\s*(?:Notice|Alert|Directive|Broadcast|Announcement|Message)|Dimensional\s*Notice)', text, re.I):
+        return {'type': 'broadcast', 'card_class': 'system-card-broadcast', 'badge': '📢 SYSTEM BROADCAST'}
+
+    # 7. Thoughts
+    if (text.startswith('*') and text.endswith('*')) or \
+       text.startswith(('<<', '«', '『')) or \
+       text.endswith(('I thought.', 'I thought', 'thought Carl', 'thought Randidly')) or \
+       re.search(r'\bthought\s+[A-Z][a-z]+', text, re.I):
+        return {'type': 'thought'}
+
+    # 8. Dialogue
+    if text.startswith(('"', '“', "'", '‘', '「')):
+        return {'type': 'dialogue'}
+
+    return {'type': 'narrative'}
+
+def format_inline_typography(raw_text: str) -> str:
+    """
+    Renders lightweight markdown bold, italics, skill pills, and stat tags into secure HTML.
+    Matches the client-side formatInlineTypography in reader.js.
+    """
+    if not raw_text:
+        return ""
+    safe = html.escape(raw_text)
+    # 1. Markdown bold (**text**) -> <strong class="reader-bold">text</strong>
+    safe = re.sub(r'\*\*([^*]+)\*\*', r'<strong class="reader-bold">\1</strong>', safe)
+    # 2. Markdown italic (*text*) -> <em class="reader-italic">\1</em>
+    safe = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'<em class="reader-italic">\1</em>', safe)
+    # 3. Inline Skill / Spell brackets: [Fireball], [Shadow Step], etc.
+    safe = re.sub(r'\[((?:Skill|Spell|Title|Item)?\s*[\w\s\+\-\'\’]{2,30})\]', r'<span class="reader-inline-tag reader-tag-skill">[\1]</span>', safe)
+    # 4. Inline Stat Deltas & Perks:
+    STAT_NAMES = r'(?:All\s+stats|Strength|Agility|Dexterity|Endurance|Vitality|Intelligence|Wisdom|Perception|Constitution|Charisma|Luck|Health|Mana|Stamina|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|HP|MP|SP|EXP)'
+    safe = re.sub(r'(?:^|\s)(' + STAT_NAMES + r'\s*[\+\-]\s*\d+(?:\.\d+)?%?)', r' <span class="reader-inline-tag reader-tag-stat">\1</span>', safe, flags=re.I)
+    safe = re.sub(r'(?:^|\s)([\+\-]\d+(?:\.\d+)?%?\s*(?:' + STAT_NAMES + r'|Stat\s*points?|Points?|Levels?)%?)', r' <span class="reader-inline-tag reader-tag-stat">\1</span>', safe, flags=re.I)
+    return safe
+
 def split_long_paragraph(text: str, max_chars: int = 480) -> List[str]:
     """Divides paragraphs strictly into full-sentence units up to max_chars without mid-sentence cuts."""
     text = text.strip()
     if not text:
         return []
 
-    # Preserve LitRPG system cards and status boxes
-    system_triggers = ['New achievement!', 'Reward:', 'Congratulations!', 'Achievement Unlocked:', 'Quest Completed:', '+1 Stat point', 'Level Up!']
-    if any(k in text for k in system_triggers) and len(text) <= 950:
+    # If paragraph contains a stat block mixed with story prose, segregate first!
+    segregated = segregate_mixed_paragraph(text)
+    if len(segregated) > 1:
+        out = []
+        for s in segregated:
+            if is_system_or_stat_block(s) and len(s) <= 2500:
+                out.append(s)
+            else:
+                out.extend(split_long_paragraph(s, max_chars=max_chars))
+        return out
+
+    # Preserve LitRPG system cards, quest notifications, and status boxes up to 2500 chars
+    if is_system_or_stat_block(text) and len(text) <= 2500:
         return [text]
 
     sentences = tokenize_sentences(text)
@@ -102,24 +291,40 @@ def split_long_paragraph(text: str, max_chars: int = 480) -> List[str]:
 def process_chapter_paragraphs(paragraphs: List[str], max_chars: int = 480) -> List[str]:
     """
     Sentence-Preserving Paragraph Engine:
-    1. Recombines any sentences accidentally split across paragraphs.
-    2. Divides long paragraphs strictly at terminal sentence boundaries (. ! ?).
+    1. Segregates mixed stat/narrative paragraphs.
+    2. Recombines any sentences accidentally split across paragraphs (never merging stat blocks into prose).
+    3. Coalesces consecutive pure-stat fragments into a single unified telemetry block.
+    4. Divides long paragraphs strictly at terminal sentence boundaries (. ! ?).
     """
     TERMINAL_CHARS = set('.!?..."”’\'»)]}')
 
-    merged = []
+    # Step 1: Pre-segregate any mixed paragraphs
+    expanded = []
     for p in paragraphs:
         p_clean = str(p).strip()
         if not p_clean:
             continue
-        if merged and (merged[-1][-1] not in TERMINAL_CHARS or p_clean[0].islower()):
+        expanded.extend(segregate_mixed_paragraph(p_clean))
+
+    # Step 2: Merge accidentally split sentences, but NEVER merge stat blocks into prose
+    merged = []
+    for p_clean in expanded:
+        is_stat = is_system_or_stat_block(p_clean)
+        prev_is_stat = is_system_or_stat_block(merged[-1]) if merged else False
+        if merged and not is_stat and not prev_is_stat and (merged[-1][-1] not in TERMINAL_CHARS or p_clean[0].islower()):
             merged[-1] = merged[-1] + " " + p_clean
+        elif merged and is_stat and prev_is_stat:
+            # Coalesce consecutive pure stat blocks
+            merged[-1] = merged[-1] + "\n" + p_clean
         else:
             merged.append(p_clean)
 
+    # Step 3: Split long narrative prose while protecting intact stat blocks
     final_paras = []
     for p in merged:
-        if len(p) <= max_chars:
+        if is_system_or_stat_block(p) and len(p) <= 2500:
+            final_paras.append(p)
+        elif len(p) <= max_chars:
             final_paras.append(p)
         else:
             final_paras.extend(split_long_paragraph(p, max_chars=max_chars))
@@ -577,10 +782,7 @@ def get_chapter(slug: str, chapter_number: int) -> Optional[Tuple[Dict, Dict]]:
         novel["chapters"] = [dict(r) for r in cursor.fetchall()]
 
         raw_paras = json.loads(chapter["content_json"])
-        if isinstance(raw_paras, list) and raw_paras and all(len(p) <= 520 for p in raw_paras):
-            chapter["paragraphs"] = raw_paras
-        else:
-            chapter["paragraphs"] = split_chapter_paragraphs(raw_paras, max_chars=480)
+        chapter["paragraphs"] = split_chapter_paragraphs(raw_paras, max_chars=480)
         
         return novel, chapter
     finally:

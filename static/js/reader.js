@@ -688,164 +688,270 @@ function initReader() {
 
 
 
-    function buildParagraphElement(pText, idx) {
-
-      const text = (pText || '').trim();
-
-      if (text.includes('New achievement!') || text.startsWith('Reward:') || text.includes('Congratulations!') || text.includes('Achievement Unlocked:') || text.includes('Quest Completed:') || text.includes('+1 Stat point')) {
-
-        const card = document.createElement('div');
-
-        card.className = 'reader-system-card system-card-achievement';
-
-        card.setAttribute('data-para-idx', String(idx));
-
-        card.setAttribute('data-system-type', 'achievement');
-
-        card.title = 'Click to start audio reading from here';
-
-        card.innerHTML = `
-
-        <div class="system-card-header">
-
-          <span class="system-badge">✦ ACHIEVEMENT UNLOCKED</span>
-
-        </div>
-
-        <div class="system-card-body">${text}</div>
-
-      `;
-
-        return card;
-
-      } else if (text.includes('Crawler #') || text.includes('Race:') || text.includes('Class:') || text.includes('Health(') || text.includes('Mana(') || text.includes('Stam(') || text.includes('Vitality:') || text.includes('Endurance:') || text.includes('Strength:') || text.includes('Agility:') || text.includes('Perception:') || text.includes('Level: N/A') || text.includes('Status:')) {
-
-        const card = document.createElement('div');
-
-        card.className = 'reader-system-card system-card-stats';
-
-        card.setAttribute('data-para-idx', String(idx));
-
-        card.setAttribute('data-system-type', 'stats');
-
-        card.title = 'Click to start audio reading from here';
-
-        card.innerHTML = `
-
-        <div class="system-card-header">
-
-          <span class="system-badge">📊 CRAWLER TELEMETRY // STATS</span>
-
-        </div>
-
-        <div class="system-card-body">${text}</div>
-
-      `;
-
-        return card;
-
-      } else if (text.includes('Goblin Murder Dozer') || text.includes('Goblin. Level') || text.includes('Goblin Engineer') || text.includes('A tooltip popped up') || text.includes('A tool-tip') || text.includes('information box popped up') || text.includes('Contraption.') || text.includes('Level 1. A') || text.includes('Level 2. Small') || text.includes('Level 3. Engineers')) {
-
-        const card = document.createElement('div');
-
-        card.className = 'reader-system-card system-card-tooltip';
-
-        card.setAttribute('data-para-idx', String(idx));
-
-        card.setAttribute('data-system-type', 'tooltip');
-
-        card.title = 'Click to start audio reading from here';
-
-        card.innerHTML = `
-
-        <div class="system-card-header">
-
-          <span class="system-badge">⚡ ENTITY SCAN // TOOLTIP</span>
-
-        </div>
-
-        <div class="system-card-body">${text}</div>
-
-      `;
-
-        return card;
-
-      } else if (text.includes('Please pay careful attention') || text.includes('You have been designated Crawler') || text.includes('Time to Level Collapse:') || text.includes('Dungeon Floor') || text.includes('System initializing') || text.startsWith('[System')) {
-
-        const card = document.createElement('div');
-
-        card.className = 'reader-system-card system-card-broadcast';
-
-        card.setAttribute('data-para-idx', String(idx));
-
-        card.setAttribute('data-system-type', 'broadcast');
-
-        card.title = 'Click to start audio reading from here';
-
-        card.innerHTML = `
-
-        <div class="system-card-header">
-
-          <span class="system-badge">📢 DUNGEON DIRECTIVE</span>
-
-        </div>
-
-        <div class="system-card-body">${text}</div>
-
-      `;
-
-        return card;
-
-      } else if (text.endsWith('I thought.') || text.endsWith('I thought') || text.includes('thought Carl') || text.includes('thought Randidly') || text.startsWith('*')) {
-
-        const p = document.createElement('p');
-
-        p.className = 'reader-thought';
-
-        p.setAttribute('data-para-index', String(idx));
-
-        p.setAttribute('data-para-idx', String(idx));
-
-        p.title = 'Click to start audio reading from here';
-
-        p.textContent = text;
-
-        return p;
-
-      } else if (text.startsWith('"') || text.startsWith('“') || text.startsWith("'") || text.startsWith('‘')) {
-
-        const p = document.createElement('p');
-
-        p.className = 'reader-dialogue';
-
-        p.setAttribute('data-para-index', String(idx));
-
-        p.setAttribute('data-para-idx', String(idx));
-
-        p.title = 'Click to start audio reading from here';
-
-        p.textContent = text;
-
-        return p;
-
-      } else {
-
-        const p = document.createElement('p');
-
-        p.className = 'reader-narrative';
-
-        p.setAttribute('data-para-index', String(idx));
-
-        p.setAttribute('data-para-idx', String(idx));
-
-        p.title = 'Click to start audio reading from here';
-
-        p.textContent = text;
-
-        return p;
-
+    function escapeHtml(str) {
+      return (str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function formatInlineTypography(rawText) {
+      if (!rawText) return '';
+      let safe = escapeHtml(rawText);
+      // 1. Markdown bold (**text**) -> <strong class="reader-bold">text</strong>
+      safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong class="reader-bold">$1</strong>');
+      // 2. Markdown italic (*text*) -> <em class="reader-italic">$1</em>
+      safe = safe.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em class="reader-italic">$1</em>');
+      // 3. Inline Skill / Spell brackets: [Fireball], [Shadow Step], etc.
+      safe = safe.replace(/\[((?:Skill|Spell|Title|Item)?\s*[\w\s\+\-\'\’]{2,30})\]/g, '<span class="reader-inline-tag reader-tag-skill">[$1]</span>');
+      // 4. Inline Stat Deltas & Perks:
+      const STAT_NAMES = '(?:All\\s+stats|Strength|Agility|Dexterity|Endurance|Vitality|Intelligence|Wisdom|Perception|Constitution|Charisma|Luck|Health|Mana|Stamina|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|HP|MP|SP|EXP)';
+      // 4a. Stat Name followed by delta (Strength +1, All stats +10%, Luck +20%)
+      safe = safe.replace(new RegExp(`(?:^|\\s)(${STAT_NAMES}\\s*[\\+\\-]\\s*\\d+(?:\\.\\d+)?%?)`, 'gi'), (match, p1) => {
+        return match.replace(p1, `<span class="reader-inline-tag reader-tag-stat">${p1}</span>`);
+      });
+      // 4b. Delta followed by stat name (+5 Strength, +100 EXP, +1 Stat point)
+      safe = safe.replace(new RegExp(`(?:^|\\s)([\\+\\-]\\d+(?:\\.\\d+)?%?\\s*(?:${STAT_NAMES}|Stat\\s*points?|Points?|Levels?)\\b%?)`, 'gi'), (match, p1) => {
+        return match.replace(p1, `<span class="reader-inline-tag reader-tag-stat">${p1}</span>`);
+      });
+      return safe;
+    }
+
+    const STAT_KEY_REGEX = /\b(?:Name|Level|Race|Alignment|Titles?|Class|Rank|Profession|Affinity|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]/i;
+    const STAT_KEY_GLOBAL = new RegExp(STAT_KEY_REGEX.source, 'gi');
+
+    function isStatParagraph(text) {
+      if (!text) return false;
+      const isBracketHeader = /^(?:\[|【)\s*(?:Status\s*(?:Screen|Window|Menu|Sheet)|Character\s*Sheet|Attributes|Player\s*Profile|Crawler\s*#|Telemetry)\s*(?:\]|】)/i.test(text);
+      const matches = text.match(new RegExp(STAT_KEY_REGEX.source, 'gi'));
+      return isBracketHeader || (matches && matches.length >= 2) || (text.includes('Status:') && (text.includes('Level:') || text.includes('Class:')));
+    }
+
+    function formatStatBlockRows(text) {
+      if (!text || text.includes('\n')) return text;
+      const breakPattern = /(?<=\S)\s+(?=(?:Level|Race|Class|Titles?|Rank|Health|HP|Mana|MP|Strength|STR|Agility|AGI|Vitality|VIT|Luck|LUK)\s*[:：])/i;
+      return text.replace(new RegExp(breakPattern.source, 'gi'), '\n');
+    }
+
+    function segregateMixedParagraph(rawText) {
+      const text = (rawText || '').trim();
+      if (!text) return [];
+
+      const matches = [];
+      let m;
+      STAT_KEY_GLOBAL.lastIndex = 0;
+      while ((m = STAT_KEY_GLOBAL.exec(text)) !== null) {
+        matches.push({ key: m[0], start: m.index, end: m.index + m[0].length });
       }
 
+      if (matches.length < 2) return [text];
+
+      const firstM = matches[0];
+      const lastM = matches[matches.length - 1];
+
+      const leadIn = text.slice(0, firstM.start).trim();
+      const rest = text.slice(lastM.end);
+
+      const valMatch = rest.match(/^\s*([^\.\!\?\n]+?)(?=\s+[A-Z][a-z]+|\s*[\.\!\?]\s+[A-Z]|$)/);
+      const valLen = valMatch ? valMatch[0].length : (rest.match(/^\s*\S+/) || [''])[0].length;
+      const valEnd = lastM.end + valLen;
+
+      let statBlock = text.slice(firstM.start, valEnd).trim();
+      statBlock = formatStatBlockRows(statBlock);
+
+      let trailingProse = text.slice(valEnd).trim();
+      trailingProse = trailingProse.replace(/^[,\.\s]+/, '').trim();
+
+      const results = [];
+      if (leadIn && leadIn.length > 5 && /[a-z]/i.test(leadIn)) {
+        results.push(leadIn);
+      }
+      if (statBlock) {
+        results.push(statBlock);
+      }
+      if (trailingProse && trailingProse.length > 5 && /[a-z]/i.test(trailingProse)) {
+        results.push(trailingProse);
+      }
+
+      return results.length ? results : [text];
+    }
+
+    function segregateAndNormalizeParagraphs(rawParas) {
+      if (!rawParas || !rawParas.length) return [];
+
+      const segregated = [];
+      for (const p of rawParas) {
+        const text = (p || '').trim();
+        if (!text) continue;
+        const pieces = segregateMixedParagraph(text);
+        segregated.push(...pieces);
+      }
+
+      // Coalesce consecutive pure-stat blocks into a single unified telemetry card
+      const coalesced = [];
+      for (const piece of segregated) {
+        if (isStatParagraph(piece) && coalesced.length > 0) {
+          const prevIdx = coalesced.length - 1;
+          if (isStatParagraph(coalesced[prevIdx])) {
+            coalesced[prevIdx] = coalesced[prevIdx] + '\n' + piece;
+            continue;
+          }
+        }
+        coalesced.push(piece);
+      }
+
+      return coalesced;
+    }
+
+    function formatStatCardBody(rawText) {
+      const formattedText = formatStatBlockRows(rawText || '');
+      const safe = formatInlineTypography(formattedText);
+      const lines = safe.split('\n');
+      return lines.map(line => `<div class="stat-card-row">${line}</div>`).join('');
+    }
+
+    function classifyParagraph(rawText) {
+      const text = (rawText || '').trim();
+      if (!text) return { type: 'empty' };
+
+      // 1. Scene Break / Thematic Divider (***, ---, ◆◆◆, ===, ~~~)
+      const isDivider = /^[\s\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\-—–\.\:\/\u2500-\u257F═]{2,}$/.test(text) ||
+                        /^(\*\s*){3,}$/.test(text) ||
+                        /^(─|\-|=|_|~|\*){3,}$/.test(text);
+      if (isDivider) {
+        return { type: 'scene_break' };
+      }
+
+      // 2. Golden Achievement / Title Unlock (Strict bracketed header or prompt start)
+      const isAchievement = /^(?:\[|【)\s*(?:Achievement|Title|Milestone)/i.test(text) ||
+                            /^(?:New achievement!|Reward:|Congratulations!|Achievement Unlocked:|\+1 Stat point|Level Up!)/i.test(text) ||
+                            /\b(?:Achievement Unlocked|Title Acquired|Title Bestowed)\s*[:：]/i.test(text) ||
+                            /【(?:成就|称号)[^】]*】/.test(text);
+      if (isAchievement) {
+        const badge = /(?:title\s*(?:acquired|gained|bestowed)|【称号)/i.test(text) ? '👑 TITLE BESTOWED' : '✦ ACHIEVEMENT UNLOCKED';
+        return { type: 'achievement', cardClass: 'system-card-achievement', badge };
+      }
+
+      // 3. Quest Directive / Objectives (Strictly requires bracketed quest or prompt trigger)
+      const isQuest = /^(?:\[|【)\s*(?:Main|Side|Emergency|Daily|Hidden|Scenario|Special)?\s*(?:Quest|Mission|Objective|Task)/i.test(text) ||
+                      /^(?:Quest|Mission)\s*(?:Completed|Failed|Alert|Log|Directive|Given|Available)\s*[:：\!]/i.test(text) ||
+                      /^New Quest\s*[:：\!]/i.test(text);
+      if (isQuest) {
+        const badge = /completed/i.test(text) ? '📜 QUEST COMPLETED' : (/failed/i.test(text) ? '⚠️ QUEST FAILED' : '📜 QUEST DIRECTIVE');
+        return { type: 'quest', cardClass: 'system-card-quest', badge };
+      }
+
+      // 4. Status Screen / Stat Attributes
+      if (isStatParagraph(text)) {
+        return {
+          type: 'stats',
+          cardClass: 'system-card-stats',
+          badge: '📊 STATUS SCREEN // ATTRIBUTES',
+          collapsible: text.length > 350 || (text.split('\n').length > 5)
+        };
+      }
+
+      // 5. Skill / Spell / Entity Scan Tooltip (Strict bracket or appraisal label)
+      const isSkill = /^(?:\[|【)\s*(?:Skill|Spell|Ability|Technique)/i.test(text) ||
+                      /^(?:Skill|Spell|Ability|Technique)\s*(?:Acquired|Learned|Created|Unlocked|Upgraded)\s*[:：\!]/i.test(text);
+      if (isSkill) {
+        return { type: 'skill', cardClass: 'system-card-skill', badge: '⚡ SKILL & ABILITY' };
+      }
+
+      const isTooltip = /^(?:\[|【)\s*(?:Item|Appraisal|Scan|Artifact|Relic|Equipment|Entity|Monster)/i.test(text) ||
+                        /^(?:Item|Artifact|Relic|Equipment)\s*Appraisal\s*[:：]/i.test(text) ||
+                        /^Rank\s*[:：]\s*[ESABCDFS]+/i.test(text);
+      if (isTooltip) {
+        return { type: 'tooltip', cardClass: 'system-card-tooltip', badge: '💎 ENTITY SCAN // TOOLTIP' };
+      }
+
+      // 6. World Announcement / System Broadcast (Strict bracket or system header)
+      const isBroadcast = /^(?:\[|【)\s*(?:World Announcement|System\s*(?:Notice|Alert|Directive|Broadcast|Announcement|Message)|Dimensional\s*Notice)/i.test(text) ||
+                          /^(?:World Announcement|System Notice|System Alert|System Broadcast|Time to Level Collapse)\s*[:：]/i.test(text) ||
+                          text.startsWith('[System') || text.startsWith('【System') || text.startsWith('【Notice');
+      if (isBroadcast) {
+        return { type: 'broadcast', cardClass: 'system-card-broadcast', badge: '📢 SYSTEM BROADCAST' };
+      }
+
+      // 7. Inner Thoughts / Telepathy (Italics / Brackets / Tagged thoughts)
+      const isThought = (text.startsWith('*') && text.endsWith('*')) ||
+                        (text.startsWith('<<') && text.endsWith('>>')) ||
+                        (text.startsWith('«') && text.endsWith('»')) ||
+                        (text.startsWith('『') && text.endsWith('』')) ||
+                        text.endsWith('I thought.') || text.endsWith('I thought') ||
+                        /\bthought\s+[A-Z][a-z]+/i.test(text);
+      if (isThought) {
+        return { type: 'thought' };
+      }
+
+      // 8. Dialogue (Western and Asian Quotes)
+      const isDialogue = text.startsWith('"') || text.startsWith('“') ||
+                         text.startsWith('「') || text.startsWith("'") ||
+                         text.startsWith('‘');
+      if (isDialogue) {
+        return { type: 'dialogue' };
+      }
+
+      return { type: 'narrative' };
+    }
+
+    function buildParagraphElement(pText, idx) {
+      const text = (pText || '').trim();
+      const meta = classifyParagraph(text);
+
+      if (meta.type === 'scene_break') {
+        const divider = document.createElement('div');
+        divider.className = 'reader-scene-break';
+        divider.setAttribute('data-para-idx', String(idx));
+        divider.setAttribute('data-scene-break', 'true');
+        divider.innerHTML = `
+          <div class="scene-break-rule"></div>
+          <span class="scene-break-glyph">✦ &nbsp; ✦ &nbsp; ✦</span>
+          <div class="scene-break-rule"></div>
+        `;
+        return divider;
+      }
+
+      if (meta.cardClass) {
+        const card = document.createElement('div');
+        card.className = `reader-system-card ${meta.cardClass}`;
+        card.setAttribute('data-para-idx', String(idx));
+        card.setAttribute('data-system-type', meta.type);
+        card.title = 'Click to start audio reading from here';
+
+        const formattedBody = meta.type === 'stats' ? formatStatCardBody(text) : formatInlineTypography(text);
+
+        card.innerHTML = `
+          <div class="system-card-header">
+            <span class="system-badge">${meta.badge}</span>
+            ${meta.collapsible ? '<button type="button" class="system-card-collapse-btn" aria-label="Toggle full card">Show Less ▲</button>' : ''}
+          </div>
+          <div class="system-card-body">${formattedBody}</div>
+        `;
+
+        if (meta.collapsible) {
+          const toggleBtn = card.querySelector('.system-card-collapse-btn');
+          if (toggleBtn) {
+            toggleBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const isCollapsed = card.classList.toggle('system-card-collapsed');
+              toggleBtn.textContent = isCollapsed ? 'Expand All ▼' : 'Show Less ▲';
+            });
+          }
+        }
+
+        return card;
+      }
+
+      const p = document.createElement('p');
+      p.className = `reader-${meta.type}`;
+      p.setAttribute('data-para-index', String(idx));
+      p.setAttribute('data-para-idx', String(idx));
+      p.title = 'Click to start audio reading from here';
+      p.innerHTML = formatInlineTypography(text);
+      return p;
     }
 
 
@@ -870,7 +976,41 @@ function initReader() {
         return chapterCache.get(num);
       }
 
-      // 1. Check Dexie IndexedDB first (Fastest, resilient to type variations & offline)
+      // 1. If online, fetch fresh data with ETag support from high-speed backend API first
+      if (navigator.onLine) {
+        try {
+          const res = await fetch(`/api/novel/${novelSlug}/chapter/${num}`);
+          if (res.status === 304 && chapterCache.has(num)) {
+            return chapterCache.get(num);
+          }
+          if (res.ok) {
+            const data = await res.json();
+            if (data.paragraphs && Array.isArray(data.paragraphs)) {
+              data.paragraphs = segregateAndNormalizeParagraphs(data.paragraphs);
+            }
+            chapterCache.set(num, data);
+            if (novelDb) {
+              novelDb.chapters.put({
+                novelSlug: novelSlug,
+                chapterNumber: num,
+                title: data.title,
+                content: (data.paragraphs || []).join('\n\n'),
+                paragraphs: data.paragraphs,
+                word_count: data.word_count,
+                read_time_mins: data.read_time_mins,
+                prev_chapter: data.prev_chapter,
+                next_chapter: data.next_chapter,
+                updated_at: Date.now()
+              }).catch(() => { });
+            }
+            return data;
+          }
+        } catch (netErr) {
+          console.warn("High-speed backend API fetch failed, checking Dexie offline cache:", netErr);
+        }
+      }
+
+      // 2. Check Dexie IndexedDB (Resilient offline storage)
       if (novelDb) {
         try {
           let cached = await novelDb.chapters.get([novelSlug, num]).catch(() => null);
@@ -898,13 +1038,14 @@ function initReader() {
 
             // Only trust cached chapter if it contains valid paragraphs
             if (paras && paras.length > 0) {
+              const normalized = segregateAndNormalizeParagraphs(paras);
               const formatted = {
                 slug: novelSlug,
                 novel_title: document.body.getAttribute('data-novel-title') || novelSlug,
                 chapter_number: num,
                 title: cached.title || `Chapter ${num}`,
-                paragraphs: paras,
-                word_count: cached.word_count || paras.reduce((acc, p) => acc + p.split(/\s+/).length, 0),
+                paragraphs: normalized,
+                word_count: cached.word_count || normalized.reduce((acc, p) => acc + p.split(/\s+/).length, 0),
                 read_time_mins: cached.read_time_mins || Math.max(1, Math.round((cached.word_count || 1000) / 220)),
                 prev_chapter: cached.prev_chapter,
                 next_chapter: cached.next_chapter,
@@ -923,33 +1064,19 @@ function initReader() {
         }
       }
 
-      // 2. Fetch JSON from high-speed backend API
+      // 3. Fallback: retry API fetch if offline check failed
       try {
         const res = await fetch(`/api/novel/${novelSlug}/chapter/${num}`);
-        if (res.status === 304 && chapterCache.has(num)) {
-          return chapterCache.get(num);
-        }
         if (res.ok) {
           const data = await res.json();
-          chapterCache.set(num, data);
-          if (novelDb) {
-            novelDb.chapters.put({
-              novelSlug: novelSlug,
-              chapterNumber: num,
-              title: data.title,
-              content: (data.paragraphs || []).join('\n\n'),
-              paragraphs: data.paragraphs,
-              word_count: data.word_count,
-              read_time_mins: data.read_time_mins,
-              prev_chapter: data.prev_chapter,
-              next_chapter: data.next_chapter,
-              updated_at: Date.now()
-            }).catch(() => { });
+          if (data.paragraphs && Array.isArray(data.paragraphs)) {
+            data.paragraphs = segregateAndNormalizeParagraphs(data.paragraphs);
           }
+          chapterCache.set(num, data);
           return data;
         }
-      } catch (netErr) {
-        console.warn("Backend fetch failed, attempting IndexedDB fallback:", netErr);
+      } catch (err) {
+        console.error("All chapter fetch sources exhausted:", err);
       }
 
       throw new Error(`Failed to load Chapter ${num}`);
@@ -1149,8 +1276,9 @@ function initReader() {
         if (chapterContent) {
           chapterContent.innerHTML = '';
           if (data.paragraphs && data.paragraphs.length > 0) {
+            const normalizedParas = segregateAndNormalizeParagraphs(data.paragraphs);
             const fragment = document.createDocumentFragment();
-            data.paragraphs.forEach((pText, idx) => {
+            normalizedParas.forEach((pText, idx) => {
               fragment.appendChild(buildParagraphElement(pText, idx));
             });
             chapterContent.appendChild(fragment);
@@ -1531,8 +1659,9 @@ function initReader() {
                 if (localCh) {
                   const paras = localCh.paragraphs || (localCh.content ? localCh.content.split('\n\n') : []);
                   contentEl.innerHTML = '';
-                  if (paras.length > 0) {
-                    paras.forEach((pText, pIdx) => {
+                  const normalizedParas = segregateAndNormalizeParagraphs(paras);
+                  if (normalizedParas.length > 0) {
+                    normalizedParas.forEach((pText, pIdx) => {
                       contentEl.appendChild(buildParagraphElement(pText, pIdx));
                     });
                   } else {
@@ -3172,15 +3301,21 @@ function initReader() {
 
 
     document.addEventListener('click', (e) => {
-
-      if (!e.target.closest('.dock-popover-wrapper')) {
-
-        dockVolPopover?.classList.remove('open');
-
-        dockBrightnessPopover?.classList.remove('open');
-
+      const toggleBtn = e.target.closest('.system-card-collapse-btn');
+      if (toggleBtn) {
+        e.stopPropagation();
+        const card = toggleBtn.closest('.reader-system-card');
+        if (card) {
+          const isCollapsed = card.classList.toggle('system-card-collapsed');
+          toggleBtn.textContent = isCollapsed ? 'Expand All ▼' : 'Show Less ▲';
+        }
+        return;
       }
 
+      if (!e.target.closest('.dock-popover-wrapper')) {
+        dockVolPopover?.classList.remove('open');
+        dockBrightnessPopover?.classList.remove('open');
+      }
     });
 
 
@@ -4583,13 +4718,13 @@ function initReader() {
 
       // Tactile Haptic Immersion on LitRPG System Cards
 
-      if (targetNode.classList.contains('system-card-achievement')) {
+      if (targetNode.classList.contains('system-card-achievement') || targetNode.classList.contains('system-card-quest')) {
 
-        triggerHaptic([35, 45, 35]); // Double vibration buzz on achievement unlock!
+        triggerHaptic([35, 45, 35]); // Double vibration buzz on achievement unlock or quest update!
 
-      } else if (targetNode.classList.contains('system-card-stats') || targetNode.classList.contains('system-card-tooltip')) {
+      } else if (targetNode.classList.contains('system-card-stats') || targetNode.classList.contains('system-card-tooltip') || targetNode.classList.contains('system-card-skill')) {
 
-        triggerHaptic([20]); // Subtle tactile pulse on stat telemetry
+        triggerHaptic([20]); // Subtle tactile pulse on stat telemetry / skill scan
 
       }
 
@@ -5269,6 +5404,10 @@ function initReader() {
         node.onclick = null;
 
         node.addEventListener('click', (e) => {
+          // Guard 0: Ignore clicks on interactive buttons/controls (e.g. collapse toggle button)
+          if (e.target.closest('.system-card-collapse-btn, button, a, input, select')) {
+            return;
+          }
 
           // Guard 1: Ignore accidental taps during or immediately after scrolling/dragging on mobile
 
@@ -5703,9 +5842,16 @@ function initReader() {
         targetNode.classList.contains('reader-system-card') ||
         targetNode.classList.contains('system-card-stats') ||
         targetNode.classList.contains('system-card-achievement') ||
+        targetNode.classList.contains('system-card-quest') ||
+        targetNode.classList.contains('system-card-skill') ||
         targetNode.classList.contains('system-card-tooltip') ||
         targetNode.hasAttribute('data-system-type')
       );
+
+      // Clean markdown emphasis and table dividers for clean speech synthesis
+      cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '$1');
+      cleaned = cleaned.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1');
+      cleaned = cleaned.replace(/\|/g, ' ');
 
       // Look for characteristic LitRPG stat patterns:
       // e.g. "Strength: 45", "Agility: 32", "Health: 120/120", "Mana: 60/60", "[Level: 14]"
@@ -5721,29 +5867,49 @@ function initReader() {
           return `System notification: Achievement unlocked. ${titleName}.`;
         }
 
-        // 2. Check for Level Up
+        // 2. Check for Quest Directive
+        const questMatch = rawText.match(/(?:quest|mission)\s*(?:directive|alert|notice|completed|failed)?\s*[:：\-—]?\s*\[?([A-Za-z0-9\s\'’\-]+)\]?/i);
+        if (questMatch && questMatch[1]) {
+          const qName = questMatch[1].trim();
+          return `System notification: Quest alert. ${qName}.`;
+        }
+
+        // 3. Check for Skill / Spell Unlock
+        const skillMatch = rawText.match(/(?:skill|spell|ability)\s*(?:acquired|learned|unlocked)?\s*[:：\-—]?\s*\[?([A-Za-z0-9\s\'’\-]+)\]?/i);
+        if (skillMatch && skillMatch[1]) {
+          const sName = skillMatch[1].trim();
+          return `System notification: Skill acquired. ${sName}.`;
+        }
+
+        // 4. Check for Level Up
         const levelMatch = rawText.match(/level\s*(?:up)?\s*[:：\-—]?\s*(\d+)/i);
         if (/level\s*up/i.test(rawText) || (levelMatch && /congratulations|congrats/i.test(rawText))) {
           const lvlStr = levelMatch ? ` to level ${levelMatch[1]}` : '';
           return `System notification: Level up achieved${lvlStr}. Character attributes updated.`;
         }
 
-        // 3. Check for Character Name / Class in Status Window
-        const nameMatch = rawText.match(/name\s*[:：]\s*([A-Za-z0-9\s\'’\-]+)/i);
-        const classMatch = rawText.match(/class\s*[:：]\s*([A-Za-z0-9\s\'’\-]+)/i);
-        if (nameMatch || classMatch || /status\s*(?:window|menu|sheet)?/i.test(rawText)) {
-          let summary = 'Status screen updated.';
-          if (nameMatch && classMatch) {
-            summary = `Status screen for ${nameMatch[1].trim()}, class ${classMatch[1].trim()}. Attributes updated.`;
-          } else if (nameMatch) {
-            summary = `Status screen for ${nameMatch[1].trim()}. Attributes updated.`;
-          } else if (levelMatch) {
-            summary = `Status screen, level ${levelMatch[1]}. Attributes updated.`;
+        // 5. Check for Character Name / Class / Level in Status Window
+        const nameMatch = rawText.match(/name\s*[:：]\s*([^:\n]+?)(?=\s+(?:Level|Race|Class|Titles?|Rank|Health|Strength)\s*[:：]|\n|$)/i);
+        const classMatch = rawText.match(/class\s*[:：]\s*([^:\n]+?)(?=\s+(?:Rank|Level|Health|Mana|Strength|Titles?)\s*[:：]|\n|$)/i);
+        const levelMatchInBox = rawText.match(/level\s*[:：]\s*(\d+)/i);
+        if (nameMatch || classMatch || levelMatchInBox || /status\s*(?:window|menu|sheet)?/i.test(rawText)) {
+          const charName = nameMatch ? nameMatch[1].trim() : '';
+          const charClass = classMatch ? classMatch[1].trim() : '';
+          const charLevel = levelMatchInBox ? levelMatchInBox[1].trim() : '';
+
+          if (charName && charClass) {
+            return `Status screen for ${charName}, class ${charClass}. Attributes updated.`;
+          } else if (charName && charLevel) {
+            return `Status screen for ${charName}, level ${charLevel}. Attributes updated.`;
+          } else if (charName) {
+            return `Status screen for ${charName}. Attributes updated.`;
+          } else if (charLevel) {
+            return `Status screen, level ${charLevel}. Attributes updated.`;
           }
-          return summary;
+          return 'Status screen updated. Attributes displayed.';
         }
 
-        // 4. If there is a narrative intro sentence before the dense stat block, speak that intro
+        // 6. If there is a narrative intro sentence before the dense stat block, speak that intro
         const lines = rawText.split(/[\r\n]+/);
         const narrativeLines = lines.filter(l => {
           const trimmed = l.trim();

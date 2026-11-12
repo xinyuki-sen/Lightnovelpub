@@ -6,6 +6,7 @@ import tempfile
 import asyncio
 import zipfile
 import base64
+import hashlib
 import edge_tts
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response, RedirectResponse
@@ -70,6 +71,8 @@ async def serve_cover_image(filename: str):
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+templates.env.globals["classify_paragraph"] = database.classify_paragraph
+templates.env.filters["format_typography"] = database.format_inline_typography
 
 # Initialize database schema
 database.init_db()
@@ -212,6 +215,10 @@ async def get_chapter_json(request: Request, slug: str, chapter_number: int):
 
     word_count = chapter.get("word_count", 0)
     mins = max(1, round(word_count / 220))
+    etag = f'"{hashlib.md5(f"{slug}:{chapter_number}:{word_count}".encode()).hexdigest()}"'
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match and if_none_match.strip() == etag:
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "public, max-age=3600, must-revalidate"})
 
     return JSONResponse(
         content={
