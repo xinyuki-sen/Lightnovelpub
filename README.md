@@ -17,18 +17,31 @@ An ultra-responsive, mobile-first web application and Progressive Web App (PWA) 
   - Memory-safe PDF stream ingestion powered by `pypdfium2` with `pypdf` fallback.
   - Generous 45MB upload envelope with zip-bomb and decompression expansion guards.
 
-- **Neural Edge-TTS Audio Engine & Word Synchronization**:
-  - High-fidelity cloud neural speech synthesis powered by Microsoft Edge-TTS (`en-US-ChristopherNeural`, `en-US-AvaNeural`, and global multilingual voices).
-  - Accurate `WordBoundary` timestamps delivering real-time karaoke word-by-word and sentence highlighting.
-  - 10-paragraph predictive offline audio runway caching for seamless, gapless narration.
-  - MediaSession API integration for lock-screen controls, headphone events, and metadata display.
-  - Persistent audio session singleton with seamless silent PCM handoff, preventing Android Chrome autoplay restrictions during automatic chapter transitions.
-  - Built-in **LitRPG Stat-Box Audio Bypass** to skip dense stat dumps during audiobook narration.
+- **Cyber-OLED LitRPG HUD & Paragraph Segregation Engine**:
+  - **Lookahead Boundary Paragraph Cleaving**: Automatically separates embedded LitRPG stat dumps from trailing narrative prose into distinct paragraphs, preventing narrative sentences from being swallowed into stat cards or muted during audio playback.
+  - **6-Taxonomy System HUD Cards**: Classifies game notifications into specialized visual components with cybernetic badge ribbons:
+    - `Stats HUD`: Character sheets and attribute lists with triadic grouping.
+    - `Title Bestowed`: Achievement and moniker unlocks.
+    - `Quest Directive`: Mission objectives and condition alerts.
+    - `Skill & Ability`: Spell, perk, and technique registrations.
+    - `Entity Tooltip Scan`: Monster and item appraisal descriptions.
+    - `System Broadcast`: World announcements and administrator notices.
+  - **Balanced RPG Attribute Triads**: Groups stats into Physical (`STR`, `DEX`, `END`, `AGI`, `VIT`), Mental (`INT`, `WIS`, `WILL`, `PER`), and Progression (`Level`, `Free Stats`, `Nexus Coins`, `Credits`, `EXP`) chips rendered in responsive inline triads (`.stat-card-row`).
+  - **Dynamic Stat Delta & Perk Styling**: Bidirectional regex styling for stat gains and buffs (e.g., `+5 STR`, `All stats +10%`, `Strength +1`, `Agility +2`).
+  - **Smart Card Folding**: System cards exceeding 4 lines automatically include a smooth toggle control (`Show Less ▲` / `Show More ▼`) with click-propagation guards.
+
+- **Dual-Engine Audio Narration Architecture**:
+  - **Studio Neural (Cloud Edge-TTS)**: High-fidelity cloud neural speech synthesis (`en-US-ChristopherNeural`, `en-US-AvaNeural`, multilingual voices) with base64 `X-Word-Boundaries` timestamps for real-time sentence and karaoke word-by-word highlighting.
+  - **LitRPG Audio Summaries**: Dense stat boxes are condensed into conversational spoken summaries (e.g. *"Status Screen: 9 attributes detected."*) during cloud TTS narration instead of drone-reading numbers.
+  - **Infinite Local (Web Speech API)**: Zero-latency, zero-bandwidth browser speech synthesis engine with an anti-cascade watchdog timer and chunk boundary tracking.
+  - **Predictive Audio Runway**: 10-paragraph forward pre-buffering pipeline for seamless, gapless chapter playback.
+  - **MediaSession & Lock Screen**: Full native OS lock-screen metadata, headphone click controls, and persistent audio singleton with silent PCM handoff to prevent mobile autoplay blocks.
 
 - **Offline-First PWA Architecture & Dexie.js**:
-  - Client-authoritative storage powered by **Dexie.js (IndexedDB)** for full offline library reading and audio playback.
-  - Sub-50ms instantaneous chapter navigation via single-roundtrip DOM hydration without full page reloads.
-  - Real-time reading progress tracking, font personalization, and OLED themes preserved locally and synced with the server.
+  - Client-authoritative storage powered by **Dexie.js (IndexedDB)** for full offline library reading and instant chapter navigation.
+  - Sub-50ms instantaneous chapter transitions via single-roundtrip DOM hydration without page reloads.
+  - Real-time reading progress tracking, font personalization, and OLED themes preserved locally and synchronized with the server.
+  - Sub-5ms HTTP ETag (`304 Not Modified`) chapter revalidation with MD5 content hashing.
 
 - **Resilient Hybrid Database**:
   - High-concurrency cloud **Turso (LibSQL)** support with single-roundtrip chapter and Table of Contents hydration.
@@ -42,11 +55,12 @@ An ultra-responsive, mobile-first web application and Progressive Web App (PWA) 
 | Component | Technology | Description |
 |---|---|---|
 | **Backend** | Python 3.11+, FastAPI, Uvicorn | Asynchronous REST API, server-side template rendering, ETag cache |
-| **Audio Service** | Edge-TTS, Web Audio API | Neural speech synthesis with word boundary cues and background keep-alive |
-| **Document Parsers** | PyPDFium2, PyPDF, Pillow, zipfile | Native, memory-safe PDF & EPUB parsing pipelines |
+| **Audio Service** | Edge-TTS, Web Speech API, Web Audio | Dual-engine narration: Studio Neural (cloud) + Infinite Local (offline browser) |
+| **Document Parsers** | PyPDFium2, PyPDF, Pillow, zipfile | Native, memory-safe PDF & EPUB chapter segregation pipelines |
+| **Typography Engine** | Jinja2 Filters & Client Regex | Unified SSR/client paragraph classification, LitRPG stat triads, and perk deltas |
 | **Database** | Turso (LibSQL) / SQLite3 | Dual-mode database with single-connection chapter and ToC queries |
-| **Client Storage** | Dexie.js (IndexedDB) | Client-first offline storage, fast hydration, and reading cache |
-| **Interface & PWA** | Vanilla HTML5, CSS3, Jinja2, ServiceWorker | Cyber-OLED aesthetic, responsive mobile & desktop views, installable PWA |
+| **Client Storage** | Dexie.js (IndexedDB) | Client-first offline storage, sub-50ms hydration, and reading cache |
+| **Interface & PWA** | Vanilla HTML5, CSS3, Jinja2, ServiceWorker | Cyber-OLED aesthetic, 6 LitRPG HUD cards, responsive mobile reader, installable PWA |
 | **Hosting & CI/CD** | Render (`render.yaml`) | Automated cloud deployment on Git push |
 
 ---
@@ -55,8 +69,8 @@ An ultra-responsive, mobile-first web application and Progressive Web App (PWA) 
 
 ```
 Lightnovelpub/
-├── main.py                  # FastAPI server, REST routes, upload handlers, ETag caching
-├── database.py              # Turso LibSQL & SQLite adapter, single-roundtrip queries, lexer
+├── main.py                  # FastAPI server, REST routes, Edge-TTS bridge, ETag caching, Jinja2 filters
+├── database.py              # Turso LibSQL & SQLite adapter, LitRPG paragraph segregation, lexer
 ├── pdf_parser.py            # PDF chapter division parser, in-text ToC filter, watermark stripper
 ├── epub_parser.py           # EPUB3 & OPF spine extractor, HTML text cleaner, natural sort
 ├── render.yaml              # Render web service blueprint & build configuration
@@ -65,9 +79,9 @@ Lightnovelpub/
 │   └── library.db           # Pre-seeded local library SQLite database
 ├── static/
 │   ├── css/
-│   │   └── style.css        # Cyber-OLED theme, responsive mobile HUD, reading canvas
+│   │   └── style.css        # Cyber-OLED theme, LitRPG HUD cards, stat triads, reading canvas
 │   ├── js/
-│   │   ├── reader.js        # Audio player, Dexie hydration, audio singleton, gesture engine
+│   │   ├── reader.js        # Dual-engine player (Neural/Local), Dexie hydration, card collapse
 │   │   ├── upload.js        # Chunked client upload orchestrator, local DB sync, progress bar
 │   │   ├── dexie.min.js     # IndexedDB client persistence engine
 │   │   └── sw.js            # PWA Service Worker for offline asset caching
@@ -77,7 +91,7 @@ Lightnovelpub/
     ├── base.html            # PWA application shell, global navigation, modal roots
     ├── index.html           # Library home, search, sort, and novel cards
     ├── novel_detail.html    # Bento-grid metadata, chapter table of contents, progress
-    └── reader.html          # Distraction-free reader canvas, Cyber-OLED audio HUD sheet
+    └── reader.html          # Distraction-free reader canvas, Cyber-OLED HUD cards, audio controls
 ```
 
 ---
