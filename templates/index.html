@@ -100,6 +100,43 @@
   </div>
 </div>
 
+<!-- USER READING TELEMETRY BANNER -->
+<div class="reading-telemetry-banner" id="reading-telemetry-banner">
+  <div class="telemetry-badge-row">
+    <span class="telemetry-badge-chip"><span>●</span> READING TELEMETRY</span>
+    <span class="telemetry-sync-time" id="telemetry-sync-status">PERSISTENCE SYNCHRONIZED</span>
+  </div>
+  <div class="telemetry-grid">
+    <div class="telemetry-card telemetry-card-today">
+      <div class="telemetry-card-icon">🔥</div>
+      <div class="telemetry-card-val" id="stat-today-time">0m</div>
+      <div class="telemetry-card-label">Today's Time</div>
+      <div class="telemetry-card-sub">Active reading session</div>
+    </div>
+
+    <div class="telemetry-card">
+      <div class="telemetry-card-icon">⏱️</div>
+      <div class="telemetry-card-val" id="stat-total-time">0m</div>
+      <div class="telemetry-card-label">Total Time</div>
+      <div class="telemetry-card-sub">All-time reading</div>
+    </div>
+
+    <div class="telemetry-card">
+      <div class="telemetry-card-icon">📚</div>
+      <div class="telemetry-card-val" id="stat-books-read">0</div>
+      <div class="telemetry-card-label">Books Read</div>
+      <div class="telemetry-card-sub" id="stat-books-sub">0 completed</div>
+    </div>
+
+    <div class="telemetry-card">
+      <div class="telemetry-card-icon">📄</div>
+      <div class="telemetry-card-val" id="stat-pages-read">0</div>
+      <div class="telemetry-card-label">Pages Read</div>
+      <div class="telemetry-card-sub">250 words / page</div>
+    </div>
+  </div>
+</div>
+
 <!-- Collection Controls, Integrated Search & Sorting Bar -->
 <div class="collection-controls-bar" id="novel-collection">
   <div class="collection-heading-wrap">
@@ -115,12 +152,13 @@
   </div>
 
   <div class="collection-actions-wrap">
-    <!-- Filter Pills (All, In Progress, Unread, Completed) -->
+    <!-- Filter Pills (All, Favorites, In Progress, Unread, Completed) -->
     <div class="collection-filter-pills" id="library-filter-pills">
       <button type="button" class="filter-pill-btn active" data-filter="all">All ({{ novels|length }})</button>
-      <button type="button" class="filter-pill-btn" data-filter="reading">In Progress</button>
+      <button type="button" class="filter-pill-btn" data-filter="favorites">⭐ Favorites</button>
+      <button type="button" class="filter-pill-btn" data-filter="reading">📖 Reading</button>
       <button type="button" class="filter-pill-btn" data-filter="unread">Unread</button>
-      <button type="button" class="filter-pill-btn" data-filter="completed">Completed</button>
+      <button type="button" class="filter-pill-btn" data-filter="completed">✔️ Completed</button>
     </div>
 
     <!-- Quick Sort Dropdown -->
@@ -158,13 +196,20 @@
       
       <!-- Top Badges -->
       <div class="novel-badge-top-row">
-        <span class="novel-card-badge">{{ novel.total_chapters }} Chs</span>
-        {% if is_reading %}
-        <span class="novel-status-chip">Reading Ch. {{ cur_ch }} ({{ cur_pct|round|int }}%)</span>
-        {% endif %}
-        <button type="button" class="btn-card-quick-delete" title="Delete novel from library" onclick="deleteNovelFromLibrary(event, '{{ novel.slug }}', '{{ novel.title }}')">
-          🗑️
-        </button>
+        <div class="badge-row-left">
+          <button type="button" class="btn-card-favorite" data-slug="{{ novel.slug }}" title="Toggle Favorite" onclick="toggleNovelFavorite(event, '{{ novel.slug }}')">
+            ☆
+          </button>
+          <span class="novel-card-badge">{{ novel.total_chapters }} Chs</span>
+        </div>
+        <div class="badge-row-right">
+          {% if is_reading %}
+          <span class="novel-status-chip">Ch. {{ cur_ch }}</span>
+          {% endif %}
+          <button type="button" class="btn-card-quick-delete" title="Delete novel from library" onclick="deleteNovelFromLibrary(event, '{{ novel.slug }}', '{{ novel.title }}')">
+            🗑️
+          </button>
+        </div>
       </div>
 
       <!-- Quick Action Overlay Pill -->
@@ -180,6 +225,7 @@
       <div class="novel-progress-bar-wrap">
         <div class="progress-header">
           <span>Ch. {{ cur_ch }} / {{ novel.total_chapters }}</span>
+          <span class="novel-time-left" data-slug="{{ novel.slug }}" id="time-left-{{ novel.slug }}">~{{ (((novel.total_chapters - cur_ch + 1) * 2200) / 220 / 60)|round(1) }}h left</span>
           <span class="progress-pct-text">{{ percent }}%</span>
         </div>
         <div class="progress-track">
@@ -231,6 +277,103 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentFilter = 'all';
   let searchQuery = '';
 
+  // Initialize favorite buttons and estimated time
+  setTimeout(() => {
+    updateFavoriteButtons();
+    updateEstimatedTimeLeft();
+  }, 50);
+
+  // Smart Shelves & Favorites Manager
+  const FAVORITES_KEY = 'novel_favorites_v1';
+  function getFavorites() {
+    try {
+      const raw = localStorage.getItem(FAVORITES_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch(e) {
+      return [];
+    }
+  }
+
+  function isFavorite(slug) {
+    return getFavorites().includes(slug);
+  }
+
+  window.toggleNovelFavorite = function(e, slug) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    let favs = getFavorites();
+    const idx = favs.indexOf(slug);
+    if (idx >= 0) {
+      favs.splice(idx, 1);
+    } else {
+      favs.push(slug);
+    }
+    try {
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs));
+    } catch(e) {}
+    updateFavoriteButtons();
+    applyFilters();
+  };
+
+  function updateFavoriteButtons() {
+    const favs = getFavorites();
+    document.querySelectorAll('.btn-card-favorite').forEach(btn => {
+      const s = btn.getAttribute('data-slug');
+      if (favs.includes(s)) {
+        btn.textContent = '★';
+        btn.classList.add('active');
+        btn.title = 'Remove from Favorites';
+      } else {
+        btn.textContent = '☆';
+        btn.classList.remove('active');
+        btn.title = 'Add to Favorites';
+      }
+    });
+    const favPill = document.querySelector('.filter-pill-btn[data-filter="favorites"]');
+    if (favPill) {
+      favPill.textContent = `⭐ Favorites (${favs.length})`;
+    }
+  }
+
+  function updateEstimatedTimeLeft() {
+    const statsKey = 'novel_reading_stats_v1';
+    let stats = null;
+    try {
+      const raw = localStorage.getItem(statsKey);
+      if (raw) stats = JSON.parse(raw);
+    } catch(e) {}
+
+    let wpm = 220;
+    if (stats && stats.totalWords > 1000 && stats.totalSeconds > 120) {
+      wpm = Math.min(450, Math.max(120, Math.round(stats.totalWords / (stats.totalSeconds / 60))));
+    }
+
+    document.querySelectorAll('.novel-card').forEach(card => {
+      const curCh = parseInt(card.getAttribute('data-ch') || '1', 10);
+      const totalChs = parseInt(card.getAttribute('data-total-chs') || '1', 10);
+      const pct = parseFloat(card.getAttribute('data-percent') || '0');
+      const timeLeftEl = card.querySelector('.novel-time-left');
+      if (!timeLeftEl) return;
+
+      if (pct >= 100) {
+        timeLeftEl.textContent = 'Finished ✔️';
+      } else {
+        const remainingChapters = Math.max(0, totalChs - curCh + 1);
+        const estWords = remainingChapters * 2200;
+        const minsLeft = Math.ceil(estWords / wpm);
+        if (minsLeft < 60) {
+          timeLeftEl.textContent = `~${minsLeft}m left`;
+        } else {
+          const hrs = Math.floor(minsLeft / 60);
+          const remM = minsLeft % 60;
+          timeLeftEl.textContent = remM > 0 ? `~${hrs}h ${remM}m left` : `~${hrs}h left`;
+        }
+      }
+    });
+  }
+
   function syncSearch(query, origin) {
     searchQuery = query.trim().toLowerCase();
     if (origin !== 'nav' && navSearch) navSearch.value = query;
@@ -265,6 +408,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (currentFilter === 'reading') matchesFilter = (pct > 0.0 || ch > 1) && pct < 100.0;
       if (currentFilter === 'unread') matchesFilter = (pct === 0.0 && ch <= 1);
       if (currentFilter === 'completed') matchesFilter = pct >= 100.0;
+      if (currentFilter === 'favorites') {
+        const slug = card.getAttribute('data-novel-slug') || '';
+        matchesFilter = isFavorite(slug);
+      }
 
       if (matchesSearch && matchesFilter) {
         card.style.display = '';
@@ -700,6 +847,88 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
       }
+
+      // 4. Hydrate User Reading Telemetry
+      function formatTelemetryDuration(seconds) {
+        if (!seconds || seconds <= 0) return '0m';
+        const mins = Math.floor(seconds / 60);
+        if (mins < 1) return '< 1m';
+        if (mins < 60) return `${mins}m`;
+        const hrs = Math.floor(mins / 60);
+        const remMins = mins % 60;
+        return remMins > 0 ? `${hrs}h ${remMins}m` : `${hrs}h`;
+      }
+
+      function updateTelemetryUI(s) {
+        const elToday = document.getElementById('stat-today-time');
+        const elTotal = document.getElementById('stat-total-time');
+        const elBooks = document.getElementById('stat-books-read');
+        const elBooksSub = document.getElementById('stat-books-sub');
+        const elPages = document.getElementById('stat-pages-read');
+
+        if (elToday) elToday.textContent = formatTelemetryDuration(s.todaySeconds);
+        if (elTotal) elTotal.textContent = formatTelemetryDuration(s.totalSeconds);
+
+        const completedCount = Array.isArray(s.completedNovels) ? s.completedNovels.length : 0;
+        const inProgressCount = Array.isArray(s.readNovels) ? s.readNovels.length : 0;
+        if (elBooks) elBooks.textContent = String(completedCount);
+        if (elBooksSub) {
+          if (completedCount > 0) elBooksSub.textContent = `${completedCount} completed (${inProgressCount} active)`;
+          else if (inProgressCount > 0) elBooksSub.textContent = `${inProgressCount} in progress`;
+          else elBooksSub.textContent = '0 completed';
+        }
+
+        const pages = Math.floor((s.totalWords || 0) / 250);
+        if (elPages) elPages.textContent = pages.toLocaleString();
+      }
+
+      const STATS_KEY = 'novel_reading_stats_v1';
+      const todayStr = (new Date()).toLocaleDateString('en-CA');
+      let stats = null;
+      try {
+        const raw = localStorage.getItem(STATS_KEY);
+        if (raw) stats = JSON.parse(raw);
+      } catch (e) {}
+
+      if (!stats || typeof stats !== 'object') {
+        stats = {
+          todayDate: todayStr,
+          todaySeconds: 0,
+          totalSeconds: 0,
+          totalWords: 0,
+          completedNovels: [],
+          readNovels: [],
+          chapterWordsCredited: {}
+        };
+      }
+
+      if (stats.todayDate !== todayStr) {
+        stats.todayDate = todayStr;
+        stats.todaySeconds = 0;
+      }
+
+      // If stats.totalWords is 0 and we have progress items from Dexie, seed initial estimate
+      if ((!stats.totalWords || stats.totalWords === 0) && items && items.length > 0) {
+        let estimatedWords = 0;
+        items.forEach(p => {
+          const pct = (typeof p.percent === 'number' && !isNaN(p.percent)) ? p.percent : 0;
+          estimatedWords += Math.round(2500 * (pct / 100));
+          if (p.novelSlug && !stats.readNovels.includes(p.novelSlug)) {
+            stats.readNovels.push(p.novelSlug);
+          }
+        });
+        if (estimatedWords > 0) {
+          stats.totalWords = estimatedWords;
+          if (!stats.totalSeconds || stats.totalSeconds === 0) {
+            stats.totalSeconds = Math.round((estimatedWords / 220) * 60);
+          }
+        }
+      }
+
+      try {
+        localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+      } catch (e) {}
+      updateTelemetryUI(stats);
     } catch(err) {
       console.warn('Dexie library hydration note:', err);
     }

@@ -1523,7 +1523,146 @@ function initReader() {
 
     const novelSummaryKey = `novel_progress_${novelSlug}`;
 
+    // =========================================================================
+    // READING TELEMETRY & USER ACTIVITY TRACKER
+    // (Today's Time, Total Time, Books Read, Pages Read @ 250 w/p)
+    // =========================================================================
+    const STATS_KEY = 'novel_reading_stats_v1';
+    const chapterWordCount = parseInt(document.body.getAttribute('data-chapter-words') || '0', 10);
+    const totalChapters = parseInt(document.body.getAttribute('data-total-chapters') || '1', 10);
 
+    function getTelemetryStats() {
+      const todayStr = (new Date()).toLocaleDateString('en-CA');
+      let stats = null;
+      try {
+        const raw = localStorage.getItem(STATS_KEY);
+        if (raw) stats = JSON.parse(raw);
+      } catch (e) {}
+
+      if (!stats || typeof stats !== 'object') {
+        stats = {
+          todayDate: todayStr,
+          todaySeconds: 0,
+          totalSeconds: 0,
+          totalWords: 0,
+          completedNovels: [],
+          readNovels: [],
+          chapterWordsCredited: {}
+        };
+      }
+
+      if (stats.todayDate !== todayStr) {
+        stats.todayDate = todayStr;
+        stats.todaySeconds = 0;
+      }
+      if (!Array.isArray(stats.completedNovels)) stats.completedNovels = [];
+      if (!Array.isArray(stats.readNovels)) stats.readNovels = [];
+      if (!stats.chapterWordsCredited || typeof stats.chapterWordsCredited !== 'object') {
+        stats.chapterWordsCredited = {};
+      }
+      return stats;
+    }
+
+    function saveTelemetryStats(stats) {
+      try {
+        localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+      } catch (e) {}
+    }
+
+    function formatTelemetryDuration(seconds) {
+      if (!seconds || seconds <= 0) return '0m';
+      const mins = Math.floor(seconds / 60);
+      if (mins < 1) return '< 1m';
+      if (mins < 60) return `${mins}m`;
+      const hrs = Math.floor(mins / 60);
+      const remMins = mins % 60;
+      return remMins > 0 ? `${hrs}h ${remMins}m` : `${hrs}h`;
+    }
+
+    function updateReaderLiveStatsUI(s) {
+      const elToday = document.getElementById('reader-live-today');
+      const elTotal = document.getElementById('reader-live-total');
+      const elPages = document.getElementById('reader-live-pages');
+      const elBooks = document.getElementById('reader-live-books');
+
+      if (elToday) elToday.textContent = formatTelemetryDuration(s.todaySeconds);
+      if (elTotal) elTotal.textContent = formatTelemetryDuration(s.totalSeconds);
+      if (elPages) elPages.textContent = Math.floor((s.totalWords || 0) / 250).toLocaleString();
+      if (elBooks) elBooks.textContent = String(s.completedNovels ? s.completedNovels.length : 0);
+    }
+
+    let telemetrySessionSeconds = 0;
+    let lastUserActivityTs = Date.now();
+
+    ['scroll', 'mousemove', 'keydown', 'touchstart', 'click'].forEach(evt => {
+      window.addEventListener(evt, () => {
+        lastUserActivityTs = Date.now();
+      }, { passive: true });
+    });
+
+    function flushTelemetryTime() {
+      if (telemetrySessionSeconds <= 0) return;
+      const stats = getTelemetryStats();
+      stats.todaySeconds = (stats.todaySeconds || 0) + telemetrySessionSeconds;
+      stats.totalSeconds = (stats.totalSeconds || 0) + telemetrySessionSeconds;
+      telemetrySessionSeconds = 0;
+      saveTelemetryStats(stats);
+      updateReaderLiveStatsUI(stats);
+    }
+
+    // Active reading timer: ticks every 1 second when active
+    setInterval(() => {
+      const isDocVisible = !document.hidden;
+      const isAudioActive = typeof audioState !== 'undefined' && audioState && audioState.isPlaying && !audioState.isPaused;
+      const isRecentActivity = (Date.now() - lastUserActivityTs) < 60000;
+
+      if (isDocVisible && (isAudioActive || isRecentActivity)) {
+        telemetrySessionSeconds++;
+        if (telemetrySessionSeconds >= 10) {
+          flushTelemetryTime();
+        }
+      }
+    }, 1000);
+
+    window.addEventListener('beforeunload', flushTelemetryTime);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) flushTelemetryTime();
+    });
+
+    function updateTelemetryProgress(progressPct) {
+      if (!novelSlug) return;
+      const stats = getTelemetryStats();
+
+      if (!stats.readNovels.includes(novelSlug)) {
+        stats.readNovels.push(novelSlug);
+      }
+
+      if (currentChapterNum >= totalChapters && progressPct >= 90) {
+        if (!stats.completedNovels.includes(novelSlug)) {
+          stats.completedNovels.push(novelSlug);
+        }
+      }
+
+      if (chapterWordCount > 0 && progressPct > 0) {
+        const chapterKey = `${novelSlug}:${currentChapterNum}`;
+        const wordsReached = Math.min(chapterWordCount, Math.round(chapterWordCount * (progressPct / 100)));
+        const prevMax = stats.chapterWordsCredited[chapterKey] || 0;
+        if (wordsReached > prevMax) {
+          const delta = wordsReached - prevMax;
+          stats.totalWords = (stats.totalWords || 0) + delta;
+          stats.chapterWordsCredited[chapterKey] = wordsReached;
+          saveTelemetryStats(stats);
+          updateReaderLiveStatsUI(stats);
+          return;
+        }
+      }
+      saveTelemetryStats(stats);
+      updateReaderLiveStatsUI(stats);
+    }
+
+    try {
+      updateReaderLiveStatsUI(getTelemetryStats());
+    } catch (e) {}
 
     // Dexie IndexedDB Initialization (Tier 2 Offline Cache)
 
@@ -1866,10 +2005,12 @@ function initReader() {
 
 
       if (progressBar) {
-
         progressBar.style.width = `${progress}%`;
-
       }
+
+      try {
+        updateTelemetryProgress(progress);
+      } catch (e) {}
 
 
 
@@ -5979,10 +6120,60 @@ function initReader() {
       return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     }
 
+    const SLEEP_CYCLE = ['0', '15', '30', '45', 'ch_end'];
+    function cycleSleepTimer() {
+      const currentVal = sleepTimerSelect ? sleepTimerSelect.value : (audioState.stopAtChapterEnd ? 'ch_end' : (sleepTimerTargetMs ? '15' : '0'));
+      let idx = SLEEP_CYCLE.indexOf(currentVal);
+      if (idx === -1) idx = 0;
+      const nextVal = SLEEP_CYCLE[(idx + 1) % SLEEP_CYCLE.length];
+      setSleepTimer(nextVal);
+    }
+
+    function updateSleepButtonLabels(val) {
+      const dockLabel = document.getElementById('dock-sleep-label');
+      const quickBtn = document.getElementById('np-btn-quick-sleep');
+      const dockBtn = document.getElementById('dock-btn-sleep-toggle');
+      
+      let labelText = 'Timer';
+      if (val === '15') labelText = '15m';
+      else if (val === '30') labelText = '30m';
+      else if (val === '45') labelText = '45m';
+      else if (val === 'ch_end') labelText = 'End Ch';
+      else labelText = 'Timer';
+      
+      if (dockLabel) dockLabel.textContent = labelText;
+      if (quickBtn) {
+        quickBtn.classList.toggle('active', val !== '0' && !!val);
+      }
+      if (dockBtn) {
+        dockBtn.classList.toggle('active', val !== '0' && !!val);
+      }
+    }
+
     function initSleepTimer() {
       if (sleepTimerSelect) {
         sleepTimerSelect.addEventListener('change', (e) => {
           setSleepTimer(e.target.value);
+        });
+      }
+
+      // Quick 1-tap sleep button in audio header
+      const quickSleepBtn = document.getElementById('np-btn-quick-sleep');
+      if (quickSleepBtn) {
+        quickSleepBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cycleSleepTimer();
+        });
+      }
+
+      // Quick 1-tap sleep button in floating dock for Android
+      const dockSleepBtn = document.getElementById('dock-btn-sleep-toggle');
+      if (dockSleepBtn) {
+        dockSleepBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cycleSleepTimer();
         });
       }
 
@@ -6042,6 +6233,8 @@ function initReader() {
       if (sleepBadge) {
         sleepBadge.classList.remove('decaying');
       }
+
+      updateSleepButtonLabels(val);
 
       if (val === '0' || !val) {
         if (sleepBadge) sleepBadge.style.display = 'none';

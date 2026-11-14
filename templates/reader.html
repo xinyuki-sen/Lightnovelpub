@@ -15,7 +15,7 @@
   <title>{{ chapter.title }} — {{ novel.title }} — LightnovelPub</title>
   <link rel="stylesheet" href="/static/css/style.css?v=56">
 </head>
-<body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-total-chapters="{{ novel.total_chapters or 0 }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
+<body data-reader-theme="black" data-novel-slug="{{ novel.slug }}" data-chapter-num="{{ chapter.chapter_number }}" data-chapter-words="{{ chapter.word_count or 0 }}" data-novel-title="{{ novel.title }}" data-cover-url="{{ novel.cover_image or '' }}" data-total-chapters="{{ novel.total_chapters or 0 }}" data-next-num="{{ next_chapter or '' }}" data-prev-num="{{ prev_chapter or '' }}" data-next-url="{% if next_chapter %}/novel/{{ novel.slug }}/chapter/{{ next_chapter }}{% endif %}" data-prev-url="{% if prev_chapter %}/novel/{{ novel.slug }}/chapter/{{ prev_chapter }}{% endif %}">
 
   <!-- Real-time Reading Progress Bar at the absolute top -->
   <div class="reader-progress-bar" id="reader-progress-bar"></div>
@@ -152,6 +152,30 @@
       <button type="button" class="reader-tool-btn active" id="btn-toggle-system-hud" style="padding: 0.35rem 0.8rem; font-size: 0.82rem;" title="Distinguish System Notifications, Tooltips & Achievements with Hologram HUD Cards">
         ⚡ HUD On
       </button>
+    </div>
+
+    <!-- Live Reading Telemetry -->
+    <div class="setting-ctrl-item reading-live-stats-box" id="reader-live-stats-box">
+      <div class="reading-live-stat" title="Active reading time today">
+        <span class="live-stat-icon">🔥</span>
+        <span class="live-stat-label">Today:</span>
+        <strong id="reader-live-today">0m</strong>
+      </div>
+      <div class="reading-live-stat" title="All-time total reading time">
+        <span class="live-stat-icon">⏱️</span>
+        <span class="live-stat-label">Total:</span>
+        <strong id="reader-live-total">0m</strong>
+      </div>
+      <div class="reading-live-stat" title="Pages read (250 words = 1 page)">
+        <span class="live-stat-icon">📄</span>
+        <span class="live-stat-label">Pages:</span>
+        <strong id="reader-live-pages">0</strong>
+      </div>
+      <div class="reading-live-stat" title="Completed books">
+        <span class="live-stat-icon">📚</span>
+        <span class="live-stat-label">Books:</span>
+        <strong id="reader-live-books">0</strong>
+      </div>
     </div>
 
     <!-- Reset Defaults -->
@@ -294,6 +318,11 @@
       </div>
 
       <div class="np-audio-header-actions">
+        <!-- Quick 1-Tap Sleep Timer Button for Android & Mobile -->
+        <button type="button" class="np-circle-icon-btn np-btn-quick-sleep" id="np-btn-quick-sleep" title="Sleep Timer (Tap to cycle 15m, 30m, 45m, End Ch)">
+          <span class="sleep-moon-icon">🌙</span>
+        </button>
+
         <!-- Sleep Engine Countdown Moon Badge -->
         <button type="button" class="np-sleep-badge" id="np-sleep-badge" style="display: none;" title="Circadian Sleep Engine Active — Click to add 15m or cancel">
           <span class="sleep-moon-icon">🌙</span> <span id="np-sleep-badge-time">15:00</span>
@@ -512,6 +541,12 @@
       <button type="button" class="dock-btn dock-btn-audio" id="dock-btn-audio-toggle" title="Toggle Audio Reader (A)">
         <span class="dock-icon" id="dock-audio-icon">🎧</span>
         <span class="dock-label">Listen</span>
+      </button>
+
+      <!-- Quick Sleep Timer Button for Android -->
+      <button type="button" class="dock-btn dock-btn-sleep" id="dock-btn-sleep-toggle" title="Sleep Timer (Tap to cycle 15m, 30m, 45m, End Ch)">
+        <span class="dock-icon" id="dock-sleep-icon">🌙</span>
+        <span class="dock-label" id="dock-sleep-label">Timer</span>
       </button>
 
       <!-- Quick Volume Slider Popover -->
