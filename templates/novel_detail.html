@@ -77,8 +77,8 @@
 
       <!-- Action Buttons -->
       <div class="detail-actions-bento-row">
-        <a href="/novel/{{ novel.slug }}/chapter/{{ novel.last_read_chapter }}" class="btn-read-primary-bento">
-          {% if novel.last_read_chapter > 1 %}
+        <a href="/novel/{{ novel.slug }}/chapter/{{ novel.last_read_chapter or 1 }}" class="btn-read-primary-bento">
+          {% if novel.last_read_chapter and novel.last_read_chapter > 1 %}
           <span>▶</span> Continue Chapter {{ novel.last_read_chapter }}
           {% else %}
           <span>▶</span> Start Reading Chapter 1
