@@ -382,6 +382,24 @@ async def save_progress(payload: ProgressPayload):
     database.update_reading_progress(payload.slug, payload.chapter_number, payload.percent, payload.para_index or 0)
     return {"status": "ok"}
 
+@app.get("/api/progress/{slug}")
+async def get_progress_api(slug: str):
+    novel = database.get_novel_by_slug(slug)
+    if not novel:
+        raise HTTPException(status_code=404, detail="Novel not found")
+    cur_ch = novel.get("last_read_chapter") or 1
+    cur_pct = novel.get("last_read_percent") or 0.0
+    total = novel.get("total_chapters") or 1
+    comp_pct = round(max(0.0, min(100.0, (((cur_ch - 1) + (cur_pct / 100.0)) / total) * 100)), 1)
+    return {
+        "slug": slug,
+        "chapter_number": cur_ch,
+        "chapter_percent": cur_pct,
+        "para_index": novel.get("last_read_para", 0),
+        "composite_percent": comp_pct,
+        "total_chapters": total
+    }
+
 @app.delete("/api/novel/{slug}")
 async def delete_novel_api(slug: str, request: Request):
     # Admin security guard: if ADMIN_TOKEN is configured in environment, require matching header

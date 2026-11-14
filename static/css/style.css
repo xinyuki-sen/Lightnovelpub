@@ -3011,33 +3011,51 @@ a {
 /* Bento Novel Cards */
 .novel-badge-top-row {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
+  top: 8px;
+  left: 8px;
+  right: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 6px;
   z-index: 10;
   pointer-events: none;
 }
 
-.badge-row-left,
+.badge-row-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+  flex-shrink: 0;
+}
+
 .badge-row-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   pointer-events: auto;
+  flex-shrink: 1;
+  min-width: 0;
+  justify-content: flex-end;
 }
 
 .novel-status-chip {
-  background: rgba(16, 185, 129, 0.9);
+  background: rgba(16, 185, 129, 0.92);
   color: #ffffff;
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 800;
   text-transform: uppercase;
-  padding: 2px 7px;
+  padding: 2px 6px;
   border-radius: 6px;
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 78px;
+  display: inline-block;
+  line-height: 1.2;
 }
 
 .novel-cover-hover-action {

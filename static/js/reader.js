@@ -1689,10 +1689,10 @@ function initReader() {
         });
 
         // Version-gated audio cache migration: flush any cross-chapter or legacy audio blobs
-        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v57') {
+        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v58') {
           try {
             novelDb.audioCache.clear().then(() => {
-              localStorage.setItem('novel_reader_audio_cache_version', 'v57');
+              localStorage.setItem('novel_reader_audio_cache_version', 'v58');
             }).catch(() => { });
           } catch (e) { }
         }

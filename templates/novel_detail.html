@@ -48,10 +48,15 @@
           </div>
         </div>
 
+        {% set d_cur_ch = novel.last_read_chapter or 1 %}
+        {% set d_cur_pct = novel.last_read_percent or 0.0 %}
+        {% set d_tot_chs = novel.total_chapters if novel.total_chapters > 0 else 1 %}
+        {% set d_comp_raw = (((d_cur_ch - 1) + (d_cur_pct / 100.0)) / d_tot_chs * 100)|round(1) %}
+        {% set d_comp_pct = 100 if d_comp_raw > 100 else (0 if d_comp_raw < 0 else d_comp_raw) %}
         <div class="meta-bento-chip">
           <span class="meta-chip-icon">🔖</span>
           <div class="meta-chip-content">
-            <span class="meta-chip-val" id="detail-progress-val">Ch. {{ novel.last_read_chapter or 1 }} &bull; {{ (novel.last_read_percent or 0)|round|int }}%</span>
+            <span class="meta-chip-val" id="detail-progress-val">Ch. {{ d_cur_ch }} &bull; {{ d_comp_pct }}%</span>
             <span class="meta-chip-lbl">Progress</span>
           </div>
         </div>
@@ -465,7 +470,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const valSpan = document.getElementById('detail-progress-val');
-        if (valSpan) valSpan.innerHTML = `Ch. ${chNum} &bull; ${chPct}%`;
+        const totalChs = parseInt('{{ novel.total_chapters or 1 }}', 10) || 1;
+        const compPct = Math.min(100, Math.max(0, Math.round((((chNum - 1) + (chPct / 100)) / totalChs) * 1000) / 10)) || 0;
+        if (valSpan) valSpan.innerHTML = `Ch. ${chNum} &bull; ${compPct}%`;
         
         if (ctaBtn) {
           ctaBtn.href = `/novel/${novelSlug}/chapter/${chNum}`;

@@ -563,15 +563,22 @@ def init_db():
                 last_read_chapter INTEGER DEFAULT 1,
                 last_read_percent REAL DEFAULT 0.0,
                 last_read_para INTEGER DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """)
-            # Migration check: Ensure last_read_para column exists in existing SQLite databases
+            # Migration check: Ensure last_read_para and updated_at columns exist in existing SQLite databases
             cursor.execute("PRAGMA table_info(novels)")
             columns = [row[1] for row in cursor.fetchall()]
             if "last_read_para" not in columns:
                 try:
                     cursor.execute("ALTER TABLE novels ADD COLUMN last_read_para INTEGER DEFAULT 0")
+                except Exception:
+                    pass
+            if "updated_at" not in columns:
+                try:
+                    cursor.execute("ALTER TABLE novels ADD COLUMN updated_at TIMESTAMP")
+                    cursor.execute("UPDATE novels SET updated_at = created_at WHERE updated_at IS NULL")
                 except Exception:
                     pass
             cursor.execute("""
@@ -711,12 +718,16 @@ def get_all_novels(order_by: str = "recent") -> List[Dict]:
         elif order_by == "chapters":
             cursor.execute("SELECT * FROM novels ORDER BY total_chapters DESC, created_at DESC")
         elif order_by == "progress":
-            cursor.execute("SELECT * FROM novels ORDER BY last_read_percent DESC, last_read_chapter DESC")
+            cursor.execute("""
+                SELECT * FROM novels 
+                ORDER BY (CAST(last_read_chapter - 1 AS REAL) + (last_read_percent / 100.0)) / MAX(total_chapters, 1) DESC
+            """)
         else:
-            # Default: Actively reading first, then newly added
+            # Default: Actively reading first (by updated_at DESC), then newly added
             cursor.execute("""
                 SELECT * FROM novels 
                 ORDER BY CASE WHEN last_read_chapter > 1 OR last_read_percent > 3.0 THEN 0 ELSE 1 END,
+                         COALESCE(updated_at, created_at) DESC,
                          created_at DESC
             """)
         rows = cursor.fetchall()
@@ -791,13 +802,16 @@ def get_chapter(slug: str, chapter_number: int) -> Optional[Tuple[Dict, Dict]]:
 def update_reading_progress(slug: str, chapter_number: int, percent: float, para_index: int = 0):
     conn = get_connection()
     try:
+        clean_percent = max(0.0, min(100.0, float(percent)))
+        clean_chapter = max(1, int(chapter_number))
+        clean_para = max(0, int(para_index or 0))
         with conn:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE novels 
-                SET last_read_chapter = ?, last_read_percent = ?, last_read_para = ?
-                WHERE slug = ?
-            """, (chapter_number, percent, para_index, slug))
+                SET last_read_chapter = ?, last_read_percent = ?, last_read_para = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE LOWER(slug) = LOWER(?)
+            """, (clean_chapter, clean_percent, clean_para, slug))
     finally:
         conn.close()
 
