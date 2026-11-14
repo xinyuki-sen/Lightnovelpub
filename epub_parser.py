@@ -106,7 +106,7 @@ class SimpleHTMLTextExtractor(HTMLParser):
 def extract_epub_chapters(epub_path: str):
     """
     Zero-dependency pure Python EPUB parser using zipfile, xml.etree, and html.parser.
-    Returns: (title, chapters, cover_bytes)
+    Returns: (title, author, chapters, cover_bytes, cover_data_url)
     chapters format: [{"number": 1, "title": "...", "content": [p1, p2, ...], "word_count": N}]
     """
     with zipfile.ZipFile(epub_path, 'r') as zf:
@@ -317,7 +317,7 @@ if __name__ == '__main__':
     with open(test_file, 'wb') as f:
         f.write(buf.getvalue())
 
-    t, chs, cov = extract_epub_chapters(test_file)
+    t, auth, chs, cov, cov_url = extract_epub_chapters(test_file)
     print("EPUB Extracted Title:", t)
     print("Total Chapters:", len(chs))
     print("Chapter 1 Title:", chs[0]["title"])

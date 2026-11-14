@@ -37,6 +37,12 @@ An ultra-responsive, mobile-first web application and Progressive Web App (PWA) 
   - **Predictive Audio Runway**: 10-paragraph forward pre-buffering pipeline for seamless, gapless chapter playback.
   - **MediaSession & Lock Screen**: Full native OS lock-screen metadata, headphone click controls, and persistent audio singleton with silent PCM handoff to prevent mobile autoplay blocks.
 
+- **Real-Time Reading Telemetry & Smart Shelves**:
+  - **Live Reading Activity Tracker**: Real-time session time, all-time duration, books completed/active, and total pages read (standardized at 250 words/page) with offline Dexie synchronization.
+  - **Dynamic Velocity Time-Remaining Badges**: Automatically calculates user reading velocity (words per minute) and dynamically updates time-to-finish estimates (e.g. `~14h 20m left`) on library cards.
+  - **Smart Shelves**: 1-tap filtering for `All`, `⭐ Favorites`, `📖 Reading`, `Unread`, and `✔️ Completed` with 1-tap star toggles.
+  - **1-Tap Bedtime Sleep Timer**: Integrated into audio player header and floating mobile dock (15m, 30m, 45m, 60m, off) with gradual volume decay.
+
 - **Offline-First PWA Architecture & Dexie.js**:
   - Client-authoritative storage powered by **Dexie.js (IndexedDB)** for full offline library reading and instant chapter navigation.
   - Sub-50ms instantaneous chapter transitions via single-roundtrip DOM hydration without page reloads.

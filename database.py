@@ -863,14 +863,15 @@ def import_library_data(data: dict) -> int:
         with conn:
             cursor = conn.cursor()
             for nov in novels:
-                cursor.execute("SELECT id FROM novels WHERE slug = ?", (nov["slug"],))
+                cursor.execute("SELECT id FROM novels WHERE LOWER(slug) = LOWER(?)", (nov["slug"],))
                 existing = cursor.fetchone()
                 if existing:
                     novel_id = existing["id"]
                     cursor.execute("""
                         UPDATE novels SET 
                             title = ?, author = ?, synopsis = ?, cover_image = ?,
-                            total_chapters = ?, last_read_chapter = ?, last_read_percent = ?, last_read_para = ?
+                            total_chapters = ?, last_read_chapter = ?, last_read_percent = ?, last_read_para = ?,
+                            updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                     """, (
                         nov["title"],
@@ -885,8 +886,8 @@ def import_library_data(data: dict) -> int:
                     ))
                 else:
                     cursor.execute("""
-                        INSERT INTO novels (title, slug, author, synopsis, cover_image, total_chapters, last_read_chapter, last_read_percent, last_read_para, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO novels (title, slug, author, synopsis, cover_image, total_chapters, last_read_chapter, last_read_percent, last_read_para, updated_at, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
                     """, (
                         nov["title"],
                         nov["slug"],
@@ -899,7 +900,7 @@ def import_library_data(data: dict) -> int:
                         nov.get("last_read_para", 0),
                         nov.get("created_at", time.time())
                     ))
-                    cursor.execute("SELECT id FROM novels WHERE slug = ?", (nov["slug"],))
+                    cursor.execute("SELECT id FROM novels WHERE LOWER(slug) = LOWER(?)", (nov["slug"],))
                     n_row = cursor.fetchone()
                     novel_id = (n_row["id"] if isinstance(n_row, dict) or hasattr(n_row, "keys") else n_row[0]) if n_row else cursor.lastrowid
                     imported_count += 1
