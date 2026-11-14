@@ -100,6 +100,107 @@
   </div>
 </div>
 
+<style>
+/* Resilient Telemetry Banner Styling (Zero-Cache-Lag) */
+.reading-telemetry-banner {
+  background: rgba(18, 22, 30, 0.75) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 18px !important;
+  padding: 1rem 1.25rem !important;
+  margin: 1.25rem 0 2rem 0 !important;
+  position: relative !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+  display: block !important;
+}
+.telemetry-badge-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-bottom: 0.85rem !important;
+}
+.telemetry-badge-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  font-size: 0.68rem !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.8px !important;
+  color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  padding: 0.2rem 0.6rem !important;
+  border-radius: 9999px !important;
+}
+.telemetry-sync-time {
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.4px !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+.telemetry-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 0.85rem !important;
+}
+.telemetry-card {
+  background: rgba(10, 14, 20, 0.65) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 14px !important;
+  padding: 0.85rem 1rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  transition: all 0.2s ease !important;
+}
+.telemetry-card-today {
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(10, 14, 20, 0.65) 100%) !important;
+}
+.telemetry-card-today .telemetry-card-val {
+  color: #f59e0b !important;
+}
+.telemetry-card-icon {
+  font-size: 1.25rem !important;
+  margin-bottom: 0.25rem !important;
+  line-height: 1 !important;
+}
+.telemetry-card-val {
+  font-size: 1.55rem !important;
+  font-weight: 900 !important;
+  font-family: 'Montserrat', -apple-system, sans-serif !important;
+  color: #ffffff !important;
+  line-height: 1.1 !important;
+  letter-spacing: -0.5px !important;
+}
+.telemetry-card-label {
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+  margin-top: 0.3rem !important;
+}
+.telemetry-card-sub {
+  font-size: 0.65rem !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+  margin-top: 2px !important;
+}
+@media (max-width: 860px) {
+  .telemetry-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.65rem !important;
+  }
+  .telemetry-card {
+    padding: 0.75rem 0.85rem !important;
+  }
+  .telemetry-card-val {
+    font-size: 1.35rem !important;
+  }
+}
+</style>
+
 <!-- USER READING TELEMETRY BANNER -->
 <div class="reading-telemetry-banner" id="reading-telemetry-banner">
   <div class="telemetry-badge-row">
@@ -677,7 +778,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               card.setAttribute('data-percent', '0');
               card.setAttribute('data-ch', '1');
 
-              const coverSrc = novel.cover_image || '/static/img/logo.png?v=56';
+              const coverSrc = novel.cover_image || '/static/img/logo.png?v=57';
               card.innerHTML = `
                 <div class="novel-cover-wrap">
                   <img src="${coverSrc}" alt="${novel.title}" class="novel-cover-img" loading="lazy">
