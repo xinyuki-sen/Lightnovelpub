@@ -447,9 +447,14 @@ class TTSRequest(BaseModel):
 
 @app.post("/api/tts")
 async def generate_tts(req: TTSRequest):
-    text = req.text.strip()
-    if not text:
+    raw_text = req.text.strip() if req.text else ""
+    if not raw_text:
         raise HTTPException(status_code=400, detail="Text cannot be empty")
+    
+    # Server-side speech sanitizer: cleans decorative scene breaks and symbol noise
+    text = database.clean_speech_text(raw_text)
+    if not text:
+        raise HTTPException(status_code=400, detail="Text contains no speakable speech content")
     
     # Generous limit covering 100% of literary paragraphs without dropping text (Max in library is 2502 chars)
     if len(text) > 3600:

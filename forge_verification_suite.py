@@ -44,7 +44,7 @@ def loop_header(loop_num, loop_title):
 loop_header(1, "Syntax & Bytecode Compilation")
 
 # Check Python files
-py_files = ["main.py", "database.py", "pdf_extractor.py"]
+py_files = ["main.py", "database.py", "typesetter.py", "pdf_extractor.py"]
 for f in py_files:
     if os.path.exists(f):
         res = subprocess.run([sys.executable, "-m", "py_compile", f], capture_output=True, text=True)
@@ -196,15 +196,18 @@ except Exception as e:
 # -----------------------------------------------------------------------------
 loop_header(5, "Decorative Character & Symbol Cleaner")
 
-def py_sanitize_speech_text(raw_text):
-    if not raw_text:
-        return ""
-    # Mirror regex from reader.js
-    decorative_line_regex = re.compile(r'^[\s\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\-—–\.\:\/\u2500-\u257F═]{2,}$', re.MULTILINE)
-    cleaned = decorative_line_regex.sub(' ', raw_text)
-    cleaned = re.sub(r'(\s*[\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\u2500-\u257F═]{2,}\s*)', ', ', cleaned)
-    cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
-    return cleaned
+try:
+    from typesetter import clean_speech_text as py_sanitize_speech_text
+except ImportError:
+    def py_sanitize_speech_text(raw_text):
+        if not raw_text:
+            return ""
+        # Mirror regex from reader.js
+        decorative_line_regex = re.compile(r'^[\s\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\-—–\.\:\/\u2500-\u257F═]{2,}$', re.MULTILINE)
+        cleaned = decorative_line_regex.sub(' ', raw_text)
+        cleaned = re.sub(r'(\s*[\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\u2500-\u257F═]{2,}\s*)', ', ', cleaned)
+        cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+        return cleaned
 
 test_cases = [
     ("Sunny entered the cathedral. *** The shadows danced.", "Sunny entered the cathedral., The shadows danced."),
