@@ -141,17 +141,38 @@ def segregate_mixed_paragraph(text: str) -> List[str]:
     lead_in = text[:first_m.start()].strip()
     rest = text[last_m.end():]
 
-    val_m = re.match(r'^\s*([^\.\!\?\n]+?)(?=\s+[A-Z][a-z]+|\s*[\.\!\?]\s+[A-Z]|$)', rest)
-    if val_m:
-        val_end = last_m.end() + val_m.end()
+    # If rest contains pipe symbols '|', the skill/stat table extends through all pipe items!
+    if '|' in rest:
+        last_pipe_idx = rest.rfind('|')
+        after_pipe = rest[last_pipe_idx:]
+        m_prose = re.search(r'[\.\!\?]\s+([A-Z][A-Za-z0-9\-\'\"]*(?:\s+[A-Za-z0-9\-\'\"]+){2,})', after_pipe)
+        if m_prose:
+            cut = last_m.end() + last_pipe_idx + m_prose.start() + 1
+            stat_block = text[first_m.start():cut].strip()
+            trailing_prose = text[cut:].strip()
+        else:
+            m_prose_noperiod = re.search(r'(?<=\d)\s+([A-Z][a-z]+(?:\s+[a-z]+){1,3}\s+[a-z]+[\s\S]*)', after_pipe)
+            if m_prose_noperiod and not re.search(r'\b(?:Lvl|Level)\s+\d+', m_prose_noperiod.group(1), re.I):
+                cut = last_m.end() + last_pipe_idx + m_prose_noperiod.start()
+                stat_block = text[first_m.start():cut].strip()
+                trailing_prose = text[cut:].strip()
+            else:
+                stat_block = text[first_m.start():].strip()
+                trailing_prose = ""
     else:
-        fallback_m = re.match(r'^\s*(\S+)', rest)
-        val_end = last_m.end() + (fallback_m.end() if fallback_m else 0)
+        # Standard key-value stat block without pipes
+        val_m = re.match(r'^\s*([^\.\!\?\n]+?)(?=\s+[A-Z][a-z]+|\s*[\.\!\?]\s+[A-Z]|$)', rest)
+        if val_m:
+            val_end = last_m.end() + val_m.end()
+            stat_block = text[first_m.start():val_end].strip()
+            trailing_prose = text[val_end:].strip()
+        else:
+            fallback_m = re.match(r'^\s*(\S+)', rest)
+            val_end = last_m.end() + (fallback_m.end() if fallback_m else 0)
+            stat_block = text[first_m.start():val_end].strip()
+            trailing_prose = text[val_end:].strip()
 
-    stat_block = text[first_m.start():val_end].strip()
     stat_block = format_stat_block_rows(stat_block)
-
-    trailing_prose = text[val_end:].strip()
     trailing_prose = re.sub(r'^[,\.\s]+', '', trailing_prose).strip()
 
     res = []

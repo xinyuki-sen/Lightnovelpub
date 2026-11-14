@@ -2,7 +2,7 @@
 Forge Verification Suite for LightnovelPub Audio & Reader Architecture
 Executes an 8-loop exhaustive verification of:
 - Loop 1: Syntax & Compilation (Python + JavaScript)
-- Loop 2: PWA & Cache-Busting Version Coherence (v58 alignment)
+- Loop 2: PWA & Cache-Busting Version Coherence (v59 alignment)
 - Loop 3: Edge-TTS Server API & 1.0x Master Audio Timing Integrity
 - Loop 4: Chapter Reader HTML DOM & Dual-Engine Segmented UI
 - Loop 5: Novel Phoenix Decorative Character & Symbol Cleaner
@@ -64,11 +64,11 @@ for f in js_files:
             log_fail(f"Node syntax check: {f}", res.stderr)
 
 # -----------------------------------------------------------------------------
-# LOOP 2: PWA & Cache-Busting Version Coherence (v58)
+# LOOP 2: PWA & Cache-Busting Version Coherence (v59)
 # -----------------------------------------------------------------------------
-loop_header(2, "PWA & Cache-Busting Coherence (v58)")
+loop_header(2, "PWA & Cache-Busting Coherence (v59)")
 
-EXPECTED_VERSION = "58"
+EXPECTED_VERSION = "59"
 
 # Check static/sw.js
 with open("static/sw.js", "r", encoding="utf-8") as f:

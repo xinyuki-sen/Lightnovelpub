@@ -726,7 +726,7 @@ function initReader() {
       if (!text) return false;
       const isBracketHeader = /^(?:\[|【)\s*(?:Status\s*(?:Screen|Window|Menu|Sheet)|Character\s*Sheet|Attributes|Player\s*Profile|Crawler\s*#|Telemetry)\s*(?:\]|】)/i.test(text);
       const matches = text.match(new RegExp(STAT_KEY_REGEX.source, 'gi'));
-      return isBracketHeader || (matches && matches.length >= 2) || (text.includes('Status:') && (text.includes('Level:') || text.includes('Class:')));
+      return isBracketHeader || (matches && matches.length >= 2) || (text.includes('Status:') && (text.includes('Level:') || text.includes('Class:'))) || (text.split('|').length >= 4);
     }
 
     function formatStatBlockRows(text) {
@@ -1689,10 +1689,10 @@ function initReader() {
         });
 
         // Version-gated audio cache migration: flush any cross-chapter or legacy audio blobs
-        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v58') {
+        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v59') {
           try {
             novelDb.audioCache.clear().then(() => {
-              localStorage.setItem('novel_reader_audio_cache_version', 'v58');
+              localStorage.setItem('novel_reader_audio_cache_version', 'v59');
             }).catch(() => { });
           } catch (e) { }
         }
