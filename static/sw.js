@@ -1,13 +1,13 @@
-const CACHE_NAME = 'lightnovelpub-v61';
+const CACHE_NAME = 'lightnovelpub-v62';
 const STATIC_ASSETS = [
-  '/static/css/style.css?v=61',
-  '/static/js/reader.js?v=61',
-  '/static/js/upload.js?v=61',
-  '/static/js/dexie.min.js?v=61',
-  '/static/img/logo.png?v=61',
-  '/static/img/icon-192.png?v=61',
-  '/static/img/icon-512.png?v=61',
-  '/static/favicon.ico?v=61'
+  '/static/css/style.css?v=62',
+  '/static/js/reader.js?v=62',
+  '/static/js/upload.js?v=62',
+  '/static/js/dexie.min.js?v=62',
+  '/static/img/logo.png?v=62',
+  '/static/img/icon-192.png?v=62',
+  '/static/img/icon-512.png?v=62',
+  '/static/favicon.ico?v=62'
 ];
 
 self.addEventListener('install', (e) => {
