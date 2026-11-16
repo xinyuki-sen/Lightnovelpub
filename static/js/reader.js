@@ -700,26 +700,31 @@ function initReader() {
     function formatInlineTypography(rawText) {
       if (!rawText) return '';
       let safe = escapeHtml(rawText);
-      // 1. Markdown bold (**text**) -> <strong class="reader-bold">text</strong>
+      // 1. Bold + Italic (***text*** or ***text**)
+      safe = safe.replace(/\*{3}([^*]+)\*{2,3}/g, '<strong class="reader-bold"><em class="reader-italic">$1</em></strong>');
+      // 2. Markdown bold (**text**) -> <strong class="reader-bold">text</strong>
       safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong class="reader-bold">$1</strong>');
-      // 2. Markdown italic (*text*) -> <em class="reader-italic">$1</em>
+      // 3. Markdown italic (*text*) -> <em class="reader-italic">$1</em>
       safe = safe.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em class="reader-italic">$1</em>');
-      // 3. Inline Skill / Spell brackets: [Fireball], [Shadow Step], etc.
+      // 4. Clean any dangling unclosed bold/italic asterisks attached to words or colons (e.g. Level:** or Mining*)
+      safe = safe.replace(/(?<=[:：\w])\*{1,3}(?!\w)/g, '');
+      safe = safe.replace(/(?<!\w)\*{1,3}(?=[:：\w])/g, '');
+      // 5. Inline Skill / Spell brackets: [Fireball], [Shadow Step], etc.
       safe = safe.replace(/\[((?:Skill|Spell|Title|Item)?\s*[\w\s\+\-\'\’]{2,30})\]/g, '<span class="reader-inline-tag reader-tag-skill">[$1]</span>');
-      // 4. Inline Stat Deltas & Perks:
+      // 6. Inline Stat Deltas & Perks:
       const STAT_NAMES = '(?:All\\s+stats|Strength|Agility|Dexterity|Endurance|Vitality|Intelligence|Wisdom|Perception|Constitution|Charisma|Luck|Health|Mana|Stamina|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|HP|MP|SP|EXP)';
-      // 4a. Stat Name followed by delta (Strength +1, All stats +10%, Luck +20%)
+      // 6a. Stat Name followed by delta (Strength +1, All stats +10%, Luck +20%)
       safe = safe.replace(new RegExp(`(?:^|\\s)(${STAT_NAMES}\\s*[\\+\\-]\\s*\\d+(?:\\.\\d+)?%?)`, 'gi'), (match, p1) => {
         return match.replace(p1, `<span class="reader-inline-tag reader-tag-stat">${p1}</span>`);
       });
-      // 4b. Delta followed by stat name (+5 Strength, +100 EXP, +1 Stat point)
+      // 6b. Delta followed by stat name (+5 Strength, +100 EXP, +1 Stat point)
       safe = safe.replace(new RegExp(`(?:^|\\s)([\\+\\-]\\d+(?:\\.\\d+)?%?\\s*(?:${STAT_NAMES}|Stat\\s*points?|Points?|Levels?)\\b%?)`, 'gi'), (match, p1) => {
         return match.replace(p1, `<span class="reader-inline-tag reader-tag-stat">${p1}</span>`);
       });
       return safe;
     }
 
-    const STAT_KEY_REGEX = /\b(?:Name|Level|Race|Alignment|Titles?|Class|Rank|Profession|Affinity|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]/i;
+    const STAT_KEY_REGEX = /\b(?:Name|Level|Race|Alignment|Titles?|Class|Sub\s*Class(?:es)?|Subclass(?:es)?|Specialization|Specialty|Rank|Class\s*Rank|Class\s*Tier|Tier|Profession|Affinity|Aspect|Domain|Bloodline|Physique|Talent|Grade|Stage|Realm|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]/i;
     const STAT_KEY_GLOBAL = new RegExp(STAT_KEY_REGEX.source, 'gi');
 
     function isStatParagraph(text) {
@@ -731,8 +736,8 @@ function initReader() {
 
     function formatStatBlockRows(text) {
       if (!text || text.includes('\n')) return text;
-      const breakPattern = /(?<=\S)\s+(?=(?:Level|Race|Class|Titles?|Rank|Health|HP|Mana|MP|Strength|STR|Agility|AGI|Vitality|VIT|Luck|LUK)\s*[:：])/i;
-      return text.replace(new RegExp(breakPattern.source, 'gi'), '\n');
+      const breakPattern = /(?<=\S)\s+(?=(?:[\*~_`]*\s*(?:Sub\s*Class(?:es)?|Class\s*Rank|Class\s*Tier|(?<!\bSub\s)(?<!\bSub-)Class|Specialization|Specialty|Level|Race|Titles?|(?<!\bClass\s)Rank|Tier|Health|HP|Mana|MP|Energy|Strength|STR|Agility|AGI|Vitality|VIT|Luck|LUK)\s*[:：]))/gi;
+      return text.replace(breakPattern, '\n');
     }
 
     function segregateMixedParagraph(rawText) {
@@ -754,14 +759,42 @@ function initReader() {
       const leadIn = text.slice(0, firstM.start).trim();
       const rest = text.slice(lastM.end);
 
-      const valMatch = rest.match(/^\s*([^\.\!\?\n]+?)(?=\s+[A-Z][a-z]+|\s*[\.\!\?]\s+[A-Z]|$)/);
-      const valLen = valMatch ? valMatch[0].length : (rest.match(/^\s*\S+/) || [''])[0].length;
-      const valEnd = lastM.end + valLen;
+      let valEnd = text.length;
+      let statBlock = '';
+      let trailingProse = '';
 
-      let statBlock = text.slice(firstM.start, valEnd).trim();
+      if (rest.includes('|')) {
+        const lastPipeIdx = rest.lastIndexOf('|');
+        const afterPipe = rest.slice(lastPipeIdx);
+        const mProse = afterPipe.match(/[\.\!\?]\s+([A-Z][A-Za-z0-9\-\'\"]*(?:\s+[A-Za-z0-9\-\'\"]+){2,})/);
+        if (mProse) {
+          const cut = lastM.end + lastPipeIdx + mProse.index + 1;
+          statBlock = text.slice(firstM.start, cut).trim();
+          trailingProse = text.slice(cut).trim();
+        } else {
+          statBlock = text.slice(firstM.start).trim();
+          trailingProse = '';
+        }
+      } else {
+        const mPeriod = rest.match(/[\.\!\?]\s+([A-Z][A-Za-z0-9\-\'\"]*(?:\s+[A-Za-z0-9\-\'\"]+){2,})/);
+        if (mPeriod) {
+          const cut = lastM.end + mPeriod.index + 1;
+          statBlock = text.slice(firstM.start, cut).trim();
+          trailingProse = text.slice(cut).trim();
+        } else {
+          const valClauseMatch = rest.match(/^(\s*(?:[\*~_`\"\'\[\(]*\s*[\w\d\+\-\/\,\.]+\s*[\*~_`\"\'\]\)]*\s*){1,4}?)(?=\s+[A-Z][a-z]+(?:\s+[A-Za-z0-9\-\'\"]+){2,}|\s*$)/);
+          if (valClauseMatch) {
+            valEnd = lastM.end + valClauseMatch[0].length;
+            statBlock = text.slice(firstM.start, valEnd).trim();
+            trailingProse = text.slice(valEnd).trim();
+          } else {
+            statBlock = text.slice(firstM.start).trim();
+            trailingProse = '';
+          }
+        }
+      }
+
       statBlock = formatStatBlockRows(statBlock);
-
-      let trailingProse = text.slice(valEnd).trim();
       trailingProse = trailingProse.replace(/^[,\.\s]+/, '').trim();
 
       const results = [];
@@ -1689,10 +1722,10 @@ function initReader() {
         });
 
         // Version-gated audio cache migration: flush any cross-chapter or legacy audio blobs
-        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v59') {
+        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v60') {
           try {
             novelDb.audioCache.clear().then(() => {
-              localStorage.setItem('novel_reader_audio_cache_version', 'v59');
+              localStorage.setItem('novel_reader_audio_cache_version', 'v60');
             }).catch(() => { });
           } catch (e) { }
         }

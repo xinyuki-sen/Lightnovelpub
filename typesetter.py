@@ -75,7 +75,7 @@ def tokenize_sentences(text: str) -> List[str]:
 # 2. LITRPG STAT & SYSTEM WINDOW DETECTION
 # -----------------------------------------------------------------------------
 STAT_KEY_REGEX = re.compile(
-    r'\b(?:Name|Level|Race|Alignment|Titles?|Class|Rank|Profession|Affinity|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]',
+    r'\b(?:Name|Level|Race|Alignment|Titles?|Class|Sub\s*Class(?:es)?|Subclass(?:es)?|Specialization|Specialty|Rank|Class\s*Rank|Class\s*Tier|Tier|Profession|Affinity|Aspect|Domain|Bloodline|Physique|Talent|Grade|Stage|Realm|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]',
     re.I
 )
 
@@ -115,25 +115,37 @@ def format_stat_block_rows(text: str) -> str:
     """
     Intelligently inserts newline row boundaries before major LitRPG attribute clusters
     if the stat block was provided as a single un-formatted line.
+    Prevents artificial breaks inside multi-word keys like Sub Class: or Class Rank:.
     """
     if not text or '\n' in text:
         return text
 
     BREAK_KEYS = [
+        r'Sub\s*Class(?:es)?\s*[:：]',
+        r'Class\s*Rank\s*[:：]',
+        r'Class\s*Tier\s*[:：]',
+        r'(?<!\bSub\s)(?<!\bSub-)Class\s*[:：]',
+        r'Specialization\s*[:：]',
+        r'Specialty\s*[:：]',
         r'Level\s*[:：]',
-        r'Class\s*[:：]',
         r'Titles?\s*[:：]',
-        r'Rank\s*[:：]',
+        r'(?<!\bClass\s)Rank\s*[:：]',
+        r'Tier\s*[:：]',
         r'Health\s*[:：]',
         r'HP\s*[:：]',
+        r'Mana\s*[:：]',
+        r'MP\s*[:：]',
+        r'Energy\s*[:：]',
         r'Strength\s*[:：]',
         r'STR\s*[:：]',
+        r'Agility\s*[:：]',
+        r'AGI\s*[:：]',
         r'Vitality\s*[:：]',
         r'VIT\s*[:：]',
         r'Luck\s*[:：]',
         r'LUK\s*[:：]'
     ]
-    pattern = r'(?<=\S)\s+(?=(?:' + '|'.join(BREAK_KEYS) + r'))'
+    pattern = r'(?<=\S)\s+(?=(?:[\*~_`]*\s*(?:' + '|'.join(BREAK_KEYS) + r')))'
     return re.sub(pattern, '\n', text)
 
 # -----------------------------------------------------------------------------
@@ -143,7 +155,7 @@ def segregate_mixed_paragraph(text: str) -> List[str]:
     """
     Splits any paragraph containing a LitRPG stat block mixed with narrative lead-in or trailing prose.
     Guarantees pure status telemetry is segregated from novel story prose.
-    Protects multi-item pipe lists (skill tables) from premature sentence splits.
+    Protects multi-item pipe lists (skill tables) and capitalized attribute values from premature cuts.
     """
     text = (text or '').strip()
     if not text:
@@ -178,16 +190,36 @@ def segregate_mixed_paragraph(text: str) -> List[str]:
                 trailing_prose = ""
     else:
         # Standard key-value stat block without pipes
-        val_m = re.match(r'^\s*([^\.\!\?\n]+?)(?=\s+[A-Z][a-z]+|\s*[\.\!\?]\s+[A-Z]|$)', rest)
-        if val_m:
-            val_end = last_m.end() + val_m.end()
-            stat_block = text[first_m.start():val_end].strip()
-            trailing_prose = text[val_end:].strip()
+        m_period = re.search(r'[\.\!\?]\s+([A-Z][A-Za-z0-9\-\'\"]*(?:\s+[A-Za-z0-9\-\'\"]+){2,})', rest)
+        if m_period:
+            cut = last_m.end() + m_period.start() + 1
+            stat_block = text[first_m.start():cut].strip()
+            trailing_prose = text[cut:].strip()
         else:
-            fallback_m = re.match(r'^\s*(\S+)', rest)
-            val_end = last_m.end() + (fallback_m.end() if fallback_m else 0)
-            stat_block = text[first_m.start():val_end].strip()
-            trailing_prose = text[val_end:].strip()
+            # Check for unpunctuated narrative sentence clause after attribute value
+            val_clause_match = re.search(
+                r'^(\s*(?:[\*~_`\"\'\[\(]*\s*[\w\d\+\-\/\,\.]+\s*[\*~_`\"\'\]\)]*\s*){1,4}?)(?=\s+[A-Z][a-z]+(?:\s+[A-Za-z0-9\-\'\"]+){2,}|\s*$)',
+                rest
+            )
+            if val_clause_match:
+                val_end = last_m.end() + val_clause_match.end()
+                stat_block = text[first_m.start():val_end].strip()
+                trailing_prose = text[val_end:].strip()
+            else:
+                stat_block = text[first_m.start():].strip()
+                trailing_prose = ""
+
+    stat_block = format_stat_block_rows(stat_block)
+    trailing_prose = re.sub(r'^[,\.\s]+', '', trailing_prose).strip()
+
+    res = []
+    if lead_in and len(lead_in) > 3:
+        res.append(lead_in)
+    if stat_block:
+        res.append(stat_block)
+    if trailing_prose and len(trailing_prose) > 3:
+        res.append(trailing_prose)
+    return res if res else [text]
 
     stat_block = format_stat_block_rows(stat_block)
     trailing_prose = re.sub(r'^[,\.\s]+', '', trailing_prose).strip()
@@ -274,13 +306,18 @@ def format_inline_typography(raw_text: str) -> str:
     if not raw_text:
         return ""
     safe = html.escape(raw_text)
-    # 1. Markdown bold (**text**) -> <strong class="reader-bold">text</strong>
+    # 1. Bold + Italic (***text*** or ***text**)
+    safe = re.sub(r'\*{3}([^*]+)\*{2,3}', r'<strong class="reader-bold"><em class="reader-italic">\1</em></strong>', safe)
+    # 2. Markdown bold (**text**) -> <strong class="reader-bold">text</strong>
     safe = re.sub(r'\*\*([^*]+)\*\*', r'<strong class="reader-bold">\1</strong>', safe)
-    # 2. Markdown italic (*text*) -> <em class="reader-italic">\1</em>
+    # 3. Markdown italic (*text*) -> <em class="reader-italic">\1</em>
     safe = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'<em class="reader-italic">\1</em>', safe)
-    # 3. Inline Skill / Spell brackets: [Fireball], [Shadow Step], etc.
+    # 4. Clean any dangling unclosed bold/italic asterisks attached to words or colons (e.g. Level:** or Mining*)
+    safe = re.sub(r'(?<=[:：\w])\*{1,3}(?!\w)', '', safe)
+    safe = re.sub(r'(?<!\w)\*{1,3}(?=[:：\w])', '', safe)
+    # 5. Inline Skill / Spell brackets: [Fireball], [Shadow Step], etc.
     safe = re.sub(r'\[((?:Skill|Spell|Title|Item)?\s*[\w\s\+\-\'\’]{2,30})\]', r'<span class="reader-inline-tag reader-tag-skill">[\1]</span>', safe)
-    # 4. Inline Stat Deltas & Perks:
+    # 6. Inline Stat Deltas & Perks:
     STAT_NAMES = r'(?:All\s+stats|Strength|Agility|Dexterity|Endurance|Vitality|Intelligence|Wisdom|Perception|Constitution|Charisma|Luck|Health|Mana|Stamina|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|HP|MP|SP|EXP)'
     safe = re.sub(r'(?:^|\s)(' + STAT_NAMES + r'\s*[\+\-]\s*\d+(?:\.\d+)?%?)', r' <span class="reader-inline-tag reader-tag-stat">\1</span>', safe, flags=re.I)
     safe = re.sub(r'(?:^|\s)([\+\-]\d+(?:\.\d+)?%?\s*(?:' + STAT_NAMES + r'|Stat\s*points?|Points?|Levels?)%?)', r' <span class="reader-inline-tag reader-tag-stat">\1</span>', safe, flags=re.I)
