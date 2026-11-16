@@ -5,7 +5,7 @@ An ultra-responsive, mobile-first web application and Progressive Web App (PWA) 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Render](https://img.shields.io/badge/Deploy-Render-46E3B7.svg?style=flat&logo=render&logoColor=white)](https://render.com/)
-[![PWA](https://img.shields.io/badge/PWA-v60-brightgreen.svg?style=flat&logo=pwa&logoColor=white)](static/sw.js)
+[![PWA](https://img.shields.io/badge/PWA-v61-brightgreen.svg?style=flat&logo=pwa&logoColor=white)](static/sw.js)
 [![Forge Verified](https://img.shields.io/badge/Forge%20Suite-38%2F38%20PASS-success.svg?style=flat)](forge_verification_suite.py)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -53,12 +53,12 @@ An ultra-responsive, mobile-first web application and Progressive Web App (PWA) 
   - **Smart Shelves**: 1-tap filtering for `All`, `⭐ Favorites`, `📖 Reading`, `Unread`, and `✔️ Completed` with 1-tap star toggles.
   - **1-Tap Bedtime Sleep Timer**: Integrated into audio player header and floating mobile dock (15m, 30m, 45m, 60m, off) with gradual volume decay.
 
-- **Offline-First PWA Architecture & Dexie.js (v60)**:
+- **Offline-First PWA Architecture & Dexie.js (v61)**:
   - Client-authoritative storage powered by **Dexie.js (IndexedDB)** for full offline library reading and instant chapter navigation.
   - Sub-50ms instantaneous chapter transitions via single-roundtrip DOM hydration without page reloads.
   - Real-time reading progress tracking, font personalization, and OLED themes preserved locally and synchronized with the server.
   - Sub-5ms HTTP ETag (`304 Not Modified`) chapter revalidation with MD5 content hashing.
-  - Version-gated cache eviction (`v60`) ensuring mobile browsers instantly adopt updated styles and scripts.
+  - Version-gated cache eviction (`v61`) ensuring mobile browsers instantly adopt updated styles and scripts.
 
 - **Resilient Hybrid Database**:
   - High-concurrency cloud **Turso (LibSQL)** support with single-roundtrip chapter and Table of Contents hydration.
@@ -76,7 +76,7 @@ LightnovelPub includes an exhaustive automated verification suite (`forge_verifi
   FORGE VERIFICATION SUITE ARCHITECTURE
 ==================================================================
   Loop 1: Syntax & Bytecode Compilation (Python + JavaScript)
-  Loop 2: PWA & Cache-Busting Coherence (v60 synchronization)
+  Loop 2: PWA & Cache-Busting Coherence (v61 synchronization)
   Loop 3: Edge-TTS API & Master Audio Integrity (1.0x baseline, MP3 stream)
   Loop 4: Chapter Reader DOM & UI Segmented Tabs
   Loop 5: Decorative Character & Symbol Cleaner (Speech text sanitizer)
@@ -105,7 +105,7 @@ python forge_verification_suite.py
 | **Document Parsers** | PyPDFium2, PyPDF, Pillow, zipfile | Native, memory-safe PDF & EPUB chapter segregation pipelines |
 | **Database** | Turso (LibSQL) / SQLite3 | Dual-mode database with single-connection chapter and ToC queries |
 | **Client Storage** | Dexie.js (IndexedDB) | Client-first offline storage, sub-50ms hydration, composite audio cache |
-| **Interface & PWA** | Vanilla HTML5, CSS3, Jinja2, ServiceWorker | Cyber-OLED aesthetic, 6 LitRPG HUD cards, responsive mobile reader, installable PWA v60 |
+| **Interface & PWA** | Vanilla HTML5, CSS3, Jinja2, ServiceWorker | Cyber-OLED aesthetic, 6 LitRPG HUD cards, responsive mobile reader, installable PWA v61 |
 | **Verification** | `forge_verification_suite.py` | 8-loop architectural verification suite with 38 automated assertions |
 | **Hosting & CI/CD** | Render (`render.yaml`) | Automated cloud deployment on Git push to `main` |
 
@@ -132,7 +132,7 @@ Lightnovelpub/
 │   │   ├── reader.js           # Dual-engine player (Neural/Local), Dexie hydration, card collapse
 │   │   ├── upload.js           # Chunked client upload orchestrator, local DB sync, progress bar
 │   │   ├── dexie.min.js        # IndexedDB client persistence engine
-│   │   └── sw.js               # PWA Service Worker for offline asset caching (v60)
+│   │   └── sw.js               # PWA Service Worker for offline asset caching (v61)
 │   ├── img/                    # PWA application icons, badges, and logos
 │   └── covers/                 # Cached novel cover images
 └── templates/

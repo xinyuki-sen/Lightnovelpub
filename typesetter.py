@@ -75,7 +75,7 @@ def tokenize_sentences(text: str) -> List[str]:
 # 2. LITRPG STAT & SYSTEM WINDOW DETECTION
 # -----------------------------------------------------------------------------
 STAT_KEY_REGEX = re.compile(
-    r'\b(?:Name|Level|Race|Alignment|Titles?|Class|Sub\s*Class(?:es)?|Subclass(?:es)?|Specialization|Specialty|Rank|Class\s*Rank|Class\s*Tier|Tier|Profession|Affinity|Aspect|Domain|Bloodline|Physique|Talent|Grade|Stage|Realm|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]',
+    r'\b(?:Name|Level|Race|Alignment|Titles?|Class|Sub\s*Class(?:es)?|Subclass(?:es)?|Specialization|Specialty|Rank|Class\s*Rank|Class\s*Tier|Tier|Profession|Affinity|Aspect|Domain|Bloodline|Physique|Talent|Grade|Stage|Realm|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|(?<!\bBody\s)(?<!\bRoot\s)(?<!\bMind\s)(?<!\bCrowd\s)Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]',
     re.I
 )
 
@@ -105,8 +105,16 @@ def is_system_or_stat_block(text: str) -> bool:
     if len(stat_matches) >= 2:
         return True
 
-    # 4. ASCII / Markdown table blocks / Pipe skill lists
-    if text.count('|') >= 4 or (text.count('+') >= 4 and '-' in text):
+    # 4. ASCII / Markdown table blocks / Pipe skill lists & telemetry indicators
+    if text.count('|') >= 3 or (text.count('+') >= 4 and '-' in text):
+        return True
+    if text.count('|') >= 2 and ('lvl' in t_lower or 'level' in t_lower):
+        return True
+    if re.search(r'^(?:Lvl|Level)\s+\d+\s*\|', text, re.I):
+        return True
+    if len(re.findall(r'\b(?:Lvl|Level)\s+\d+', text, re.I)) >= 3:
+        return True
+    if re.search(r'\b(?:Basic\s+Passives?|Passives?|Actives?|Stamina\s+Attack\s+Skills|Mana\s+Attack\s+Skills|Utility|Boosts?|Resistances?|Soulskills?)\s*[:：]', text, re.I):
         return True
 
     return False
@@ -131,10 +139,12 @@ def format_stat_block_rows(text: str) -> str:
         r'Titles?\s*[:：]',
         r'(?<!\bClass\s)Rank\s*[:：]',
         r'Tier\s*[:：]',
-        r'Health\s*[:：]',
+        r'Health(?:\([^\)]*\))?\s*[:：]',
         r'HP\s*[:：]',
-        r'Mana\s*[:：]',
+        r'Mana(?:\([^\)]*\))?\s*[:：]',
         r'MP\s*[:：]',
+        r'Stam(?:ina)?(?:\([^\)]*\))?\s*[:：]',
+        r'SP\s*[:：]',
         r'Energy\s*[:：]',
         r'Strength\s*[:：]',
         r'STR\s*[:：]',
@@ -142,11 +152,39 @@ def format_stat_block_rows(text: str) -> str:
         r'AGI\s*[:：]',
         r'Vitality\s*[:：]',
         r'VIT\s*[:：]',
+        r'Endurance\s*[:：]',
+        r'END\s*[:：]',
+        r'Intelligence\s*[:：]',
+        r'INT\s*[:：]',
+        r'Wisdom\s*[:：]',
+        r'WIS\s*[:：]',
+        r'Perception\s*[:：]',
+        r'PER\s*[:：]',
+        r'Reaction\s*[:：]',
+        r'Resistance\s*[:：]',
+        r'Willpower\s*[:：]',
+        r'WIL\s*[:：]',
+        r'Focus\s*[:：]',
+        r'(?<!\bBody\s)(?<!\bRoot\s)(?<!\bMind\s)(?<!\bCrowd\s)Control\s*[:：]',
         r'Luck\s*[:：]',
-        r'LUK\s*[:：]'
+        r'LUK\s*[:：]',
+        r'Stamina\s+Attack\s+Skills\s*[:：]',
+        r'Mana\s+Attack\s+Skills\s*[:：]',
+        r'Basic\s+Passives?\s*[:：]',
+        r'(?<!\bAttack\s)(?<!\bPassive\s)(?<!\bActive\s)(?<!\bCombat\s)(?<!\bUtility\s)Skills?\s*[:：]',
+        r'Passives?\s*[:：]',
+        r'Actives?\s*[:：]',
+        r'Utility\s*[:：]',
+        r'Boosts?\s*[:：]',
+        r'Resistances?\s*[:：]',
+        r'Soulskills?\s*[:：]',
+        r'\bThe\s+\d+\s+Kata\s+of\s+[^:：]+[:：]',
+        r'\b(?<!\bThe\s)\d+\s+Kata\s+of\s+[^:：]+[:：]',
+        r'\bThe\s+\d+\s+Signs?\s+of\s+[^:：]+[:：]',
+        r'\b(?<!\bThe\s)\d+\s+Signs?\s+of\s+[^:：]+[:：]'
     ]
     pattern = r'(?<=\S)\s+(?=(?:[\*~_`]*\s*(?:' + '|'.join(BREAK_KEYS) + r')))'
-    return re.sub(pattern, '\n', text)
+    return re.sub(pattern, '\n', text, flags=re.I)
 
 # -----------------------------------------------------------------------------
 # 3. MIXED PARAGRAPH SEGREGATION ENGINE
@@ -181,7 +219,7 @@ def segregate_mixed_paragraph(text: str) -> List[str]:
             trailing_prose = text[cut:].strip()
         else:
             m_prose_noperiod = re.search(r'(?<=\d)\s+([A-Z][a-z]+(?:\s+[a-z]+){1,3}\s+[a-z]+[\s\S]*)', after_pipe)
-            if m_prose_noperiod and not re.search(r'\b(?:Lvl|Level)\s+\d+', m_prose_noperiod.group(1), re.I):
+            if m_prose_noperiod and not re.search(r'(?:\b(?:Lvl|Level)\s+\d+|\((?:Ru|R|A|U|Un|E|L|M|S)\)|[:：]|\b(?:Kata|Signs?|Form|Stance|Style|Skills?)\b)', m_prose_noperiod.group(1), re.I):
                 cut = last_m.end() + last_pipe_idx + m_prose_noperiod.start()
                 stat_block = text[first_m.start():cut].strip()
                 trailing_prose = text[cut:].strip()
@@ -337,14 +375,14 @@ def split_long_paragraph(text: str, max_chars: int = 480) -> List[str]:
     if len(segregated) > 1:
         out = []
         for s in segregated:
-            if is_system_or_stat_block(s) and len(s) <= 2500:
+            if is_system_or_stat_block(s) and len(s) <= 10000:
                 out.append(s)
             else:
                 out.extend(split_long_paragraph(s, max_chars=max_chars))
         return out
 
-    # Preserve LitRPG system cards, quest notifications, and status boxes up to 2500 chars
-    if is_system_or_stat_block(text) and len(text) <= 2500:
+    # Preserve LitRPG system cards, quest notifications, and status boxes up to 10000 chars
+    if is_system_or_stat_block(text) and len(text) <= 10000:
         return [text]
 
     sentences = tokenize_sentences(text)
@@ -406,7 +444,7 @@ def process_chapter_paragraphs(paragraphs: List[str], max_chars: int = 480) -> L
     # Step 3: Split long narrative prose while protecting intact stat blocks
     final_paras = []
     for p in merged:
-        if is_system_or_stat_block(p) and len(p) <= 2500:
+        if is_system_or_stat_block(p) and len(p) <= 10000:
             final_paras.append(p)
         elif len(p) <= max_chars:
             final_paras.append(p)

@@ -724,19 +724,27 @@ function initReader() {
       return safe;
     }
 
-    const STAT_KEY_REGEX = /\b(?:Name|Level|Race|Alignment|Titles?|Class|Sub\s*Class(?:es)?|Subclass(?:es)?|Specialization|Specialty|Rank|Class\s*Rank|Class\s*Tier|Tier|Profession|Affinity|Aspect|Domain|Bloodline|Physique|Talent|Grade|Stage|Realm|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]/i;
+    const STAT_KEY_REGEX = /\b(?:Name|Level|Race|Alignment|Titles?|Class|Sub\s*Class(?:es)?|Subclass(?:es)?|Specialization|Specialty|Rank|Class\s*Rank|Class\s*Tier|Tier|Profession|Affinity|Aspect|Domain|Bloodline|Physique|Talent|Grade|Stage|Realm|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|(?<!\bBody\s)(?<!\bRoot\s)(?<!\bMind\s)(?<!\bCrowd\s)Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]/i;
     const STAT_KEY_GLOBAL = new RegExp(STAT_KEY_REGEX.source, 'gi');
 
     function isStatParagraph(text) {
       if (!text) return false;
       const isBracketHeader = /^(?:\[|【)\s*(?:Status\s*(?:Screen|Window|Menu|Sheet)|Character\s*Sheet|Attributes|Player\s*Profile|Crawler\s*#|Telemetry)\s*(?:\]|】)/i.test(text);
       const matches = text.match(new RegExp(STAT_KEY_REGEX.source, 'gi'));
-      return isBracketHeader || (matches && matches.length >= 2) || (text.includes('Status:') && (text.includes('Level:') || text.includes('Class:'))) || (text.split('|').length >= 4);
+      if (isBracketHeader || (matches && matches.length >= 2) || (text.includes('Status:') && (text.includes('Level:') || text.includes('Class:')))) return true;
+      if (text.split('|').length >= 4) return true;
+      const tLower = text.toLowerCase();
+      if (text.split('|').length >= 3 && (tLower.includes('lvl') || tLower.includes('level'))) return true;
+      if (/^(?:Lvl|Level)\s+\d+\s*\|/i.test(text)) return true;
+      const lvlMatches = text.match(/\b(?:Lvl|Level)\s+\d+/gi);
+      if (lvlMatches && lvlMatches.length >= 3) return true;
+      if (/\b(?:Basic\s+Passives?|Passives?|Actives?|Stamina\s+Attack\s+Skills|Mana\s+Attack\s+Skills|Utility|Boosts?|Resistances?|Soulskills?)\s*[:：]/i.test(text)) return true;
+      return false;
     }
 
     function formatStatBlockRows(text) {
       if (!text || text.includes('\n')) return text;
-      const breakPattern = /(?<=\S)\s+(?=(?:[\*~_`]*\s*(?:Sub\s*Class(?:es)?|Class\s*Rank|Class\s*Tier|(?<!\bSub\s)(?<!\bSub-)Class|Specialization|Specialty|Level|Race|Titles?|(?<!\bClass\s)Rank|Tier|Health|HP|Mana|MP|Energy|Strength|STR|Agility|AGI|Vitality|VIT|Luck|LUK)\s*[:：]))/gi;
+      const breakPattern = /(?<=\S)\s+(?=(?:[\*~_`]*\s*(?:Sub\s*Class(?:es)?|Class\s*Rank|Class\s*Tier|(?<!\bSub\s)(?<!\bSub-)Class|Specialization|Specialty|Level|Titles?|(?<!\bClass\s)Rank|Tier|Health(?:\([^\)]*\))?|HP|Mana(?:\([^\)]*\))?|MP|Stam(?:ina)?(?:\([^\)]*\))?|SP|Energy|Strength|STR|Str|Agility|AGI|Agi|Vitality|VIT|Vit|Endurance|END|End|Intelligence|INT|Int|Wisdom|WIS|Wis|Perception|PER|Per|Reaction|Resistance|Willpower|WIL|Focus|(?<!\bBody\s)(?<!\bRoot\s)(?<!\bMind\s)(?<!\bCrowd\s)Control|Luck|LUK|Stamina\s+Attack\s+Skills|Mana\s+Attack\s+Skills|Basic\s+Passives?|(?<!\bAttack\s)(?<!\bPassive\s)(?<!\bActive\s)(?<!\bCombat\s)(?<!\bUtility\s)Skills?|Passives?|Actives?|Utility|Boosts?|Resistances?|Soulskills?|\bThe\s+\d+\s+Kata\s+of\s+[^:：]+|\b(?<!\bThe\s)\d+\s+Kata\s+of\s+[^:：]+|\bThe\s+\d+\s+Signs?\s+of\s+[^:：]+|\b(?<!\bThe\s)\d+\s+Signs?\s+of\s+[^:：]+)\s*[:：]))/gi;
       return text.replace(breakPattern, '\n');
     }
 
@@ -772,8 +780,15 @@ function initReader() {
           statBlock = text.slice(firstM.start, cut).trim();
           trailingProse = text.slice(cut).trim();
         } else {
-          statBlock = text.slice(firstM.start).trim();
-          trailingProse = '';
+          const mProseNoPeriod = afterPipe.match(/(?<=\d)\s+([A-Z][a-z]+(?:\s+[a-z]+){1,3}\s+[a-z]+[\s\S]*)/);
+          if (mProseNoPeriod && !/(?:\b(?:Lvl|Level)\s+\d+|\((?:Ru|R|A|U|Un|E|L|M|S)\)|[:：]|\b(?:Kata|Signs?|Form|Stance|Style|Skills?)\b)/i.test(mProseNoPeriod[1])) {
+            const cut = lastM.end + lastPipeIdx + mProseNoPeriod.index;
+            statBlock = text.slice(firstM.start, cut).trim();
+            trailingProse = text.slice(cut).trim();
+          } else {
+            statBlock = text.slice(firstM.start).trim();
+            trailingProse = '';
+          }
         }
       } else {
         const mPeriod = rest.match(/[\.\!\?]\s+([A-Z][A-Za-z0-9\-\'\"]*(?:\s+[A-Za-z0-9\-\'\"]+){2,})/);
@@ -1722,10 +1737,10 @@ function initReader() {
         });
 
         // Version-gated audio cache migration: flush any cross-chapter or legacy audio blobs
-        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v60') {
+        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v61') {
           try {
             novelDb.audioCache.clear().then(() => {
-              localStorage.setItem('novel_reader_audio_cache_version', 'v60');
+              localStorage.setItem('novel_reader_audio_cache_version', 'v61');
             }).catch(() => { });
           } catch (e) { }
         }
@@ -2659,12 +2674,35 @@ function initReader() {
 
 
           navigator.mediaSession.setActionHandler('play', () => toggleAudioPlay());
-
           navigator.mediaSession.setActionHandler('pause', () => toggleAudioPlay());
-
           navigator.mediaSession.setActionHandler('previoustrack', () => playPrevParagraph());
-
           navigator.mediaSession.setActionHandler('nexttrack', () => playNextParagraph());
+
+          try {
+            navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+              const sec = (details && details.seekOffset) || 10;
+              if (activeHtml5Audio && !isNaN(activeHtml5Audio.currentTime)) {
+                activeHtml5Audio.currentTime = Math.max(0, activeHtml5Audio.currentTime - sec);
+              } else {
+                playPrevParagraph();
+              }
+            });
+          } catch (e) { }
+
+          try {
+            navigator.mediaSession.setActionHandler('seekforward', (details) => {
+              const sec = (details && details.seekOffset) || 10;
+              if (activeHtml5Audio && !isNaN(activeHtml5Audio.currentTime)) {
+                activeHtml5Audio.currentTime = Math.min(activeHtml5Audio.duration || 9999, activeHtml5Audio.currentTime + sec);
+              } else {
+                playNextParagraph();
+              }
+            });
+          } catch (e) { }
+
+          try {
+            navigator.mediaSession.setActionHandler('stop', () => stopAudioPlayback());
+          } catch (e) { }
 
         } catch (err) {
 
@@ -5959,6 +5997,11 @@ function initReader() {
     function initVisibilityProtocol() {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
+          // Re-acquire screen wakeLock on Android / mobile return if reading audio is active
+          if (audioState.isPlaying && !audioState.isPaused) {
+            requestWakeLock();
+          }
+
           // Screen turned on / tab restored: Smooth non-jarring catch-up
           if (audioState.isPlaying && !audioState.isPaused && audioState.currentIndex >= 0) {
             const activeIdx = audioState.currentIndex;
