@@ -967,7 +967,6 @@ function initReader() {
         card.className = `reader-system-card ${meta.cardClass}`;
         card.setAttribute('data-para-idx', String(idx));
         card.setAttribute('data-system-type', meta.type);
-        card.title = 'Click to start audio reading from here';
 
         const formattedBody = meta.type === 'stats' ? formatStatCardBody(text) : formatInlineTypography(text);
 
@@ -997,7 +996,6 @@ function initReader() {
       p.className = `reader-${meta.type}`;
       p.setAttribute('data-para-index', String(idx));
       p.setAttribute('data-para-idx', String(idx));
-      p.title = 'Click to start audio reading from here';
       p.innerHTML = formatInlineTypography(text);
       return p;
     }
@@ -1737,10 +1735,10 @@ function initReader() {
         });
 
         // Version-gated audio cache migration: flush any cross-chapter or legacy audio blobs
-        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v62') {
+        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v63') {
           try {
             novelDb.audioCache.clear().then(() => {
-              localStorage.setItem('novel_reader_audio_cache_version', 'v62');
+              localStorage.setItem('novel_reader_audio_cache_version', 'v63');
             }).catch(() => { });
           } catch (e) { }
         }
@@ -2637,10 +2635,14 @@ function initReader() {
 
 
 
+    let lastMediaSessionPositionUpdate = 0;
     function updateMediaSessionPosition() {
+      const now = Date.now();
+      if (now - lastMediaSessionPositionUpdate < 800) return;
       if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
         try {
           if (activeHtml5Audio && !isNaN(activeHtml5Audio.duration) && activeHtml5Audio.duration > 0 && !isNaN(activeHtml5Audio.currentTime)) {
+            lastMediaSessionPositionUpdate = now;
             navigator.mediaSession.setPositionState({
               duration: Math.max(0.1, activeHtml5Audio.duration),
               playbackRate: Math.max(0.5, Math.min(2.5, activeHtml5Audio.playbackRate || audioState.rate || 1.0)),
@@ -3386,17 +3388,11 @@ function initReader() {
       applyAudioGraphVolume(vol);
 
       if (vol === 0) {
-
-        if (dockVolIcon) dockVolIcon.textContent = '🔇';
-
+        if (dockVolIcon) dockVolIcon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`;
       } else if (vol < 0.5) {
-
-        if (dockVolIcon) dockVolIcon.textContent = '🔉';
-
+        if (dockVolIcon) dockVolIcon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`;
       } else {
-
-        if (dockVolIcon) dockVolIcon.textContent = '🔊';
-
+        if (dockVolIcon) dockVolIcon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`;
       }
 
     }
@@ -3883,29 +3879,17 @@ function initReader() {
 
 
     function updatePlayStateUI(isPlaying) {
-
       if (isPlaying) {
-
-        if (npPlayIcon) npPlayIcon.textContent = '⏸';
-
+        if (npPlayIcon) npPlayIcon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1.5"></rect><rect x="14" y="4" width="4" height="16" rx="1.5"></rect></svg>`;
         if (listenToggleBtn) listenToggleBtn.classList.add('is-playing');
-
         dockBtnAudioToggle?.classList.add('is-playing');
-
-        if (dockAudioIcon) dockAudioIcon.textContent = '⏸';
-
+        if (dockAudioIcon) dockAudioIcon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1.5"></rect><rect x="14" y="4" width="4" height="16" rx="1.5"></rect></svg>`;
       } else {
-
-        if (npPlayIcon) npPlayIcon.textContent = '▶';
-
+        if (npPlayIcon) npPlayIcon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
         if (listenToggleBtn) listenToggleBtn.classList.remove('is-playing');
-
         dockBtnAudioToggle?.classList.remove('is-playing');
-
-        if (dockAudioIcon) dockAudioIcon.textContent = '🎧';
-
+        if (dockAudioIcon) dockAudioIcon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>`;
       }
-
     }
 
 
@@ -5825,9 +5809,9 @@ function initReader() {
       const currentVoice = audioState.selectedVoice || NEURAL_VOICES[0];
       if (!currentVoice || !currentVoice.isNeural) return;
 
-      // Target: 10 paragraphs ahead runway
+      // Target: 6 paragraphs ahead runway (optimized for mobile radio & CPU efficiency)
       const targetChapter = currentChapterNum;
-      const targetEnd = Math.min(paragraphNodes.length - 1, currentIndex + 10);
+      const targetEnd = Math.min(paragraphNodes.length - 1, currentIndex + 6);
       const missingIndices = [];
       for (let i = currentIndex + 1; i <= targetEnd; i++) {
         const key = getAudioKey(targetChapter, i);
@@ -5850,8 +5834,8 @@ function initReader() {
       const currentEpoch = audioPlaybackEpoch;
 
       try {
-        // Parallel batch burst: 3 chunks per sub-batch over HTTP/2
-        const batchSize = 3;
+        // Parallel batch burst: 2 chunks per sub-batch (prevents mobile radio saturation)
+        const batchSize = 2;
         for (let i = 0; i < missingIndices.length; i += batchSize) {
           if (signal.aborted || audioPlaybackEpoch !== currentEpoch || targetChapter !== currentChapterNum || !audioState.isPlaying || audioState.isPaused) break;
           const slice = missingIndices.slice(i, i + batchSize);

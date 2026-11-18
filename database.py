@@ -387,7 +387,7 @@ def save_novel(title: str, author: str, synopsis: str, cover_path: str, chapters
                 if isinstance(raw_c, list) and raw_c and all(len(p) <= 480 for p in raw_c):
                     paras = raw_c
                 else:
-                    paras = split_chapter_paragraphs(raw_c, max_chars=480)
+                    paras = split_chapter_paragraphs(raw_c, max_chars=480, chapter_title=ch.get("title", ""), chapter_num=ch.get("number", 0))
                 w_count = sum(len(p.split()) for p in paras)
                 batch_data.append((
                     novel_id,
@@ -490,7 +490,7 @@ def get_chapter(slug: str, chapter_number: int) -> Optional[Tuple[Dict, Dict]]:
         novel["chapters"] = [dict(r) for r in cursor.fetchall()]
 
         raw_paras = json.loads(chapter["content_json"])
-        chapter["paragraphs"] = split_chapter_paragraphs(raw_paras, max_chars=480)
+        chapter["paragraphs"] = split_chapter_paragraphs(raw_paras, max_chars=480, chapter_title=chapter.get("title", ""), chapter_num=chapter.get("chapter_number", 0))
         
         return novel, chapter
     finally:

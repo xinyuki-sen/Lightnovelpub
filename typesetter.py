@@ -410,30 +410,108 @@ def split_long_paragraph(text: str, max_chars: int = 480) -> List[str]:
 
     return chunks
 
-def process_chapter_paragraphs(paragraphs: List[str], max_chars: int = 480) -> List[str]:
+def repair_typesetting_artifacts(text: str) -> str:
+    """
+    Rejoins drop-caps, fixes split contractions, and removes trailing spaces before punctuation.
+    - 'T HE' -> 'THE', 'P ACIFIC' -> 'PACIFIC', 'M ORDECAI' -> 'MORDECAI'
+    - 'I’ VE' -> 'I’VE', 'DON’ T' -> 'DON’T'
+    - 'CLOSED ,' -> 'CLOSED,'
+    """
+    if not text:
+        return ""
+    # 1. Drop-cap reunion: 'T HE' -> 'THE', 'P ACIFIC' -> 'PACIFIC', 'M ORDECAI' -> 'MORDECAI'
+    text = re.sub(r'\b([B-HJ-Z])\s+([A-Z]{2,})\b', r'\1\2', text)
+    # 2. Reconnect 'A N' before uppercase words: 'A N ORNATE' -> 'AN ORNATE'
+    text = re.sub(r'\bA\s+N\s+([A-Z]{2,})\b', r'AN \1', text)
+    # 3. Reconnect split contractions: 'I’ VE' -> 'I’VE', 'DON’ T' -> 'DON’T'
+    text = re.sub(r'\b([A-Za-z]+)\s*([\'’])\s+([A-Za-z]+)\b', lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}", text)
+    # 4. Spaces before punctuation: 'CLOSED ,' -> 'CLOSED,'
+    text = re.sub(r'\s+([,\.!?:;])', r'\1', text)
+    return text
+
+def strip_leading_chapter_heading(paragraph: str, chapter_title: str = "", chapter_num: int = 0) -> str:
+    """
+    Slices off redundant chapter headings and spaced small-cap titles from the start of a chapter's opening paragraph.
+    Never strips genuine story openings.
+    """
+    if not paragraph:
+        return ""
+    paragraph = repair_typesetting_artifacts(paragraph)
+    
+    norm_title = re.sub(r'^(?:Chapter\s+)?\d+[\.\:\s\-]*', '', chapter_title or "", flags=re.I)
+    norm_title_clean = re.sub(r'[^a-zA-Z0-9]', '', norm_title).lower()
+    
+    m = re.match(r'^([A-Z0-9\s–—\-\.\,\:\'\"\’\‘\?\!]{3,110}?)(?=[a-z]|\s+[A-Z][a-z]|[\“\"\”\[]|\Z)', paragraph)
+    if not m:
+        return paragraph
+        
+    candidate = m.group(1).strip()
+    candidate_clean = re.sub(r'[^a-zA-Z0-9]', '', candidate).lower()
+    
+    matches_title = bool(norm_title_clean and (norm_title_clean in candidate_clean or candidate_clean in norm_title_clean))
+    is_known_marker = any(k in candidate_clean for k in ['prologue', 'interlude', 'epilogue'])
+    has_ch_word = 'chapter' in candidate_clean and any(char.isdigit() for char in candidate_clean)
+    
+    has_ch_num = False
+    if chapter_num and norm_title_clean:
+        has_ch_num = any(str(n) in candidate for n in [chapter_num, chapter_num - 1]) and (norm_title_clean in candidate_clean or candidate_clean in norm_title_clean or len(candidate_clean) < 15)
+        
+    if matches_title or is_known_marker or has_ch_word or has_ch_num:
+        remainder = paragraph[m.end():].strip()
+        return remainder
+        
+    return paragraph
+
+def process_chapter_paragraphs(paragraphs: List[str], max_chars: int = 480, chapter_title: str = "", chapter_num: int = 0) -> List[str]:
     """
     Sentence-Preserving Paragraph Engine:
-    1. Segregates mixed stat/narrative paragraphs.
-    2. Recombines any sentences accidentally split across paragraphs (never merging stat blocks into prose).
-    3. Coalesces consecutive pure-stat fragments into a single unified telemetry block.
-    4. Divides long paragraphs strictly at terminal sentence boundaries (. ! ?).
+    1. Repairs typesetting artifacts (drop-caps, split contractions, punctuation spacing).
+    2. Strips redundant chapter headings matching the chapter title/number from opening paragraph.
+    3. Segregates mixed stat/narrative paragraphs.
+    4. Recombines any sentences accidentally split across paragraphs (never merging stat blocks or headings into prose).
+    5. Coalesces consecutive pure-stat fragments into a single unified telemetry block.
+    6. Divides long paragraphs strictly at terminal sentence boundaries (. ! ?).
     """
-    TERMINAL_CHARS = set('.!?..."”’\'»)]}')
+    if not paragraphs:
+        return []
+
+    # Step 0: Clean typesetting artifacts & strip leading redundant chapter heading from paragraph 0
+    cleaned_input = []
+    for idx, p in enumerate(paragraphs):
+        p_clean = repair_typesetting_artifacts(str(p).strip())
+        if not p_clean:
+            continue
+        if idx == 0:
+            p_clean = strip_leading_chapter_heading(p_clean, chapter_title=chapter_title, chapter_num=chapter_num)
+            if not p_clean:
+                continue
+        cleaned_input.append(p_clean)
 
     # Step 1: Pre-segregate any mixed paragraphs
     expanded = []
-    for p in paragraphs:
-        p_clean = str(p).strip()
-        if not p_clean:
-            continue
+    for p_clean in cleaned_input:
         expanded.extend(segregate_mixed_paragraph(p_clean))
 
-    # Step 2: Merge accidentally split sentences, but NEVER merge stat blocks into prose
+    # Step 2: Merge accidentally split sentences, but NEVER merge stat blocks or headings into prose
     merged = []
     for p_clean in expanded:
         is_stat = is_system_or_stat_block(p_clean)
         prev_is_stat = is_system_or_stat_block(merged[-1]) if merged else False
-        if merged and not is_stat and not prev_is_stat and (merged[-1][-1] not in TERMINAL_CHARS or p_clean[0].islower()):
+
+        # Guard against merging with previous heading
+        is_heading = False
+        if merged:
+            last = merged[-1]
+            tokens = [t for t in last.split() if t.isalpha()]
+            if len(tokens) >= 1 and all(t.isupper() for t in tokens) and len(last) < 100:
+                is_heading = True
+
+        can_merge = False
+        if merged and not is_stat and not prev_is_stat and not is_heading:
+            if p_clean[0].islower() or merged[-1].endswith((',', '-', '—', ';')):
+                can_merge = True
+
+        if can_merge:
             merged[-1] = merged[-1] + " " + p_clean
         elif merged and is_stat and prev_is_stat:
             # Coalesce consecutive pure stat blocks
@@ -464,10 +542,12 @@ def clean_speech_text(raw_text: str) -> str:
     Sanitizes text intended for Edge-TTS / Web Speech.
     1. Replaces decorative scene breaks (***, ◆◆◆, ════) with natural speech pauses (, ).
     2. Cleans markdown bold/italic syntax and raw table pipe dividers.
-    3. Matches the client-side sanitizeSpeechText from reader.js.
+    3. Repairs drop-caps and split contractions for fluent vocalization.
+    4. Matches the client-side sanitizeSpeechText from reader.js.
     """
     if not raw_text:
         return ""
+    raw_text = repair_typesetting_artifacts(raw_text)
     decorative_line_regex = re.compile(r'^[\s\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\-—–\.\:\/\u2500-\u257F═]{2,}$', re.MULTILINE)
     cleaned = decorative_line_regex.sub(' ', raw_text)
     cleaned = re.sub(r'(\s*[\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\u2500-\u257F═]{2,}\s*)', ', ', cleaned)

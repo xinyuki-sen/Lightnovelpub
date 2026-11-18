@@ -254,7 +254,7 @@ def extract_epub_chapters(epub_path: str):
                     if ch_num <= 3 or total_words < 40:
                         continue
 
-                divided_content = split_chapter_paragraphs(parser.paragraphs, max_chars=480)
+                divided_content = split_chapter_paragraphs(parser.paragraphs, max_chars=480, chapter_title=ch_title, chapter_num=ch_num)
                 chapters.append({
                     "number": ch_num,
                     "title": ch_title,

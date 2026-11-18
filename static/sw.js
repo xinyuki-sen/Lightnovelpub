@@ -1,13 +1,13 @@
-const CACHE_NAME = 'lightnovelpub-v62';
+const CACHE_NAME = 'lightnovelpub-v63';
 const STATIC_ASSETS = [
-  '/static/css/style.css?v=62',
-  '/static/js/reader.js?v=62',
-  '/static/js/upload.js?v=62',
-  '/static/js/dexie.min.js?v=62',
-  '/static/img/logo.png?v=62',
-  '/static/img/icon-192.png?v=62',
-  '/static/img/icon-512.png?v=62',
-  '/static/favicon.ico?v=62'
+  '/static/css/style.css?v=63',
+  '/static/js/reader.js?v=63',
+  '/static/js/upload.js?v=63',
+  '/static/js/dexie.min.js?v=63',
+  '/static/img/logo.png?v=63',
+  '/static/img/icon-192.png?v=63',
+  '/static/img/icon-512.png?v=63',
+  '/static/favicon.ico?v=63'
 ];
 
 self.addEventListener('install', (e) => {
@@ -52,18 +52,21 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Network-First for static assets: always fetch fresh version from server; fallback to cache only when offline
+  // Stale-While-Revalidate for static assets: instant 0ms response from cache, while updating cache in background
   if (url.pathname.startsWith('/static/') || url.origin.includes('fonts.googleapis.com') || url.origin.includes('fonts.gstatic.com')) {
     e.respondWith(
-      fetch(e.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(e.request, responseClone);
-          });
-        }
-        return networkResponse;
-      }).catch(() => caches.match(e.request))
+      caches.match(e.request).then((cachedResponse) => {
+        const fetchPromise = fetch(e.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(e.request, responseClone);
+            });
+          }
+          return networkResponse;
+        }).catch(() => {});
+        return cachedResponse || fetchPromise;
+      })
     );
   }
 });
