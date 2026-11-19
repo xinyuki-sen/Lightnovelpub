@@ -709,8 +709,8 @@ function initReader() {
       // 4. Clean any dangling unclosed bold/italic asterisks attached to words or colons (e.g. Level:** or Mining*)
       safe = safe.replace(/(?<=[:：\w])\*{1,3}(?!\w)/g, '');
       safe = safe.replace(/(?<!\w)\*{1,3}(?=[:：\w])/g, '');
-      // 5. Inline Skill / Spell brackets: [Fireball], [Shadow Step], etc.
-      safe = safe.replace(/\[((?:Skill|Spell|Title|Item)?\s*[\w\s\+\-\'\’]{2,30})\]/g, '<span class="reader-inline-tag reader-tag-skill">[$1]</span>');
+      // 5. Inline Skill / Spell brackets: [Fireball], [Shadow Step], [Mana Manipulation - Level 1 > Mana Manipulation - Level 2], etc.
+      safe = safe.replace(/\[((?:Skill|Spell|Title|Item)?\s*[\w\s\+\-\'\’\:\/&;>→]{2,100})\]/g, '<span class="reader-inline-tag reader-tag-skill">[$1]</span>');
       // 6. Inline Stat Deltas & Perks:
       const STAT_NAMES = '(?:All\\s+stats|Strength|Agility|Dexterity|Endurance|Vitality|Intelligence|Wisdom|Perception|Constitution|Charisma|Luck|Health|Mana|Stamina|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|HP|MP|SP|EXP)';
       // 6a. Stat Name followed by delta (Strength +1, All stats +10%, Luck +20%)
@@ -724,7 +724,7 @@ function initReader() {
       return safe;
     }
 
-    const STAT_KEY_REGEX = /\b(?:Name|Level|Race|Alignment|Titles?|Class|Sub\s*Class(?:es)?|Subclass(?:es)?|Specialization|Specialty|Rank|Class\s*Rank|Class\s*Tier|Tier|Profession|Affinity|Aspect|Domain|Bloodline|Physique|Talent|Grade|Stage|Realm|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|(?<!\bBody\s)(?<!\bRoot\s)(?<!\bMind\s)(?<!\bCrowd\s)Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]/i;
+    const STAT_KEY_REGEX = /\b(?:Name|Level|Race|Alignment|Titles?|Primary\s*Class(?:es)?|Main\s*Class(?:es)?|Secondary\s*Class(?:es)?|Class|Sub\s*Class(?:es)?|Subclass(?:es)?|Specialization|Specialty|Rank|Class\s*Rank|Class\s*Tier|Tier|Profession|Affinity|Aspect|Domain|Bloodline|Physique|Talent|Grade|Stage|Realm|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|(?<!\bBody\s)(?<!\bRoot\s)(?<!\bMind\s)(?<!\bCrowd\s)Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]/i;
     const STAT_KEY_GLOBAL = new RegExp(STAT_KEY_REGEX.source, 'gi');
 
     function isStatParagraph(text) {
@@ -744,13 +744,19 @@ function initReader() {
 
     function formatStatBlockRows(text) {
       if (!text || text.includes('\n')) return text;
-      const breakPattern = /(?<=\S)\s+(?=(?:[\*~_`]*\s*(?:Sub\s*Class(?:es)?|Class\s*Rank|Class\s*Tier|(?<!\bSub\s)(?<!\bSub-)Class|Specialization|Specialty|Level|Titles?|(?<!\bClass\s)Rank|Tier|Health(?:\([^\)]*\))?|HP|Mana(?:\([^\)]*\))?|MP|Stam(?:ina)?(?:\([^\)]*\))?|SP|Energy|Strength|STR|Str|Agility|AGI|Agi|Vitality|VIT|Vit|Endurance|END|End|Intelligence|INT|Int|Wisdom|WIS|Wis|Perception|PER|Per|Reaction|Resistance|Willpower|WIL|Focus|(?<!\bBody\s)(?<!\bRoot\s)(?<!\bMind\s)(?<!\bCrowd\s)Control|Luck|LUK|Stamina\s+Attack\s+Skills|Mana\s+Attack\s+Skills|Basic\s+Passives?|(?<!\bAttack\s)(?<!\bPassive\s)(?<!\bActive\s)(?<!\bCombat\s)(?<!\bUtility\s)Skills?|Passives?|Actives?|Utility|Boosts?|Resistances?|Soulskills?|\bThe\s+\d+\s+Kata\s+of\s+[^:：]+|\b(?<!\bThe\s)\d+\s+Kata\s+of\s+[^:：]+|\bThe\s+\d+\s+Signs?\s+of\s+[^:：]+|\b(?<!\bThe\s)\d+\s+Signs?\s+of\s+[^:：]+)\s*[:：]))/gi;
+      const breakPattern = /(?<=[^\s\[\(\{\<【])\s+(?=(?:\[\s*)?(?:[\*~_`]*\s*(?:Sub\s*Class(?:es)?|(?:Primary|Main|Secondary|Second)\s*Class(?:es)?|Class\s*Rank|Class\s*Tier|(?<!\bSub\s)(?<!\bSub-)(?<!\bPrimary\s)(?<!\bMain\s)(?<!\bSecondary\s)(?<!\bSecond\s)Class|Specialization|Specialty|Level|Titles?|(?<!\bClass\s)Rank|Tier|Health(?:\([^\)]*\))?|HP|Mana(?:\([^\)]*\))?|MP|Stam(?:ina)?(?:\([^\)]*\))?|SP|Energy|Strength|STR|Str|Agility|AGI|Agi|Vitality|VIT|Vit|Endurance|END|End|Intelligence|INT|Int|Wisdom|WIS|Wis|Perception|PER|Per|Reaction|Resistance|Willpower|WIL|Focus|(?<!\bBody\s)(?<!\bRoot\s)(?<!\bMind\s)(?<!\bCrowd\s)Control|Luck|LUK|Stamina\s+Attack\s+Skills|Mana\s+Attack\s+Skills|Basic\s+Passives?|(?<!\bAttack\s)(?<!\bPassive\s)(?<!\bActive\s)(?<!\bCombat\s)(?<!\bUtility\s)Skills?|Passives?|Actives?|Utility|Boosts?|Resistances?|Soulskills?|\bThe\s+\d+\s+Kata\s+of\s+[^:：]+|\b(?<!\bThe\s)\d+\s+Kata\s+of\s+[^:：]+|\bThe\s+\d+\s+Signs?\s+of\s+[^:：]+|\b(?<!\bThe\s)\d+\s+Signs?\s+of\s+[^:：]+)\s*[:：]))/gi;
       return text.replace(breakPattern, '\n');
     }
 
     function segregateMixedParagraph(rawText) {
       const text = (rawText || '').trim();
       if (!text) return [];
+
+      // Leading bracket alert / skill notification segregation:
+      const mLead = text.match(/^(\[[A-Za-z0-9\s\+\-\>\→\:\.\,\'\’&;]{3,120}\])\s+([A-Za-z0-9\“\"\’\‘].*)/);
+      if (mLead && !STAT_KEY_REGEX.test(mLead[2])) {
+        return [mLead[1].trim(), ...segregateMixedParagraph(mLead[2].trim())];
+      }
 
       const matches = [];
       let m;
@@ -891,21 +897,12 @@ function initReader() {
         return { type: 'quest', cardClass: 'system-card-quest', badge };
       }
 
-      // 4. Status Screen / Stat Attributes
-      if (isStatParagraph(text)) {
-        return {
-          type: 'stats',
-          cardClass: 'system-card-stats',
-          badge: '📊 STATUS SCREEN // ATTRIBUTES',
-          collapsible: text.length > 350 || (text.split('\n').length > 5)
-        };
-      }
-
-      // 5. Skill / Spell / Entity Scan Tooltip (Strict bracket or appraisal label)
+      // 4. Skill / Spell / Entity Scan Tooltip (Strict bracket or appraisal label)
       const isSkill = /^(?:\[|【)\s*(?:Skill|Spell|Ability|Technique)/i.test(text) ||
-                      /^(?:Skill|Spell|Ability|Technique)\s*(?:Acquired|Learned|Created|Unlocked|Upgraded)\s*[:：\!]/i.test(text);
+                      /^(?:Skill|Spell|Ability|Technique)\s*(?:Acquired|Learned|Created|Unlocked|Upgraded)\s*[:：\!]/i.test(text) ||
+                      (/^(?:\[|【)\s*[^\]】]+(?:Level\s+\d+|Rank\s+[A-Za-z0-9]+|[>→]|Acquired|Learned|Unlocked)/i.test(text) && (text.endsWith(']') || text.endsWith('】')));
       if (isSkill) {
-        return { type: 'skill', cardClass: 'system-card-skill', badge: '⚡ SKILL & ABILITY' };
+        return { type: 'skill', cardClass: 'system-card-skill', badge: '⚡ SKILL NOTIFICATION' };
       }
 
       const isTooltip = /^(?:\[|【)\s*(?:Item|Appraisal|Scan|Artifact|Relic|Equipment|Entity|Monster)/i.test(text) ||
@@ -913,6 +910,16 @@ function initReader() {
                         /^Rank\s*[:：]\s*[ESABCDFS]+/i.test(text);
       if (isTooltip) {
         return { type: 'tooltip', cardClass: 'system-card-tooltip', badge: '💎 ENTITY SCAN // TOOLTIP' };
+      }
+
+      // 5. Status Screen / Stat Attributes
+      if (isStatParagraph(text)) {
+        return {
+          type: 'stats',
+          cardClass: 'system-card-stats',
+          badge: '📊 STATUS SCREEN // ATTRIBUTES',
+          collapsible: text.length > 350 || (text.split('\n').length > 5)
+        };
       }
 
       // 6. World Announcement / System Broadcast (Strict bracket or system header)
@@ -1735,10 +1742,10 @@ function initReader() {
         });
 
         // Version-gated audio cache migration: flush any cross-chapter or legacy audio blobs
-        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v63') {
+        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v64') {
           try {
             novelDb.audioCache.clear().then(() => {
-              localStorage.setItem('novel_reader_audio_cache_version', 'v63');
+              localStorage.setItem('novel_reader_audio_cache_version', 'v64');
             }).catch(() => { });
           } catch (e) { }
         }
@@ -4366,7 +4373,8 @@ function initReader() {
       if (navigator.onLine === false) return null;
       const targetNode = paragraphNodes[idx];
       if (!targetNode) return null;
-      const textToPrefetch = sanitizeSpeechText(targetNode.textContent.trim(), targetNode);
+      const textContainer = targetNode.querySelector('.system-card-body') || targetNode;
+      const textToPrefetch = sanitizeSpeechText(textContainer.textContent.trim(), targetNode);
       if (!textToPrefetch) return null;
 
       prefetchInFlight.add(key);
@@ -5886,7 +5894,8 @@ function initReader() {
 
       const targetNode = paragraphNodes[idx];
       if (!targetNode) return null;
-      const textToPrefetch = sanitizeSpeechText(targetNode.textContent.trim(), targetNode);
+      const textContainer = targetNode.querySelector('.system-card-body') || targetNode;
+      const textToPrefetch = sanitizeSpeechText(textContainer.textContent.trim(), targetNode);
       if (!textToPrefetch) return null;
 
       prefetchInFlight.add(key);
@@ -6052,8 +6061,7 @@ function initReader() {
       if (!cleaned) return '';
 
       const bypassToggle = document.getElementById('np-toggle-bypass-stats');
-      const isBypassEnabled = bypassToggle ? bypassToggle.checked : true;
-      if (!isBypassEnabled) return cleaned;
+      const isBypassEnabled = bypassToggle ? bypassToggle.checked : false;
 
       const isSystemNode = targetNode && (
         targetNode.classList.contains('reader-system-card') ||
@@ -6068,15 +6076,17 @@ function initReader() {
       // Clean markdown emphasis and table dividers for clean speech synthesis
       cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '$1');
       cleaned = cleaned.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1');
-      cleaned = cleaned.replace(/\|/g, ' ');
+      cleaned = cleaned.replace(/\|/g, ', ');
+      cleaned = cleaned.replace(/\s*(?:>|→|&gt;|&rarr;)\s*/g, ' upgraded to ');
+      cleaned = cleaned.replace(/[\[\]【】〔〕《》]/g, ' ');
 
       // Look for characteristic LitRPG stat patterns:
       // e.g. "Strength: 45", "Agility: 32", "Health: 120/120", "Mana: 60/60", "[Level: 14]"
       const statKeyRegex = /\b(Health|Mana|Stamina|Strength|Agility|Vitality|Dexterity|Endurance|Intelligence|Wisdom|Perception|Charisma|Luck|Willpower|Defense|Attack|Speed|HP|MP|SP|Rank|Level|Class|Title)\s*[:：]\s*(\d+|\d+\s*\/\s*\d+|[A-Za-z0-9+-]+)/gi;
       const matches = rawText.match(statKeyRegex);
 
-      // Check if paragraph is primarily a numerical stat box (3 or more stat attributes, or system card with stats)
-      if ((matches && matches.length >= 3) || (isSystemNode && matches && matches.length >= 2)) {
+      // Check if user explicitly enabled bypass toggle to summarize numerical tables:
+      if (isBypassEnabled && ((matches && matches.length >= 3) || (isSystemNode && matches && matches.length >= 2))) {
         // 1. Check for Achievement or Title Unlock
         const achievementMatch = rawText.match(/(?:achievement\s*(?:unlocked)?|title\s*(?:acquired|gained)?)\s*[:：\-—]?\s*\[?([A-Za-z0-9\s\'’\-]+)\]?/i);
         if (achievementMatch && achievementMatch[1]) {
@@ -6145,6 +6155,25 @@ function initReader() {
 
         return 'System notification: Status window updated.';
       }
+
+      // Default: Vocalize the full status screen / attribute card content naturally
+      if (isSystemNode || (matches && matches.length >= 2)) {
+        let statSpeech = rawText
+          .replace(/\*\*([^*]+)\*\*/g, '$1')
+          .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1')
+          .replace(/\|/g, ', ')
+          .replace(/\s*(?:>|→|&gt;|&rarr;)\s*/g, ' upgraded to ')
+          .replace(/[\[\]【】〔〕《》]/g, ' ')
+          .replace(/[\r\n]+/g, '. ')
+          .replace(/\b([A-Za-z0-9\s]+)\s*[:：]\s*/g, '$1: ');
+
+        const statNames = '(?:Strength|Agility|Dexterity|Endurance|Vitality|Intelligence|Wisdom|Perception|Constitution|Charisma|Luck|Health|Mana|Stamina|Energy|Focus|Control|Willpower|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|HP|MP|SP)';
+        statSpeech = statSpeech.replace(new RegExp(`(?<=\\d)\\s+(?=${statNames}\\s*[:：])`, 'gi'), ', ');
+        statSpeech = statSpeech.replace(/\s{2,}/g, ' ').replace(/\s*\.\s*\./g, '.').trim();
+        return statSpeech;
+      }
+
+      return cleaned;
 
       return cleaned;
     }

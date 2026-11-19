@@ -75,7 +75,7 @@ def tokenize_sentences(text: str) -> List[str]:
 # 2. LITRPG STAT & SYSTEM WINDOW DETECTION
 # -----------------------------------------------------------------------------
 STAT_KEY_REGEX = re.compile(
-    r'\b(?:Name|Level|Race|Alignment|Titles?|Class|Sub\s*Class(?:es)?|Subclass(?:es)?|Specialization|Specialty|Rank|Class\s*Rank|Class\s*Tier|Tier|Profession|Affinity|Aspect|Domain|Bloodline|Physique|Talent|Grade|Stage|Realm|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|(?<!\bBody\s)(?<!\bRoot\s)(?<!\bMind\s)(?<!\bCrowd\s)Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]',
+    r'\b(?:Name|Level|Race|Alignment|Titles?|Primary\s*Class(?:es)?|Main\s*Class(?:es)?|Secondary\s*Class(?:es)?|Class|Sub\s*Class(?:es)?|Subclass(?:es)?|Specialization|Specialty|Rank|Class\s*Rank|Class\s*Tier|Tier|Profession|Affinity|Aspect|Domain|Bloodline|Physique|Talent|Grade|Stage|Realm|Attributes?|Status|Health|Mana|Stamina|Energy|Fatigue|Shield|Barrier|Strength|Agility|Dexterity|Constitution|Endurance|Vitality|Intelligence|Wisdom|Perception|Reaction|(?<!\bBody\s)(?<!\bRoot\s)(?<!\bMind\s)(?<!\bCrowd\s)Control|Focus|Willpower|Toughness|Charisma|Luck|Free Stats|Stat Points|Skill Points|Attribute Points|Free Points|Nexus Coins|Credits|Gold|Coins|HP|MP|SP|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|WIL)\s*[:：]',
     re.I
 )
 
@@ -130,9 +130,10 @@ def format_stat_block_rows(text: str) -> str:
 
     BREAK_KEYS = [
         r'Sub\s*Class(?:es)?\s*[:：]',
+        r'(?:Primary|Main|Secondary|Second)\s*Class(?:es)?\s*[:：]',
         r'Class\s*Rank\s*[:：]',
         r'Class\s*Tier\s*[:：]',
-        r'(?<!\bSub\s)(?<!\bSub-)Class\s*[:：]',
+        r'(?<!\bSub\s)(?<!\bSub-)(?<!\bPrimary\s)(?<!\bMain\s)(?<!\bSecondary\s)(?<!\bSecond\s)Class\s*[:：]',
         r'Specialization\s*[:：]',
         r'Specialty\s*[:：]',
         r'Level\s*[:：]',
@@ -183,7 +184,7 @@ def format_stat_block_rows(text: str) -> str:
         r'\bThe\s+\d+\s+Signs?\s+of\s+[^:：]+[:：]',
         r'\b(?<!\bThe\s)\d+\s+Signs?\s+of\s+[^:：]+[:：]'
     ]
-    pattern = r'(?<=\S)\s+(?=(?:[\*~_`]*\s*(?:' + '|'.join(BREAK_KEYS) + r')))'
+    pattern = r'(?<=[^\s\[\(\{\<【])\s+(?=(?:\[\s*)?(?:[\*~_`]*\s*(?:' + '|'.join(BREAK_KEYS) + r')))'
     return re.sub(pattern, '\n', text, flags=re.I)
 
 # -----------------------------------------------------------------------------
@@ -198,6 +199,15 @@ def segregate_mixed_paragraph(text: str) -> List[str]:
     text = (text or '').strip()
     if not text:
         return []
+
+    # Leading Bracket Alert / Skill Notification Segregation:
+    # e.g. "[Mana Manipulation - Level 1 > Mana Manipulation - Level 2] I guess it's something..."
+    m_lead = re.match(r'^(\[[A-Za-z0-9\s\+\-\>\→\:\.\,\'\’&;]{3,120}\])\s+([A-Za-z0-9\“\"\’\‘].*)', text)
+    if m_lead and not STAT_KEY_REGEX.search(m_lead.group(2)):
+        badge_part = m_lead.group(1).strip()
+        story_part = m_lead.group(2).strip()
+        return [badge_part] + segregate_mixed_paragraph(story_part)
+
     matches = list(STAT_KEY_REGEX.finditer(text))
     if len(matches) < 2:
         return [text]
@@ -302,18 +312,19 @@ def classify_paragraph(text: str) -> dict:
         badge = '📜 QUEST COMPLETED' if 'completed' in text.lower() else ('⚠️ QUEST FAILED' if 'failed' in text.lower() else '📜 QUEST DIRECTIVE')
         return {'type': 'quest', 'card_class': 'system-card-quest', 'badge': badge}
 
-    # 4. Status Screen / Stat Attributes
-    if is_system_or_stat_block(text):
-        return {'type': 'stats', 'card_class': 'system-card-stats', 'badge': '📊 STATUS SCREEN // ATTRIBUTES'}
-
-    # 5. Skill / Spell / Entity Scan Tooltip
+    # 4. Skill / Spell / Entity Scan Tooltip
     if text.startswith(('[Skill', '【Skill', '[Spell', '【Spell', 'Skill Acquired:', 'Spell Acquired:', 'Skill Learned:')) or \
-       re.search(r'^(?:\[|【)\s*(?:Skill|Spell|Ability|Technique)', text, re.I):
-        return {'type': 'skill', 'card_class': 'system-card-skill', 'badge': '⚡ SKILL & ABILITY'}
+       re.search(r'^(?:\[|【)\s*(?:Skill|Spell|Ability|Technique)', text, re.I) or \
+       (re.search(r'^(?:\[|【)\s*[^\]】]+(?:Level\s+\d+|Rank\s+[A-Za-z0-9]+|[>→]|Acquired|Learned|Unlocked)', text, re.I) and text.endswith((']', '】'))):
+        return {'type': 'skill', 'card_class': 'system-card-skill', 'badge': '⚡ SKILL NOTIFICATION'}
 
     if text.startswith(('[Item', '【Item', '[Appraisal', '【Appraisal', 'Item Appraisal:', 'Rank: S', 'Rank: A')) or \
        re.search(r'^(?:\[|【)\s*(?:Item|Appraisal|Scan|Artifact|Relic|Equipment|Entity|Monster)', text, re.I):
         return {'type': 'tooltip', 'card_class': 'system-card-tooltip', 'badge': '💎 ENTITY SCAN // TOOLTIP'}
+
+    # 5. Status Screen / Stat Attributes
+    if is_system_or_stat_block(text):
+        return {'type': 'stats', 'card_class': 'system-card-stats', 'badge': '📊 STATUS SCREEN // ATTRIBUTES'}
 
     # 6. World Announcement / System Broadcast
     if text.startswith(('[System', '【System', '【Notice', '[World Announcement', 'Time to Level Collapse:')) or \
@@ -353,8 +364,8 @@ def format_inline_typography(raw_text: str) -> str:
     # 4. Clean any dangling unclosed bold/italic asterisks attached to words or colons (e.g. Level:** or Mining*)
     safe = re.sub(r'(?<=[:：\w])\*{1,3}(?!\w)', '', safe)
     safe = re.sub(r'(?<!\w)\*{1,3}(?=[:：\w])', '', safe)
-    # 5. Inline Skill / Spell brackets: [Fireball], [Shadow Step], etc.
-    safe = re.sub(r'\[((?:Skill|Spell|Title|Item)?\s*[\w\s\+\-\'\’]{2,30})\]', r'<span class="reader-inline-tag reader-tag-skill">[\1]</span>', safe)
+    # 5. Inline Skill / Spell brackets: [Fireball], [Shadow Step], [Mana Manipulation - Level 1 > Mana Manipulation - Level 2], etc.
+    safe = re.sub(r'\[((?:Skill|Spell|Title|Item)?\s*[\w\s\+\-\'\’\:\/&;>→]{2,100})\]', r'<span class="reader-inline-tag reader-tag-skill">[\1]</span>', safe)
     # 6. Inline Stat Deltas & Perks:
     STAT_NAMES = r'(?:All\s+stats|Strength|Agility|Dexterity|Endurance|Vitality|Intelligence|Wisdom|Perception|Constitution|Charisma|Luck|Health|Mana|Stamina|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|HP|MP|SP|EXP)'
     safe = re.sub(r'(?:^|\s)(' + STAT_NAMES + r'\s*[\+\-]\s*\d+(?:\.\d+)?%?)', r' <span class="reader-inline-tag reader-tag-stat">\1</span>', safe, flags=re.I)
@@ -506,8 +517,23 @@ def process_chapter_paragraphs(paragraphs: List[str], max_chars: int = 480, chap
             if len(tokens) >= 1 and all(t.isupper() for t in tokens) and len(last) < 100:
                 is_heading = True
 
+        # Unclosed bracket healing: prevent fragmented attribute keys (e.g. '[Primary') from severing
+        has_unclosed_bracket = False
+        if merged:
+            last = merged[-1]
+            if (last.count('[') > last.count(']')) or (last.count('【') > last.count('】')):
+                has_unclosed_bracket = True
+
+        is_unclosed_fragment = False
+        if (p_clean.count('[') > p_clean.count(']') or p_clean.count('【') > p_clean.count('】')) and len(p_clean) < 60:
+            is_unclosed_fragment = True
+
         can_merge = False
-        if merged and not is_stat and not prev_is_stat and not is_heading:
+        if merged and has_unclosed_bracket:
+            can_merge = True
+        elif merged and is_unclosed_fragment and prev_is_stat:
+            can_merge = True
+        elif merged and not is_stat and not prev_is_stat and not is_heading:
             if p_clean[0].islower() or merged[-1].endswith((',', '-', '—', ';')):
                 can_merge = True
 
@@ -542,14 +568,40 @@ def clean_speech_text(raw_text: str) -> str:
     Sanitizes text intended for Edge-TTS / Web Speech.
     1. Replaces decorative scene breaks (***, ◆◆◆, ════) with natural speech pauses (, ).
     2. Cleans markdown bold/italic syntax and raw table pipe dividers.
-    3. Repairs drop-caps and split contractions for fluent vocalization.
-    4. Matches the client-side sanitizeSpeechText from reader.js.
+    3. Transforms progression arrows (> / →) into natural speech ('upgraded to').
+    4. Strips brackets around system skills and titles for fluid vocalization.
+    5. Inserts pauses between attribute rows so character sheets vocalize naturally.
+    6. Repairs drop-caps and split contractions for fluent vocalization.
+    7. Matches the client-side sanitizeSpeechText from reader.js.
     """
     if not raw_text:
         return ""
     raw_text = repair_typesetting_artifacts(raw_text)
+
+    # Clean markdown emphasis and table dividers
+    t = re.sub(r'\*\*([^*]+)\*\*', r'\1', raw_text)
+    t = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'\1', t)
+    t = t.replace('|', ', ')
+
+    # Progression arrows (> / →)
+    t = re.sub(r'\s*(?:>|→|&gt;|&rarr;)\s*', ' upgraded to ', t)
+
+    # Brackets
+    t = re.sub(r'[\[\]【】〔〕《》]', ' ', t)
+
+    # Newlines to pauses
+    t = re.sub(r'[\r\n]+', '. ', t)
+
+    # Scene breaks
     decorative_line_regex = re.compile(r'^[\s\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\-—–\.\:\/\u2500-\u257F═]{2,}$', re.MULTILINE)
-    cleaned = decorative_line_regex.sub(' ', raw_text)
+    cleaned = decorative_line_regex.sub(' ', t)
     cleaned = re.sub(r'(\s*[\*~_|\#=\+\^`★☆※●○◆◇■□▪▬◊§¤\u2500-\u257F═]{2,}\s*)', ', ', cleaned)
-    cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+
+    # Insert commas between adjacent stat numbers and next stat key
+    STAT_NAMES = r'(?:Strength|Agility|Dexterity|Endurance|Vitality|Intelligence|Wisdom|Perception|Constitution|Charisma|Luck|Health|Mana|Stamina|Energy|Focus|Control|Willpower|STR|AGI|VIT|END|INT|WIS|PER|DEX|CON|CHA|LUK|HP|MP|SP)'
+    cleaned = re.sub(r'(?<=\d)\s+(?=' + STAT_NAMES + r'\s*[:：])', ', ', cleaned, flags=re.I)
+
+    cleaned = re.sub(r'\s{2,}', ' ', cleaned)
+    cleaned = re.sub(r'\s*\.\s*\.', '.', cleaned)
+    cleaned = re.sub(r'\s*,\s*,', ',', cleaned).strip()
     return cleaned

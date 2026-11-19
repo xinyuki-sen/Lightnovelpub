@@ -19,6 +19,7 @@ import base64
 import subprocess
 import urllib.request
 import urllib.error
+import typesetter
 
 PASSED = 0
 FAILED = 0
@@ -64,11 +65,11 @@ for f in js_files:
             log_fail(f"Node syntax check: {f}", res.stderr)
 
 # -----------------------------------------------------------------------------
-# LOOP 2: PWA & Cache-Busting Version Coherence (v63)
+# LOOP 2: PWA & Cache-Busting Version Coherence (v64)
 # -----------------------------------------------------------------------------
-loop_header(2, "PWA & Cache-Busting Coherence (v63)")
+loop_header(2, "PWA & Cache-Busting Coherence (v64)")
 
-EXPECTED_VERSION = "63"
+EXPECTED_VERSION = "64"
 
 # Check static/sw.js
 with open("static/sw.js", "r", encoding="utf-8") as f:
@@ -332,6 +333,59 @@ else:
     log_fail("reader.js missing safe plain-text paragraph Dexie storage")
 
 # -----------------------------------------------------------------------------
+# LOOP 9: LitRPG Blue Box Telemetry & Audio Narration Integrity
+# -----------------------------------------------------------------------------
+loop_header(9, "LitRPG Blue Box Telemetry & Audio Narration Integrity")
+
+# 1. Verify clean_speech_text correctly produces rich audio for status screens
+sample_stat_card = """Level: 2
+Strength: 6 Dexterity: 8
+Constitution: 8
+Mana: 3
+[Primary Class: Unavailable] [Sub-class: Unavailable]
+Skills: Focus - Level 3
+Mana manipulation - Level 1 [Skill Points: 0]"""
+spoken_stats = typesetter.clean_speech_text(sample_stat_card)
+if "Level: 2" in spoken_stats and "Strength: 6" in spoken_stats and "Dexterity: 8" in spoken_stats and "Mana: 3" in spoken_stats:
+    log_pass("clean_speech_text fully vocalizes character attribute sheet instead of skipping")
+else:
+    log_fail(f"clean_speech_text failed on stat card: {spoken_stats}")
+
+# 2. Verify progression arrow speech conversion ( > -> upgraded to )
+sample_upgrade = "[Mana Manipulation - Level 1 > Mana Manipulation - Level 2]"
+spoken_upgrade = typesetter.clean_speech_text(sample_upgrade)
+if "upgraded to" in spoken_upgrade and "Mana Manipulation - Level 2" in spoken_upgrade:
+    log_pass("clean_speech_text vocalizes skill progression arrows as 'upgraded to'")
+else:
+    log_fail(f"clean_speech_text skill arrow conversion failed: {spoken_upgrade}")
+
+# 3. Verify status screen healing prevents '[Primary' separation
+split_input = [
+    "Level: 2\nStrength: 6 Dexterity: 8 Constitution: 8\nMana: 3",
+    "[Primary",
+    "Class: Unavailable] [Sub-class: Unavailable]\nSkills: Focus - Level 3"
+]
+healed_paras = typesetter.process_chapter_paragraphs(split_input)
+if len(healed_paras) == 1 and "[Primary Class: Unavailable]" in healed_paras[0]:
+    log_pass("process_chapter_paragraphs heals split status screen and unifies '[Primary Class:'")
+else:
+    log_fail(f"process_chapter_paragraphs failed to heal split status screen: {healed_paras}")
+
+# 4. Verify skill notification classification
+meta_skill = typesetter.classify_paragraph("[Mana Perception - Level 0]")
+if meta_skill.get("card_class") == "system-card-skill" and meta_skill.get("type") == "skill":
+    log_pass("classify_paragraph classifies bracketed skill gains as system-card-skill")
+else:
+    log_fail(f"classify_paragraph failed on skill notification: {meta_skill}")
+
+# 5. Verify inline typography tags render long skill upgrade brackets
+html_skill = typesetter.format_inline_typography("[Mana Manipulation - Level 1 > Mana Manipulation - Level 2]")
+if 'class="reader-inline-tag reader-tag-skill"' in html_skill:
+    log_pass("format_inline_typography renders full skill progression pill with > arrow")
+else:
+    log_fail(f"format_inline_typography failed on long skill progression: {html_skill}")
+
+# -----------------------------------------------------------------------------
 # FINAL REPORT
 # -----------------------------------------------------------------------------
 print("\n" + "=" * 66)
@@ -340,7 +394,7 @@ print(f"  TOTAL CHECKS: {PASSED + FAILED} | PASSED: {PASSED} | FAILED: {FAILED}"
 print("=" * 66)
 
 if FAILED == 0:
-    print("  ALL 8 FORGE LOOPS PASSED PERFECTLY!\n")
+    print("  ALL 9 FORGE LOOPS PASSED PERFECTLY!\n")
     sys.exit(0)
 else:
     print(f"  {FAILED} CHECKS FAILED. PLEASE INVESTIGATE.\n")
