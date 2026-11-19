@@ -1146,6 +1146,85 @@ a {
   cursor: not-allowed;
 }
 
+/* Bottom Chapter Navigation Bar: Staged & Centered */
+.chapter-nav-row-bottom {
+  max-width: var(--reader-max-width, 820px);
+  margin: 3.5rem auto calc(8.5rem + env(safe-area-inset-bottom, 24px)) auto !important;
+  padding: 0 1.5rem !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.85rem !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+}
+
+.chapter-nav-row-bottom .nav-arrow-btn {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  height: 46px !important;
+  min-height: 46px !important;
+  padding: 0.65rem 1rem !important;
+  font-size: 0.88rem !important;
+  font-weight: 700 !important;
+  border-radius: var(--radius-full, 9999px) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+  gap: 0.4rem !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+.chapter-nav-row-bottom .nav-arrow-prev,
+.chapter-nav-row-bottom .nav-arrow-toc {
+  background: rgba(22, 27, 34, 0.82) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #e4e4e7 !important;
+}
+
+.chapter-nav-row-bottom .nav-arrow-prev:hover:not(.disabled),
+.chapter-nav-row-bottom .nav-arrow-toc:hover:not(.disabled) {
+  background: rgba(39, 39, 42, 0.95) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+  transform: translateY(-2px) !important;
+}
+
+/* Standout Primary Action for Next Chapter */
+.chapter-nav-row-bottom .nav-arrow-next {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(139, 92, 246, 0.42)) !important;
+  border: 1px solid rgba(139, 92, 246, 0.55) !important;
+  color: #ffffff !important;
+  font-weight: 750 !important;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25) !important;
+}
+
+.chapter-nav-row-bottom .nav-arrow-next:hover:not(.disabled) {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.55), rgba(139, 92, 246, 0.65)) !important;
+  border-color: rgba(168, 85, 247, 0.8) !important;
+  box-shadow: 0 6px 24px rgba(139, 92, 246, 0.4) !important;
+  transform: translateY(-2px) !important;
+}
+
+.chapter-nav-row-bottom .nav-text-short {
+  display: none !important;
+}
+
+.chapter-nav-row-bottom .nav-text-long {
+  display: inline !important;
+}
+
+.chapter-nav-row-bottom .nav-arrow-icon {
+  flex-shrink: 0 !important;
+}
+
 .chapter-dropdown-select {
   flex: 1;
   max-width: 360px;
@@ -2627,7 +2706,7 @@ a {
     justify-content: center;
   }
 
-  .chapter-nav-row {
+  .chapter-nav-row:not(.chapter-nav-row-bottom) {
     display: flex !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
@@ -5213,7 +5292,7 @@ body.system-hud-disabled .reader-system-card .system-card-header {
   }
 
   /* 2. Top Chapter Navigation: Single line, no wrapping */
-  .chapter-nav-row {
+  .chapter-nav-row:not(.chapter-nav-row-bottom) {
     display: flex !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
@@ -5233,26 +5312,41 @@ body.system-hud-disabled .reader-system-card .system-card-header {
     padding: 0.55rem 1.6rem 0.55rem 0.75rem !important;
   }
 
-  /* 3. Bottom 3-Button Navigation: Fits inside screen width */
-  div[style*="margin-bottom: 6rem"], .chapter-nav-row-bottom {
-    display: grid !important;
-    grid-template-columns: 1fr 1.2fr 1fr !important;
-    gap: 0.35rem !important;
+  /* 3. Bottom 3-Button Navigation: Staged Above Dock & Centered on Mobile */
+  .chapter-nav-row-bottom {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.4rem !important;
     width: 100% !important;
-    padding: 0.75rem 0.5rem !important;
+    max-width: 100% !important;
+    padding: 0 0.65rem !important;
     box-sizing: border-box !important;
-    margin-bottom: 5rem !important;
+    margin-top: 2.5rem !important;
+    margin-bottom: calc(7.5rem + env(safe-area-inset-bottom, 24px)) !important;
   }
 
-  div[style*="margin-bottom: 6rem"] .nav-arrow-btn {
-    width: 100% !important;
+  .chapter-nav-row-bottom .nav-arrow-btn {
+    flex: 1 1 0 !important;
     min-width: 0 !important;
-    padding: 0.65rem 0.2rem !important;
-    font-size: 0.72rem !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0.5rem 0.35rem !important;
+    font-size: 0.8rem !important;
     text-align: center !important;
     white-space: nowrap !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    text-overflow: clip !important;
+    gap: 0.25rem !important;
+  }
+
+  .chapter-nav-row-bottom .nav-text-long {
+    display: none !important;
+  }
+
+  .chapter-nav-row-bottom .nav-text-short {
+    display: inline !important;
   }
 
   /* 4. Reading text padding */

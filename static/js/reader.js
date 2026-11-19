@@ -844,12 +844,27 @@ function initReader() {
       }
 
       // Coalesce consecutive pure-stat blocks into a single unified telemetry card
+      // Heals fragmented attribute keys (e.g. '[Primary' or unclosed bracket rows)
       const coalesced = [];
       for (const piece of segregated) {
-        if (isStatParagraph(piece) && coalesced.length > 0) {
+        if (coalesced.length > 0) {
           const prevIdx = coalesced.length - 1;
-          if (isStatParagraph(coalesced[prevIdx])) {
-            coalesced[prevIdx] = coalesced[prevIdx] + '\n' + piece;
+          const prev = coalesced[prevIdx];
+          const hasUnclosedBracket = (prev.split('[').length > prev.split(']').length) || (prev.split('【').length > prev.split('】').length);
+          const isUnclosedFragment = ((piece.split('[').length > piece.split(']').length) || (piece.split('【').length > piece.split('】').length)) && piece.length < 60;
+          const prevIsStat = isStatParagraph(prev);
+          const curIsStat = isStatParagraph(piece);
+
+          if (hasUnclosedBracket) {
+            coalesced[prevIdx] = prev + ' ' + piece;
+            continue;
+          }
+          if (isUnclosedFragment && prevIsStat) {
+            coalesced[prevIdx] = prev + ' ' + piece;
+            continue;
+          }
+          if (curIsStat && prevIsStat) {
+            coalesced[prevIdx] = prev + '\n' + piece;
             continue;
           }
         }
@@ -973,7 +988,9 @@ function initReader() {
         const card = document.createElement('div');
         card.className = `reader-system-card ${meta.cardClass}`;
         card.setAttribute('data-para-idx', String(idx));
+        card.setAttribute('data-para-index', String(idx));
         card.setAttribute('data-system-type', meta.type);
+        card.title = 'Click to start audio reading from this card';
 
         const formattedBody = meta.type === 'stats' ? formatStatCardBody(text) : formatInlineTypography(text);
 
@@ -1003,6 +1020,7 @@ function initReader() {
       p.className = `reader-${meta.type}`;
       p.setAttribute('data-para-index', String(idx));
       p.setAttribute('data-para-idx', String(idx));
+      p.title = 'Click to start audio reading from here';
       p.innerHTML = formatInlineTypography(text);
       return p;
     }
@@ -1742,10 +1760,10 @@ function initReader() {
         });
 
         // Version-gated audio cache migration: flush any cross-chapter or legacy audio blobs
-        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v64') {
+        if (localStorage.getItem('novel_reader_audio_cache_version') !== 'v65') {
           try {
             novelDb.audioCache.clear().then(() => {
-              localStorage.setItem('novel_reader_audio_cache_version', 'v64');
+              localStorage.setItem('novel_reader_audio_cache_version', 'v65');
             }).catch(() => { });
           } catch (e) { }
         }

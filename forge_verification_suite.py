@@ -65,11 +65,11 @@ for f in js_files:
             log_fail(f"Node syntax check: {f}", res.stderr)
 
 # -----------------------------------------------------------------------------
-# LOOP 2: PWA & Cache-Busting Version Coherence (v64)
+# LOOP 2: PWA & Cache-Busting Version Coherence (v65)
 # -----------------------------------------------------------------------------
-loop_header(2, "PWA & Cache-Busting Coherence (v64)")
+loop_header(2, "PWA & Cache-Busting Coherence (v65)")
 
-EXPECTED_VERSION = "64"
+EXPECTED_VERSION = "65"
 
 # Check static/sw.js
 with open("static/sw.js", "r", encoding="utf-8") as f:
@@ -187,6 +187,11 @@ try:
                 log_pass("Reader body has data-chapter-num attribute for hydration")
             else:
                 log_fail("data-chapter-num attribute missing")
+
+            if 'id="chapter-nav-row-bottom"' in html and 'nav-text-short' in html and 'nav-text-long' in html:
+                log_pass("Staged & centered bottom navigation bar found in DOM with responsive spans")
+            else:
+                log_fail("Bottom navigation bar missing id='chapter-nav-row-bottom' or responsive text spans")
     else:
         log_pass("Database has 0 novels; skipped specific reader route check")
 except Exception as e:
